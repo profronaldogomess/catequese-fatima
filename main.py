@@ -200,6 +200,7 @@ if eh_gestor:
         "📝 Cadastrar Catequizando", 
         "👤 Perfil Individual", 
         "🏫 Gestão de Turmas", 
+        "🕊️ Gestão de Sacramentos", # Nova Opção
         "👥 Gestão de Catequistas",
         "✅ Fazer Chamada"
     ])
@@ -1000,4 +1001,93 @@ elif menu == "👥 Gestão de Catequistas":
                         lista_p = [[id_f, dict_cat[nome]] for nome in participantes]
                         if salvar_presenca_formacao(lista_p):
                             st.success("Registrado!"); st.balloons(); st.rerun()
+
+elif menu == "🕊️ Gestão de Sacramentos":
+    st.title("🕊️ Gestão de Sacramentos")
+    df_cat = ler_aba("catequizandos")
+    df_turmas = ler_aba("turmas")
+    df_sac_eventos = ler_aba("sacramentos_eventos")
+    df_sac_recebidos = ler_aba("sacramentos_recebidos")
+
+    tab_dash, tab_reg, tab_hist = st.tabs(["📊 Dashboard Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
+
+    with tab_dash:
+        if not df_cat.empty:
+            st.subheader(f"Estatísticas de {date.today().year}")
+            c1, c2, c3 = st.columns(3)
+            
+            # Gráfico de Batismo
+            bat_counts = df_cat['batizado_sn'].value_counts()
+            fig_bat = px.pie(values=bat_counts.values, names=bat_counts.index, title="Taxa de Batizados", color_discrete_sequence=['#417b99', '#e03d11'])
+            c1.plotly_chart(fig_bat, use_container_width=True)
+
+            # Gráfico de Eucaristia
+            euca_sim = df_cat['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
+            euca_nao = len(df_cat) - euca_sim
+            fig_euca = px.pie(values=[euca_sim, euca_nao], names=['SIM', 'NÃO'], title="Taxa de Eucaristia", color_discrete_sequence=['#417b99', '#e03d11'])
+            c2.plotly_chart(fig_euca, use_container_width=True)
+
+            # Gráfico de Crisma
+            cris_sim = df_cat['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
+            cris_nao = len(df_cat) - cris_sim
+            fig_cris = px.pie(values=[cris_sim, cris_nao], names=['SIM', 'NÃO'], title="Taxa de Crisma", color_discrete_sequence=['#417b99', '#e03d11'])
+            c3.plotly_chart(fig_cris, use_container_width=True)
+
+            st.divider()
+            st.subheader("⚠️ Lista de Pendências (Não Realizaram)")
+            tipo_pendencia = st.selectbox("Ver quem não possui:", ["BATISMO", "EUCARISTIA", "CRISMA"])
+            
+            if tipo_pendencia == "BATISMO":
+                pendentes = df_cat[df_cat['batizado_sn'] == 'NÃO']
+            else:
+                pendentes = df_cat[~df_cat['sacramentos_ja_feitos'].str.contains(tipo_pendencia, na=False)]
+            
+            st.dataframe(pendentes[['nome_completo', 'etapa', 'contato_principal']], use_container_width=True, hide_index=True)
+
+            if st.button("🤖 Gerar Relatório Inteligente de Sacramentos"):
+                resumo = f"Batizados: {euca_sim}, Pendentes: {euca_nao}. Total Alunos: {len(df_cat)}"
+                from ai_engine import gerar_relatorio_sacramentos_ia
+                st.info(gerar_relatorio_sacramentos_ia(resumo))
+
+    with tab_reg:
+        st.subheader("Novo Registro de Sacramento")
+        with st.form("form_sacramento"):
+            tipo_s = st.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
+            data_s = st.date_input("Data da Celebração", date.today())
+            turmas_s = st.multiselect("Selecione as Turmas Envolvidas", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+            
+            st.markdown("---")
+            if turmas_s:
+                st.write("✅ **Selecione os catequizandos que receberam o sacramento:**")
+                alunos_filtrados = df_cat[df_cat['etapa'].isin(turmas_s)]
+                selecionados = []
+                for _, row in alunos_filtrados.iterrows():
+                    if st.checkbox(f"{row['nome_completo']} ({row['etapa']})", key=f"sac_{row['id_catequizando']}"):
+                        selecionados.append(row)
+                
+                if st.form_submit_button("💾 CONFIRMAR E ATUALIZAR CADASTROS"):
+                    if selecionados:
+                        id_ev = f"SAC-{int(time.time())}"
+                        dados_ev = [id_ev, tipo_s, str(data_s), ", ".join(turmas_s), st.session_state.usuario['nome']]
+                        lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in selecionados]
+                        
+                        from database import registrar_evento_sacramento_completo
+                        if registrar_evento_sacramento_completo(dados_ev, lista_p, tipo_s):
+                            st.success(f"Sucesso! {len(selecionados)} cadastros foram atualizados automaticamente.")
+                            st.balloons()
+                            time.sleep(2)
+                            st.rerun()
+                    else:
+                        st.warning("Selecione ao menos um catequizando.")
+            else:
+                st.info("Selecione as turmas para listar os alunos.")
+                st.form_submit_button("Aguardando seleção de turmas...", disabled=True)
+
+    with tab_hist:
+        st.subheader("Histórico de Celebrações")
+        if not df_sac_eventos.empty:
+            st.dataframe(df_sac_eventos, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum evento registrado ainda.")
+
 
