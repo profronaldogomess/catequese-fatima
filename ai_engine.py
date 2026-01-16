@@ -3,7 +3,7 @@ from google import genai
 import streamlit as st
 
 def gerar_analise_pastoral(resumo_dados):
-    """Envia os dados para o Gemini e retorna uma análise em texto."""
+    """Envia os dados para o Gemini e retorna uma análise em texto com tratamento de erro amigável."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         prompt = f"""
@@ -21,7 +21,10 @@ def gerar_analise_pastoral(resumo_dados):
         response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
         return response.text
     except Exception as e:
-        return f"Erro ao gerar relatório com IA: {e}"
+        if "429" in str(e):
+            return ("Paz e Bem! Nosso assistente de inteligência pastoral atingiu o limite de consultas gratuitas "
+                    "neste minuto. Por favor, aguarde cerca de 60 segundos e tente gerar este relatório novamente.")
+        return "No momento, não foi possível gerar a análise automática. Por favor, verifique os dados estatísticos acima."
     
 def gerar_mensagem_whatsapp(tema, presentes, faltosos):
     """Usa IA para criar uma mensagem de WhatsApp calorosa e variada."""
@@ -46,10 +49,10 @@ def gerar_mensagem_whatsapp(tema, presentes, faltosos):
         response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
         return response.text
     except Exception as e:
-        return f"Erro ao gerar mensagem: {e}"
+        return "Olá! Passando para agradecer a presença de todos no encontro de hoje. Sentimos falta de quem não pôde ir. Que Deus abençoe nossa caminhada!"
     
 def analisar_turma_local(nome_turma, dados_resumo):
-    """Gera uma análise profunda de uma turma específica."""
+    """Gera uma análise profunda de uma turma específica com tratamento de erro amigável."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         prompt = f"""
@@ -63,4 +66,7 @@ def analisar_turma_local(nome_turma, dados_resumo):
         response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
         return response.text
     except Exception as e:
-        return f"Erro na análise da IA: {e}"
+        if "429" in str(e):
+            return ("O limite de processamento da IA foi atingido. Por favor, aguarde um minuto para gerar este perfil novamente. "
+                    "Os dados estatísticos acima continuam válidos para sua análise manual.")
+        return "Análise pastoral temporariamente indisponível. Por favor, utilize os dados estatísticos acima para sua avaliação."
