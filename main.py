@@ -575,7 +575,7 @@ elif menu == "⚙️ Gestão e Movimentação":
             st.info(f"💡 **Análise:** Idade: {idade} anos | Sugestão de Etapa: {sugestao}")
 
             # --- BOTÃO DE GERAR FICHA PDF (CATEQUIZANDO) ---
-            if st.button(f"📄 Baixar Ficha de Inscrição de {escolha}"):
+            if st.button(f"📄 Baixar Ficha de {escolha}"):
                 pdf_bytes = gerar_ficha_cadastral_catequizando(dados.to_dict())
                 st.download_button("📥 Download PDF", pdf_bytes, f"Ficha_{escolha}.pdf", "application/pdf")
             # -----------------------------------------------
@@ -875,14 +875,8 @@ elif menu == "👥 Gestão de Catequistas":
 
     with tab_lista:
         if not df_usuarios.empty:
-            # --- LÓGICA BLINDADA DE BUSCA E SELEÇÃO ---
-            c1, c2 = st.columns(2)
-            busca_c = c1.text_input("🔍 Buscar Catequista por nome:").upper()
-            
-            df_c_filtrado = df_usuarios
-            if busca_c:
-                df_c_filtrado = df_usuarios[df_usuarios['nome'].astype(str).str.contains(busca_c)]
-            
+            busca_c = st.text_input("🔍 Buscar Catequista por nome:").upper()
+            df_c_filtrado = df_usuarios[df_usuarios['nome'].astype(str).str.contains(busca_c)] if busca_c else df_usuarios
             st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True)
             
             st.divider()
@@ -891,43 +885,48 @@ elif menu == "👥 Gestão de Catequistas":
             if escolha_c:
                 u = df_usuarios[df_usuarios['nome'] == escolha_c].iloc[0]
                 status_min, tempo = verificar_status_ministerial(str(u.get('data_inicio_catequese', '')), str(u.get('data_batismo', '')), str(u.get('data_eucaristia', '')), str(u.get('data_crisma', '')), str(u.get('data_ministerio', '')))
-                
                 if status_min == "MINISTRO": st.success(f"📜 **MINISTRO INSTITUÍDO** (Desde: {u.get('data_ministerio')})")
                 elif status_min == "APTO": st.warning(f"🌟 **APTO AO MINISTÉRIO** ({tempo} anos)")
                 else: st.info(f"🌱 Caminhada: {tempo} anos.")
 
-                # --- HISTÓRICO DE FORMAÇÕES (BLINDADO) ---
+                # --- HISTÓRICO DE FORMAÇÕES (COM CORREÇÃO DE ERRO) ---
                 st.divider()
                 st.subheader("🎓 Histórico de Formações Realizadas")
                 forms_participadas = pd.DataFrame() # Inicializa vazio
                 
-                try:
-                    if not df_pres_form.empty and not df_formacoes.empty:
-                        # 1. Força conversão para string para evitar erro de tipo
-                        df_pres_form['email_participante'] = df_pres_form['email_participante'].astype(str).str.strip()
-                        u_email = str(u['email']).strip()
-                        
-                        # 2. Filtra presenças deste usuário
-                        minhas_forms = df_pres_form[df_pres_form['email_participante'] == u_email]
-                        
+                if not df_pres_form.empty and not df_formacoes.empty:
+                    # CORREÇÃO DO ERRO KEYERROR:
+                    # Se a planilha não tiver cabeçalho, renomeamos as colunas na força bruta
+                    if 'email_participante' not in df_pres_form.columns:
+                        if len(df_pres_form.columns) >= 2:
+                            # Assume que a coluna 0 é ID e a 1 é Email
+                            df_pres_form.columns.values[0] = 'id_formacao'
+                            df_pres_form.columns.values[1] = 'email_participante'
+                    
+                    # Agora tentamos filtrar com segurança
+                    if 'email_participante' in df_pres_form.columns:
+                        minhas_forms = df_pres_form[df_pres_form['email_participante'] == u['email']]
                         if not minhas_forms.empty:
-                            # 3. Garante que as chaves de junção são strings limpas
-                            minhas_forms['id_formacao'] = minhas_forms['id_formacao'].astype(str).str.strip()
-                            df_formacoes['id_formacao'] = df_formacoes['id_formacao'].astype(str).str.strip()
-
-                            # 4. Realiza o merge seguro
-                            forms_participadas = pd.merge(minhas_forms, df_formacoes, on='id_formacao', how='inner')
+                            # Padroniza colunas de formações para o merge
+                            if len(df_formacoes.columns) >= 5:
+                                df_formacoes.columns.values[0] = 'id_formacao'
+                                df_formacoes.columns.values[1] = 'tema'
+                                df_formacoes.columns.values[2] = 'data'
+                                df_formacoes.columns.values[4] = 'formador'
                             
-                            if not forms_participadas.empty:
-                                st.table(forms_participadas[['data', 'tema', 'formador']])
-                            else:
-                                st.info("Nenhuma participação encontrada (IDs não batem).")
+                            # Garante que a coluna de junção tem o mesmo nome
+                            cols_f = df_formacoes.columns.tolist()
+                            if 'id_formacao' not in cols_f: 
+                                df_formacoes.rename(columns={cols_f[0]: 'id_formacao'}, inplace=True)
+
+                            forms_participadas = minhas_forms.merge(df_formacoes, on='id_formacao', how='inner')
+                            st.table(forms_participadas[['data', 'tema', 'formador']])
                         else:
                             st.info("Este catequista ainda não participou de formações registradas.")
                     else:
-                        st.info("Sem registros de formação no sistema.")
-                except Exception as e:
-                    st.error(f"Erro ao carregar histórico: {e}")
+                        st.warning("Aviso: A aba 'presenca_formacao' na planilha parece estar vazia ou sem cabeçalho.")
+                else:
+                    st.info("Sem registros de formação no sistema.")
                 
                 # --- BOTÃO PDF CATEQUISTA ---
                 if st.button(f"📄 Baixar Ficha de {escolha_c}"):
