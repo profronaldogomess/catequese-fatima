@@ -1050,3 +1050,4 @@ elif menu == "👥 Gestão de Catequistas":
                         lista_p = [[id_f, dict_cat[nome]] for nome in participantes]
                         if salvar_presenca_formacao(lista_p):
                             st.success("Formação e Presenças registradas!"); st.balloons(); st.rerun()
+
