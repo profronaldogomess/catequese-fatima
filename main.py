@@ -570,7 +570,7 @@ elif menu == "📝 Cadastrar Catequizando":
                 if salvar_lote_catequizandos(lista_final):
                     st.success(f"✅ {len(lista_final)} importados!"); st.balloons(); st.rerun()
 
-# --- PÁGINA: PERFIL INDIVIDUAL ---
+# --- PÁGINA: PERFIL INDIVIDUAL (ATUALIZADA PARA EDIÇÃO) ---
 elif menu == "👤 Perfil Individual":
     st.title("👤 Perfil e Ficha do Catequizando")
     df_cat = ler_aba("catequizandos")
@@ -585,41 +585,99 @@ elif menu == "👤 Perfil Individual":
         lista_t = ["TODAS"] + df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["TODAS"]
         filtro_t = c2.selectbox("Filtrar por Turma:", lista_t)
 
-        df_f = df_cat
+        df_f = df_cat.copy()
         if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca)]
         if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
 
         st.dataframe(df_f[['nome_completo', 'etapa', 'status']], use_container_width=True)
         
         st.divider()
-        escolha = st.selectbox("Selecione um catequizando para ver detalhes ou gerar PDF:", [""] + df_f['nome_completo'].tolist())
+        
+        # Melhoria: Seletor agora mostra Nome e Turma para evitar confusão com nomes iguais
+        df_f['display_select'] = df_f['nome_completo'] + " (" + df_f['etapa'] + ")"
+        escolha_display = st.selectbox("Selecione um catequizando para EDITAR ou gerar PDF:", [""] + df_f['display_select'].tolist())
 
-        if escolha:
-            dados = df_cat[df_cat['nome_completo'] == escolha].iloc[0]
+        if escolha_display:
+            # Extrair o ID correto baseado na seleção
+            nome_sel = escolha_display.split(" (")[0]
+            turma_sel = escolha_display.split(" (")[1].replace(")", "")
+            dados = df_cat[(df_cat['nome_completo'] == nome_sel) & (df_cat['etapa'] == turma_sel)].iloc[0]
             
-            col_info, col_pdf = st.columns([2, 1])
+            tab_edit, tab_doc = st.tabs(["✏️ Editar Dados Cadastrais", "📄 Documentação e PDF"])
             
-            with col_info:
-                st.subheader(f"📍 Dados de {escolha}")
-                st.write(f"**Turma Atual:** {dados['etapa']}")
-                st.write(f"**Status:** {dados['status']}")
-                st.write(f"**Contato:** {dados['contato_principal']}")
-                st.write(f"**Responsável:** {dados['nome_responsavel']}")
-                st.info("💡 Para alterar a turma deste aluno, utilize o menu 'Gestão de Turmas > Movimentação em Massa'.")
+            with tab_edit:
+                st.subheader(f"📍 Editando: {nome_sel}")
+                with st.form("form_edicao_individual"):
+                    c1, c2, c3 = st.columns([2, 1, 1])
+                    ed_nome = c1.text_input("Nome Completo", value=dados['nome_completo']).upper()
+                    ed_nasc = c2.date_input("Data de Nascimento", value=converter_para_data(dados['data_nascimento']), min_value=MIN_DATA, max_value=MAX_DATA)
+                    
+                    # Seleção de Turma dentro da edição
+                    lista_turmas_edit = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
+                    idx_turma = lista_turmas_edit.index(dados['etapa']) if dados['etapa'] in lista_turmas_edit else 0
+                    ed_etapa = c3.selectbox("Turma/Etapa", lista_turmas_edit, index=idx_turma)
 
-            with col_pdf:
-                st.subheader("📄 Documentação")
-                if st.button(f"Gerar Ficha de Inscrição"):
-                    with st.spinner("Preparando PDF..."):
-                        st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
-                
-                if "pdf_catequizando" in st.session_state:
-                    st.download_button(
-                        label="📥 Baixar Ficha PDF",
-                        data=st.session_state.pdf_catequizando,
-                        file_name=f"Ficha_{escolha}.pdf",
-                        mime="application/pdf"
-                    )
+                    c4, c5, c6 = st.columns(3)
+                    ed_contato = c4.text_input("Telefone/WhatsApp", value=dados['contato_principal'])
+                    ed_batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
+                    ed_status = c6.selectbox("Status no Sistema", ["ATIVO", "INATIVO", "TRANSFERIDO"], index=["ATIVO", "INATIVO", "TRANSFERIDO"].index(dados['status']) if dados['status'] in ["ATIVO", "INATIVO", "TRANSFERIDO"] else 0)
+                    
+                    ed_endereco = st.text_input("Endereço Completo", value=dados['endereco_completo']).upper()
+                    
+                    st.divider()
+                    f1, f2, f3 = st.columns(3)
+                    ed_mae = f1.text_input("Nome da Mãe", value=dados['nome_mae']).upper()
+                    ed_pai = f2.text_input("Nome do Pai", value=dados['nome_pai']).upper()
+                    ed_resp = f3.text_input("Responsável Legal", value=dados['nome_responsavel']).upper()
+                    
+                    st.divider()
+                    s1, s2, s3 = st.columns(3)
+                    ed_med = s1.text_input("Medicamentos/Alergias", value=dados['toma_medicamento_sn']).upper()
+                    ed_tgo = s2.selectbox("Possui TGO?", ["NÃO", "SIM"], index=0 if dados['tgo_sn'] == "NÃO" else 1)
+                    ed_docs = s3.text_input("Documentos em Falta", value=dados['doc_em_falta']).upper()
+                    
+                    st.divider()
+                    a1, a2, a3 = st.columns([1, 1, 2])
+                    ed_est_civil = a1.text_input("Estado Civil (Pais ou Próprio)", value=dados['estado_civil_pais_ou_proprio']).upper()
+                    ed_pastoral = a2.text_input("Engajado em Pastoral?", value=dados['engajado_grupo']).upper()
+                    ed_sacramentos = a3.text_input("Sacramentos já realizados", value=dados['sacramentos_ja_feitos']).upper()
+
+                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                        # Montar lista na ordem exata das colunas da planilha (A-Q)
+                        lista_atualizada = [
+                            dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), 
+                            ed_batizado, ed_contato, ed_endereco, ed_mae, ed_pai, 
+                            ed_resp, ed_docs, ed_pastoral, ed_status, ed_med, 
+                            ed_tgo, ed_est_civil, ed_sacramentos
+                        ]
+                        if atualizar_catequizando(dados['id_catequizando'], lista_atualizada):
+                            st.success("✅ Dados atualizados com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+
+            with tab_doc:
+                col_info, col_pdf = st.columns([2, 1])
+                with col_info:
+                    st.subheader("Resumo Atual")
+                    st.write(f"**Nome:** {dados['nome_completo']}")
+                    st.write(f"**Turma:** {dados['etapa']}")
+                    st.write(f"**Status:** {dados['status']}")
+                    st.info("💡 Os dados acima refletem o que sairá no PDF. Se houver erros, corrija na aba 'Editar Dados Cadastrais'.")
+
+                with col_pdf:
+                    st.subheader("Gerar Documento")
+                    if st.button(f"Gerar Ficha de Inscrição PDF"):
+                        with st.spinner("Preparando PDF..."):
+                            # Recarrega os dados para garantir que o PDF pegue a alteração recente
+                            st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
+                    
+                    if "pdf_catequizando" in st.session_state:
+                        st.download_button(
+                            label="📥 Baixar Ficha PDF",
+                            data=st.session_state.pdf_catequizando,
+                            file_name=f"Ficha_{nome_sel}.pdf",
+                            mime="application/pdf"
+                        )
 
 # --- PÁGINA: GESTÃO DE TURMAS ---
 elif menu == "🏫 Gestão de Turmas":
@@ -719,10 +777,8 @@ elif menu == "🏫 Gestão de Turmas":
                 freq_local = df_pres_t['status_num'].mean() * 100
             c4.metric("Taxa de Presença", f"{freq_local:.1f}%")
 
-# // INÍCIO DA ALTERAÇÃO: Proteção de IA e Geração de PDF
             st.divider()
             if st.button(f"✨ Gerar Perfil Completo de {turma_alvo}"):
-                # --- TRAVA DE SEGURANÇA PARA ECONOMIA DE COTA IA ---
                 if total_cat == 0:
                     st.warning("⚠️ Esta turma não possui catequizandos cadastrados. Não há dados para a IA analisar.")
                     analise_ia = "Perfil indisponível: Esta turma ainda não possui catequizandos ativos registrados no sistema para uma análise pastoral detalhada."
@@ -733,7 +789,6 @@ elif menu == "🏫 Gestão de Turmas":
                         from ai_engine import analisar_turma_local
                         analise_ia = analisar_turma_local(turma_alvo, resumo)
                 
-                # --- PREPARAÇÃO DOS DADOS PARA O PDF ---
                 metricas_pdf = {
                     "Total de Catequizandos": total_cat, 
                     "Alunos Ativos": ativos, 
@@ -743,10 +798,8 @@ elif menu == "🏫 Gestão de Turmas":
                 }
                 lista_alunos_pdf = df_cat_t['nome_completo'].tolist() if not df_cat_t.empty else []
                 
-                # Chama o gerador de PDF (que já está no seu utils.py)
                 from utils import gerar_pdf_perfil_turma
                 st.session_state.pdf_turma = gerar_pdf_perfil_turma(turma_alvo, metricas_pdf, analise_ia, lista_alunos_pdf)
-            
             
             if "pdf_turma" in st.session_state:
                 st.download_button(
@@ -755,8 +808,6 @@ elif menu == "🏫 Gestão de Turmas":
                     file_name=f"Perfil_{turma_alvo}.pdf", 
                     mime="application/pdf"
                 )
-
-
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
@@ -779,7 +830,7 @@ elif menu == "🏫 Gestão de Turmas":
                             if mover_catequizandos_em_massa(lista_para_mover, turma_destino):
                                 st.success(f"✅ {len(lista_para_mover)} movidos!"); time.sleep(1); st.rerun()
 
-# --- PÁGINA: GESTÃO DE SACRAMENTOS (NOVA) ---
+# --- PÁGINA: GESTÃO DE SACRAMENTOS ---
 elif menu == "🕊️ Gestão de Sacramentos":
     import plotly.express as px
     st.title("🕊️ Gestão de Sacramentos")
@@ -794,18 +845,15 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.subheader(f"Estatísticas Gerais ({date.today().year})")
             c1, c2, c3 = st.columns(3)
             
-            # Gráfico de Batismo
             bat_counts = df_cat['batizado_sn'].value_counts()
             fig_bat = px.pie(values=bat_counts.values, names=bat_counts.index, title="Taxa de Batizados", color_discrete_sequence=['#417b99', '#e03d11'])
             c1.plotly_chart(fig_bat, use_container_width=True)
 
-            # Gráfico de Eucaristia
             euca_sim = df_cat['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
             euca_nao = len(df_cat) - euca_sim
             fig_euca = px.pie(values=[euca_sim, euca_nao], names=['SIM', 'NÃO'], title="Taxa de Eucaristia", color_discrete_sequence=['#417b99', '#e03d11'])
             c2.plotly_chart(fig_euca, use_container_width=True)
 
-            # Gráfico de Crisma
             cris_sim = df_cat['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
             cris_nao = len(df_cat) - cris_sim
             fig_cris = px.pie(values=[cris_sim, cris_nao], names=['SIM', 'NÃO'], title="Taxa de Crisma", color_discrete_sequence=['#417b99', '#e03d11'])
