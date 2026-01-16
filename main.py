@@ -712,39 +712,44 @@ elif menu == "🏫 Gestão de Turmas":
                 freq_local = df_pres_t['status_num'].mean() * 100
             c4.metric("Taxa de Presença", f"{freq_local:.1f}%")
 
-            st.divider()
-            col_graf, col_evasao = st.columns([2, 1])
-            with col_graf:
-                st.write("📈 **Frequência por Encontro**")
-                if not df_pres_t.empty:
-                    evolucao = df_pres_t.groupby('data_encontro')['status_num'].mean() * 100
-                    fig = px.line(evolucao.reset_index(), x='data_encontro', y='status_num', markers=True)
-                    fig.update_traces(line_color='#e03d11')
-                    fig.update_layout(font=dict(color="#000000"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig, use_container_width=True)
-            with col_evasao:
-                st.write("🚨 **Alerta de Evasão Local**")
-                if not df_pres_t.empty:
-                    faltas = df_pres_t[df_pres_t['status'] == 'AUSENTE'].groupby('nome_catequizando').size().reset_index(name='faltas')
-                    criticos = faltas[faltas['faltas'] >= 2]
-                    if not criticos.empty: st.dataframe(criticos, hide_index=True)
-                    else: st.success("Nenhum risco detectado")
-
+# // INÍCIO DA ALTERAÇÃO: Proteção de IA e Geração de PDF
             st.divider()
             if st.button(f"✨ Gerar Perfil Completo de {turma_alvo}"):
-                with st.spinner("A IA está analisando a turma..."):
-                    temas = df_pres_t['tema_do_dia'].unique().tolist() if not df_pres_t.empty else []
-                    resumo = f"Freq: {freq_local:.1f}%, Alunos: {total_cat}, Encontros: {encontros}, Temas: {temas}"
-                    from ai_engine import analisar_turma_local
-                    analise_ia = analisar_turma_local(turma_alvo, resumo)
-                    
-                    metricas_pdf = {"Total de Catequizandos": total_cat, "Alunos Ativos": ativos, "Frequência Média": f"{freq_local:.1f}%", "Encontros Realizados": encontros, "Equipe Responsável": dados_t['catequista_responsavel']}
-                    lista_alunos_pdf = df_cat_t['nome_completo'].tolist() if not df_cat_t.empty else []
-                    
-                    st.session_state.pdf_turma = gerar_pdf_perfil_turma(turma_alvo, metricas_pdf, analise_ia, lista_alunos_pdf)
+                # --- TRAVA DE SEGURANÇA PARA ECONOMIA DE COTA IA ---
+                if total_cat == 0:
+                    st.warning("⚠️ Esta turma não possui catequizandos cadastrados. Não há dados para a IA analisar.")
+                    analise_ia = "Perfil indisponível: Esta turma ainda não possui catequizandos ativos registrados no sistema para uma análise pastoral detalhada."
+                else:
+                    with st.spinner("A IA está analisando a turma e preparando o PDF..."):
+                        temas = df_pres_t['tema_do_dia'].unique().tolist() if not df_pres_t.empty else []
+                        resumo = f"Freq: {freq_local:.1f}%, Alunos: {total_cat}, Encontros: {encontros}, Temas: {temas}"
+                        from ai_engine import analisar_turma_local
+                        analise_ia = analisar_turma_local(turma_alvo, resumo)
+                
+                # --- PREPARAÇÃO DOS DADOS PARA O PDF ---
+                metricas_pdf = {
+                    "Total de Catequizandos": total_cat, 
+                    "Alunos Ativos": ativos, 
+                    "Frequência Média": f"{freq_local:.1f}%", 
+                    "Encontros Realizados": encontros, 
+                    "Equipe Responsável": dados_t['catequista_responsavel']
+                }
+                lista_alunos_pdf = df_cat_t['nome_completo'].tolist() if not df_cat_t.empty else []
+                
+                # Chama o gerador de PDF (que já está no seu utils.py)
+                from utils import gerar_pdf_perfil_turma
+                st.session_state.pdf_turma = gerar_pdf_perfil_turma(turma_alvo, metricas_pdf, analise_ia, lista_alunos_pdf)
+            
             
             if "pdf_turma" in st.session_state:
-                st.download_button(label="📥 Baixar Relatório em PDF", data=st.session_state.pdf_turma, file_name=f"Perfil_{turma_alvo}.pdf", mime="application/pdf")
+                st.download_button(
+                    label="📥 Baixar Relatório em PDF", 
+                    data=st.session_state.pdf_turma, 
+                    file_name=f"Perfil_{turma_alvo}.pdf", 
+                    mime="application/pdf"
+                )
+
+
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
@@ -995,3 +1000,4 @@ elif menu == "👥 Gestão de Catequistas":
                         lista_p = [[id_f, dict_cat[nome]] for nome in participantes]
                         if salvar_presenca_formacao(lista_p):
                             st.success("Registrado!"); st.balloons(); st.rerun()
+
