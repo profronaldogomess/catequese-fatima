@@ -93,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Importações das nossas funções personalizadas
-from database import ler_aba, salvar_lote_catequizandos, atualizar_catequizando, conectar_google_sheets, atualizar_turma, salvar_presencas, verificar_login, salvar_encontro, salvar_tema_cronograma, buscar_encontro_por_data, atualizar_usuario, salvar_formacao, salvar_presenca_formacao
+from database import ler_aba, salvar_lote_catequizandos, atualizar_catequizando, conectar_google_sheets, atualizar_turma, salvar_presencas, verificar_login, salvar_encontro, salvar_tema_cronograma, buscar_encontro_por_data, atualizar_usuario, salvar_formacao, salvar_presenca_formacao, mover_catequizandos_em_massa
 from utils import calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, obter_aniversariantes_mes, converter_para_data, verificar_status_ministerial, obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf
 
 # --- FUNÇÕES AUXILIARES DE LOGO ---
@@ -462,6 +462,7 @@ elif menu == "📝 Cadastrar Catequizando":
     st.title("📝 Cadastro de Catequizandos")
     tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
 
+# // INÍCIO DA ALTERAÇÃO: Correção de Associação de Turma e Reset de Formulário
     with tab_manual:
         tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
         df_t = ler_aba("turmas")
@@ -471,12 +472,12 @@ elif menu == "📝 Cadastrar Catequizando":
         else:
             lista_turmas = df_t['nome_turma'].tolist() if not df_t.empty else ["SEM TURMAS CADASTRADAS"]
 
-        with st.form("form_cadastro_detalhado"):
+        with st.form("form_cadastro_detalhado", clear_on_submit=True):
             st.subheader("📍 Informações Básicas")
             c1, c2, c3 = st.columns([2, 1, 1])
             nome = c1.text_input("Nome Completo").upper()
-            data_nasc = c2.date_input("Data de Nascimento", min_value=date(1930, 1, 1))
-            etapa = c3.selectbox("Turma/Etapa", lista_turmas)
+            data_nasc = c2.date_input("Data de Nascimento", value=date(2015, 1, 1))
+            etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
 
             c4, c5, c6 = st.columns(3)
             contato = c4.text_input("Telefone/WhatsApp")
@@ -505,14 +506,17 @@ elif menu == "📝 Cadastrar Catequizando":
                 nome_mae, nome_pai, responsavel, medicamento, tgo = "N/A", "N/A", "N/A", "NÃO", "NÃO"
 
             if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
-                if nome and contato:
+                if nome and contato and etapa_inscricao != "SEM TURMAS CADASTRADAS":
                     novo_id = f"CAT-{int(time.time())}"
-                    registro = [[novo_id, etapa, nome, str(data_nasc), batizado, contato, endereco, nome_mae, nome_pai, responsavel, docs_faltando, pastoral, "ATIVO", medicamento, tgo, estado_civil, sacramentos]]
+                    registro = [[novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco, nome_mae, nome_pai, responsavel, docs_faltando, pastoral, "ATIVO", medicamento, tgo, estado_civil, sacramentos]]
                     if salvar_lote_catequizandos(registro):
-                        st.success(f"✅ {nome} CADASTRADO!")
+                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO NA TURMA {etapa_inscricao}!")
                         st.balloons()
+                        time.sleep(1)
+                        st.rerun()
                 else:
-                    st.warning("Nome e Contato são obrigatórios.")
+                    st.warning("Nome, Contato e Turma são obrigatórios.")
+# // FIM DA ALTERAÇÃO
 
     with tab_csv:
         st.subheader("📥 Importação em Massa")
@@ -651,8 +655,8 @@ elif menu == "🏫 Gestão de Turmas":
     df_cat = ler_aba("catequizandos")
     df_pres = ler_aba("presencas")
     df_usuarios = ler_aba("usuarios")
-    
-    t1, t2, t3, t4 = st.tabs(["Visualizar Turmas", "➕ Criar Nova Turma", "✏️ Detalhes e Edição", "📊 Dashboard Local"])
+       
+    t1, t2, t3, t4, t5 = st.tabs(["Visualizar Turmas", "➕ Criar Nova Turma", "✏️ Detalhes e Edição", "📊 Dashboard Local", "🚀 Movimentação em Massa"])    
     dias_opcoes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
 
     with t1:
@@ -759,6 +763,35 @@ elif menu == "🏫 Gestão de Turmas":
             
             if "pdf_turma" in st.session_state:
                 st.download_button(label="📥 Baixar Relatório em PDF", data=st.session_state.pdf_turma, file_name=f"Perfil_{turma_alvo}.pdf", mime="application/pdf")
+
+    with t5:
+        st.subheader("🚀 Promover ou Transferir Catequizandos em Massa")
+        st.write("Selecione a turma de origem e a turma de destino para mover vários alunos de uma vez.")
+        if not df_turmas.empty and not df_cat.empty:
+            col_m1, col_m2 = st.columns(2)
+            turma_origem = col_m1.selectbox("Turma de ORIGEM:", [""] + df_turmas['nome_turma'].tolist(), key="m_origem")
+            turma_destino = col_m2.selectbox("Turma de DESTINO:", [""] + df_turmas['nome_turma'].tolist(), key="m_destino")
+            
+            if turma_origem:
+                alunos_da_turma = df_cat[df_cat['etapa'] == turma_origem]
+                if not alunos_da_turma.empty:
+                    st.write(f"Selecione os catequizandos de **{turma_origem}** que serão movidos:")
+                    lista_para_mover = []
+                    for _, row in alunos_da_turma.iterrows():
+                        if st.checkbox(f"{row['nome_completo']} (ID: {row['id_catequizando']})", key=f"chk_{row['id_catequizando']}"):
+                            lista_para_mover.append(row['id_catequizando'])
+                    
+                    if st.button("🚀 EXECUTAR MOVIMENTAÇÃO EM MASSA"):
+                        if lista_para_mover and turma_destino and turma_origem != turma_destino:
+                            with st.spinner("Processando movimentação..."):
+                                if mover_catequizandos_em_massa(lista_para_mover, turma_destino):
+                                    st.success(f"✅ Sucesso! {len(lista_para_mover)} catequizandos movidos para {turma_destino}.")
+                                    time.sleep(1)
+                                    st.rerun()
+                        else:
+                            st.error("Selecione os alunos e uma turma de destino diferente da origem.")
+                else:
+                    st.info("Nenhum catequizando encontrado nesta turma.")
 
 # --- PÁGINA: FAZER CHAMADA ---
 elif menu == "✅ Fazer Chamada":
