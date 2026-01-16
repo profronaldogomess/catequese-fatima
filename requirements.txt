@@ -1,0 +1,8 @@
+streamlit
+pandas
+gspread
+google-auth
+google-genai
+plotly
+fpdf
+openpyxl
