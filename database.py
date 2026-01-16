@@ -4,7 +4,8 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
 
-SCOPE = ["https://www.googleapis.com/spreadsheets", "https://www.googleapis.com/auth/drive"]
+# --- CONFIGURAÇÃO DE ACESSO ---
+SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 def conectar_google_sheets():
     try:
@@ -13,12 +14,15 @@ def conectar_google_sheets():
             creds = Credentials.from_service_account_info(info_do_cofre, scopes=SCOPE)
         else:
             creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
+            
         client = gspread.authorize(creds)
         planilha = client.open("BD_Catequese")
         return planilha
     except Exception as e:
         st.error(f"Erro de conexão: {e}")
         return None
+
+# --- FUNÇÕES DE LEITURA ---
 
 @st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
@@ -27,12 +31,19 @@ def ler_aba(nome_aba):
         try:
             aba = planilha.worksheet(nome_aba)
             todos_os_valores = aba.get_all_values()
-            if len(todos_os_valores) <= 1: return pd.DataFrame()
+            
+            if len(todos_os_valores) <= 1:
+                return pd.DataFrame()
+            
             df = pd.DataFrame(todos_os_valores[1:], columns=todos_os_valores[0])
             df.columns = [str(c).strip().lower() for c in df.columns]
             return df
-        except: return pd.DataFrame()
+        except Exception as e:
+            st.error(f"Erro ao ler a aba {nome_aba}: {e}")
+            return pd.DataFrame()
     return pd.DataFrame()
+
+# --- FUNÇÕES DE SALVAMENTO ---
 
 def salvar_lote_catequizandos(lista_de_listas):
     planilha = conectar_google_sheets()
@@ -42,25 +53,29 @@ def salvar_lote_catequizandos(lista_de_listas):
             aba.append_rows(lista_de_listas)
             st.cache_data.clear()
             return True
-        except: return False
+        except Exception as e: st.error(f"Erro: {e}")
     return False
 
-# --- NOVA FUNÇÃO PARA MOVIMENTAÇÃO EM MASSA ---
-def mover_catequizandos_em_massa(lista_ids, nova_turma):
+def salvar_presencas(lista_presencas):
     planilha = conectar_google_sheets()
     if planilha:
         try:
-            aba = planilha.worksheet("catequizandos")
-            headers = aba.row_values(1)
-            col_id = headers.index("id_catequizando") + 1
-            col_etapa = headers.index("etapa") + 1
-            for cid in lista_ids:
-                celula = aba.find(str(cid), in_col=col_id)
-                if celula:
-                    aba.update_cell(celula.row, col_etapa, nova_turma)
+            aba = planilha.worksheet("presencas")
+            aba.append_rows(lista_presencas)
             st.cache_data.clear()
             return True
-        except: return False
+        except Exception as e: st.error(f"Erro: {e}")
+    return False
+
+def salvar_encontro(dados_encontro):
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("encontros")
+            aba.append_row(dados_encontro)
+            st.cache_data.clear()
+            return True
+        except Exception as e: st.error(f"Erro: {e}")
     return False
 
 def atualizar_catequizando(id_catequizando, novos_dados_lista):
@@ -73,28 +88,44 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
                 aba.update(f"A{celula.row}:Q{celula.row}", [novos_dados_lista])
                 st.cache_data.clear()
                 return True
-        except: return False
+        except Exception as e: st.error(f"Erro: {e}")
+    return False
+
+# --- FUNÇÃO QUE ESTAVA FALTANDO ---
+def mover_catequizandos_em_massa(lista_ids, nova_turma):
+    """Atualiza a turma de vários catequizandos de uma vez na planilha."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("catequizandos")
+            # Localiza as colunas necessárias
+            headers = aba.row_values(1)
+            col_id = headers.index("id_catequizando") + 1
+            col_etapa = headers.index("etapa") + 1
+            
+            for cid in lista_ids:
+                celula = aba.find(str(cid), in_col=col_id)
+                if celula:
+                    aba.update_cell(celula.row, col_etapa, nova_turma)
+            
+            st.cache_data.clear()
+            return True
+        except Exception as e:
+            st.error(f"Erro na movimentação em massa: {e}")
     return False
 
 def verificar_login(email, senha):
     try:
         df_usuarios = ler_aba("usuarios") 
         if df_usuarios.empty: return None
-        usuario = df_usuarios[(df_usuarios['email'] == str(email)) & (df_usuarios['senha'] == str(senha))]
+        
+        usuario = df_usuarios[
+            (df_usuarios['email'].astype(str) == str(email)) & 
+            (df_usuarios['senha'].astype(str) == str(senha))
+        ]
         if not usuario.empty: return usuario.iloc[0].to_dict()
     except: return None
     return None
-
-def salvar_presencas(lista_presencas):
-    planilha = conectar_google_sheets()
-    if planilha:
-        try:
-            aba = planilha.worksheet("presencas")
-            aba.append_rows(lista_presencas)
-            st.cache_data.clear()
-            return True
-        except: return False
-    return False
 
 def buscar_encontro_por_data(turma, data_procurada):
     try:
