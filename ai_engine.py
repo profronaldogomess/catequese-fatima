@@ -32,7 +32,7 @@ def analisar_turma_local(nome_turma, dados_resumo):
 def gerar_relatorio_sacramentos_ia(resumo_sacramentos):
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        prompt = f"Gere um relatório pastoral sobre os sacramentos realizados: {resumo_sacramentos}"
+        prompt = f"Gere um relatório pastoral inteligente sobre os sacramentos realizados este ano: {resumo_sacramentos}"
         response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
         return response.text
     except Exception as e:
