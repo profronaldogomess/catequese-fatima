@@ -43,7 +43,7 @@ def ler_aba(nome_aba):
             return pd.DataFrame()
     return pd.DataFrame()
 
-# --- FUNÇÕES DE SALVAMENTO ---
+# --- FUNÇÕES DE SALVAMENTO E EDIÇÃO ---
 
 def salvar_lote_catequizandos(lista_de_listas):
     planilha = conectar_google_sheets()
@@ -91,14 +91,12 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
         except Exception as e: st.error(f"Erro: {e}")
     return False
 
-# --- FUNÇÃO QUE ESTAVA FALTANDO ---
 def mover_catequizandos_em_massa(lista_ids, nova_turma):
     """Atualiza a turma de vários catequizandos de uma vez na planilha."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("catequizandos")
-            # Localiza as colunas necessárias
             headers = aba.row_values(1)
             col_id = headers.index("id_catequizando") + 1
             col_etapa = headers.index("etapa") + 1
@@ -112,6 +110,21 @@ def mover_catequizandos_em_massa(lista_ids, nova_turma):
             return True
         except Exception as e:
             st.error(f"Erro na movimentação em massa: {e}")
+    return False
+
+def excluir_turma(id_turma):
+    """Remove uma turma da planilha."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("turmas")
+            celula = aba.find(str(id_turma))
+            if celula:
+                aba.delete_rows(celula.row)
+                st.cache_data.clear()
+                return True
+        except Exception as e:
+            st.error(f"Erro ao excluir turma: {e}")
     return False
 
 def verificar_login(email, senha):
