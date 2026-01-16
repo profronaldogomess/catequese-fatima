@@ -98,6 +98,20 @@ def limpar_texto(texto):
     if not texto: return ""
     return str(texto).encode('latin-1', 'replace').decode('latin-1')
 
+def finalizar_pdf(pdf):
+    """Trata a saída do PDF para ser compatível com Local e Cloud (FPDF vs FPDF2)."""
+    try:
+        saida = pdf.output()
+        if isinstance(saida, str):
+            return saida.encode('latin-1')
+        return bytes(saida)
+    except Exception as e:
+        # Fallback para FPDF2 que as vezes exige dest='S' ou retorna bytearray
+        try:
+            return pdf.output(dest='S').encode('latin-1')
+        except:
+            return pdf.output()
+
 def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
     pdf = FPDF()
     pdf.add_page()
@@ -126,7 +140,7 @@ def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
     for aluno in lista_alunos:
         pdf.cell(0, 6, limpar_texto(f"- {aluno}"), ln=True)
         
-    return bytes(pdf.output())
+    return finalizar_pdf(pdf)
 
 def gerar_ficha_cadastral_catequizando(dados):
     """Gera ficha de inscrição com linhas de assinatura."""
@@ -182,9 +196,6 @@ def gerar_ficha_cadastral_catequizando(dados):
     pdf.ln(2)
     pdf.set_font("helvetica", "", 11)
     
-    # CORREÇÃO DO PDF CORTADO:
-    # 1. Força o cursor para a esquerda
-    # 2. Usa w=0 para usar a largura disponível até a margem direita
     pdf.set_x(10)
     pdf.multi_cell(0, 6, limpar_texto(f"Medicamentos/Alergias: {dados.get('toma_medicamento_sn', '')}"))
     
@@ -206,7 +217,7 @@ def gerar_ficha_cadastral_catequizando(dados):
     pdf.set_xy(110, y_ass + 2)
     pdf.cell(80, 5, limpar_texto("Assinatura do Catequista/Coordenação"), align='C')
     
-    return bytes(pdf.output())
+    return finalizar_pdf(pdf)
 
 def gerar_ficha_catequista_pdf(dados, df_formacoes):
     """Gera ficha do catequista com histórico de formações."""
@@ -269,7 +280,7 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
         pdf.set_font("helvetica", "", 10)
         for _, row in df_formacoes.iterrows():
             data_fmt = str(row.get('data', ''))
-            tema_fmt = limpar_texto(str(row.get('tema', '')))[:50] # Corta se for mt grande
+            tema_fmt = limpar_texto(str(row.get('tema', '')))[:50]
             form_fmt = limpar_texto(str(row.get('formador', '')))[:30]
             
             pdf.cell(30, 8, data_fmt, 1)
@@ -293,4 +304,4 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.set_xy(110, y_ass + 2)
     pdf.cell(80, 5, limpar_texto("Assinatura do Coordenador"), align='C')
     
-    return bytes(pdf.output())
+    return finalizar_pdf(pdf)
