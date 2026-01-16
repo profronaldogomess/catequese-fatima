@@ -22,7 +22,7 @@ def conectar_google_sheets():
         st.error(f"Erro de conexão: {e}")
         return None
 
-# --- FUNÇÕES DE LEITURA (COM LIMPEZA DE CABEÇALHO) ---
+# --- FUNÇÕES DE LEITURA ---
 
 @st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
@@ -89,6 +89,28 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
                 st.cache_data.clear()
                 return True
         except Exception as e: st.error(f"Erro: {e}")
+    return False
+
+def mover_catequizandos_em_massa(lista_ids, nova_turma):
+    """Atualiza a turma de vários catequizandos de uma vez."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("catequizandos")
+            # Localiza as colunas necessárias
+            headers = aba.row_values(1)
+            col_id = headers.index("id_catequizando") + 1
+            col_etapa = headers.index("etapa") + 1
+            
+            for cid in lista_ids:
+                celula = aba.find(str(cid), in_col=col_id)
+                if celula:
+                    aba.update_cell(celula.row, col_etapa, nova_turma)
+            
+            st.cache_data.clear()
+            return True
+        except Exception as e:
+            st.error(f"Erro na movimentação em massa: {e}")
     return False
 
 def verificar_login(email, senha):
