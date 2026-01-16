@@ -22,7 +22,7 @@ def conectar_google_sheets():
         st.error(f"Erro de conexão: {e}")
         return None
 
-# --- FUNÇÕES DE LEITURA ---
+# --- FUNÇÕES DE LEITURA (COM LIMPEZA DE CABEÇALHO) ---
 
 @st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
@@ -92,7 +92,7 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
     return False
 
 def mover_catequizandos_em_massa(lista_ids, nova_turma):
-    """Atualiza a turma de vários catequizandos de uma vez."""
+    """Atualiza a turma de vários catequizandos de uma vez na planilha."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
