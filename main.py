@@ -575,9 +575,11 @@ elif menu == "⚙️ Gestão e Movimentação":
             st.info(f"💡 **Análise:** Idade: {idade} anos | Sugestão de Etapa: {sugestao}")
 
             # --- BOTÃO DE GERAR FICHA PDF (CATEQUIZANDO) ---
-            if st.button(f"📄 Baixar Ficha de {escolha}"):
-                pdf_bytes = gerar_ficha_cadastral_catequizando(dados.to_dict())
-                st.download_button("📥 Download PDF", pdf_bytes, f"Ficha_{escolha}.pdf", "application/pdf")
+            if st.button(f"📄 Gerar Ficha de Inscrição de {escolha}"):
+                st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
+            
+            if "pdf_catequizando" in st.session_state:
+                st.download_button("📥 Download PDF Catequizando", st.session_state.pdf_catequizando, f"Ficha_{escolha}.pdf", "application/pdf")
             # -----------------------------------------------
 
             with st.form("edicao_completa_catequizando"):
@@ -753,9 +755,10 @@ elif menu == "🏫 Gestão de Turmas":
                     lista_alunos_pdf = df_cat_t['nome_completo'].tolist() if not df_cat_t.empty else []
                     
                     from utils import gerar_pdf_perfil_turma
-                    pdf_bytes = gerar_pdf_perfil_turma(turma_alvo, metricas_pdf, analise_ia, lista_alunos_pdf)
-                    
-                    st.download_button(label="📥 Baixar Relatório em PDF", data=pdf_bytes, file_name=f"Perfil_{turma_alvo}.pdf", mime="application/pdf")
+                    st.session_state.pdf_turma = gerar_pdf_perfil_turma(turma_alvo, metricas_pdf, analise_ia, lista_alunos_pdf)
+            
+            if "pdf_turma" in st.session_state:
+                st.download_button(label="📥 Baixar Relatório em PDF", data=st.session_state.pdf_turma, file_name=f"Perfil_{turma_alvo}.pdf", mime="application/pdf")
 
 # --- PÁGINA: FAZER CHAMADA ---
 elif menu == "✅ Fazer Chamada":
@@ -929,9 +932,11 @@ elif menu == "👥 Gestão de Catequistas":
                     st.info("Sem registros de formação no sistema.")
                 
                 # --- BOTÃO PDF CATEQUISTA ---
-                if st.button(f"📄 Baixar Ficha de {escolha_c}"):
-                    pdf_bytes = gerar_ficha_catequista_pdf(u.to_dict(), forms_participadas)
-                    st.download_button("📥 Download Ficha Catequista", pdf_bytes, f"Ficha_{escolha_c}.pdf", "application/pdf")
+                if st.button(f"📄 Gerar Ficha de {escolha_c}"):
+                    st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), forms_participadas)
+                
+                if "pdf_catequista" in st.session_state:
+                    st.download_button("📥 Download Ficha Catequista", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf", "application/pdf")
                 # ----------------------------
                 st.divider()
 
