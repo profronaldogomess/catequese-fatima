@@ -117,7 +117,7 @@ def adicionar_cabecalho_institucional(pdf, titulo_documento):
         pdf.image("logo.png", 10, 8, 33)
     
     pdf.set_font("helvetica", "B", 14)
-    pdf.set_text_color(65, 123, 153) # Azul do Sistema
+    pdf.set_text_color(65, 123, 153) # Azul do Sistema (#417b99)
     pdf.cell(0, 7, limpar_texto("DIOCESE DE ITABUNA"), ln=True, align='C')
     pdf.set_font("helvetica", "B", 12)
     pdf.cell(0, 7, limpar_texto("PARÓQUIA NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
@@ -126,7 +126,7 @@ def adicionar_cabecalho_institucional(pdf, titulo_documento):
     
     pdf.ln(5)
     pdf.set_font("helvetica", "B", 16)
-    pdf.set_text_color(224, 61, 17) # Laranja do Sistema
+    pdf.set_text_color(224, 61, 17) # Laranja do Sistema (#e03d11)
     pdf.cell(0, 10, limpar_texto(titulo_documento), ln=True, align='C')
     pdf.set_text_color(0, 0, 0) # Volta para preto
     pdf.ln(5)
@@ -205,7 +205,7 @@ def gerar_ficha_cadastral_catequizando(dados):
     # Assinaturas
     pdf.ln(20)
     pdf.set_font("helvetica", "I", 9)
-    pdf.cell(0, 5, limpar_texto(f"Itabuna - BA, {date.today().strftime('%d de %B de %Y')}"), ln=1, align='R')
+    pdf.cell(0, 5, limpar_texto(f"Itabuna - BA, {date.today().strftime('%d/%m/%Y')}"), ln=1, align='R')
     pdf.ln(15)
     
     y_ass = pdf.get_y()
@@ -224,27 +224,37 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.add_page()
     adicionar_cabecalho_institucional(pdf, "FICHA CADASTRAL DO CATEQUISTA")
     
-    desenhar_secao(pdf, "DADOS PESSOAIS E ECLESIAIS")
+    # 1. Dados Pessoais
+    desenhar_secao(pdf, "1. DADOS PESSOAIS E ECLESIAIS")
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(110, 8, limpar_texto(f"Nome: {dados.get('nome', '')}"), ln=0)
-    pdf.cell(80, 8, limpar_texto(f"Nascimento: {dados.get('data_nascimento', '')}"), ln=1)
+    
+    col_w = 95
+    pdf.cell(col_w, 8, limpar_texto(f"Nome: {dados.get('nome', '')}"), ln=0)
+    pdf.cell(col_w, 8, limpar_texto(f"Nascimento: {dados.get('data_nascimento', '')}"), ln=1)
     
     pdf.set_font("helvetica", "", 10)
-    pdf.cell(110, 8, limpar_texto(f"E-mail: {dados.get('email', '')}"), ln=0)
-    pdf.cell(80, 8, limpar_texto(f"Telefone: {dados.get('telefone', '')}"), ln=1)
+    pdf.cell(col_w, 8, limpar_texto(f"E-mail: {dados.get('email', '')}"), ln=0)
+    pdf.cell(col_w, 8, limpar_texto(f"Telefone: {dados.get('telefone', '')}"), ln=1)
     
-    pdf.cell(110, 8, limpar_texto(f"Turmas Vinculadas: {dados.get('turma_vinculada', '')}"), ln=0)
-    pdf.cell(80, 8, limpar_texto(f"Início na Catequese: {dados.get('data_inicio_catequese', '')}"), ln=1)
-    
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(col_w, 8, limpar_texto(f"Turmas: {dados.get('turma_vinculada', '')}"), ln=0)
+    pdf.cell(col_w, 8, limpar_texto(f"Início na Catequese: {dados.get('data_inicio_catequese', '')}"), ln=1)
     pdf.ln(3)
-    desenhar_secao(pdf, "VIDA SACRAMENTAL")
-    pdf.cell(47, 8, limpar_texto(f"Batismo: {dados.get('data_batismo', '')}"), ln=0)
-    pdf.cell(47, 8, limpar_texto(f"Eucaristia: {dados.get('data_eucaristia', '')}"), ln=0)
-    pdf.cell(47, 8, limpar_texto(f"Crisma: {dados.get('data_crisma', '')}"), ln=0)
-    pdf.cell(47, 8, limpar_texto(f"Ministério: {dados.get('data_ministerio', 'NÃO')}"), ln=1)
     
+    # 2. Vida Sacramental
+    desenhar_secao(pdf, "2. VIDA SACRAMENTAL")
+    pdf.set_font("helvetica", "B", 10)
+    
+    # Organizando em 4 colunas pequenas
+    c4 = 47
+    pdf.cell(c4, 8, limpar_texto(f"Batismo: {dados.get('data_batismo', '')}"), ln=0)
+    pdf.cell(c4, 8, limpar_texto(f"Eucaristia: {dados.get('data_eucaristia', '')}"), ln=0)
+    pdf.cell(c4, 8, limpar_texto(f"Crisma: {dados.get('data_crisma', '')}"), ln=0)
+    pdf.cell(c4, 8, limpar_texto(f"Ministério: {dados.get('data_ministerio', 'NÃO')}"), ln=1)
     pdf.ln(3)
-    desenhar_secao(pdf, f"HISTÓRICO DE FORMAÇÕES ({date.today().year})")
+    
+    # 3. Histórico de Formações
+    desenhar_secao(pdf, f"3. HISTÓRICO DE FORMAÇÕES ({date.today().year})")
     
     if not df_formacoes.empty:
         pdf.set_fill_color(240, 240, 240)
@@ -262,7 +272,12 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
         pdf.set_font("helvetica", "I", 10)
         pdf.cell(0, 10, limpar_texto("Nenhuma formação registrada no período."), ln=1)
 
+    # Assinaturas
     pdf.ln(25)
+    pdf.set_font("helvetica", "I", 9)
+    pdf.cell(0, 5, limpar_texto(f"Itabuna - BA, {date.today().strftime('%d/%m/%Y')}"), ln=1, align='R')
+    pdf.ln(15)
+    
     y_ass = pdf.get_y()
     pdf.line(15, y_ass, 95, y_ass)
     pdf.line(115, y_ass, 195, y_ass)
