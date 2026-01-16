@@ -24,7 +24,7 @@ def conectar_google_sheets():
 
 # --- FUNÇÕES DE LEITURA (COM LIMPEZA DE CABEÇALHO) ---
 
-@st.cache_data(ttl=60) # Reduzi o tempo de memória para 60 segundos para atualizar mais rápido
+@st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
     planilha = conectar_google_sheets()
     if planilha:
@@ -35,14 +35,8 @@ def ler_aba(nome_aba):
             if len(todos_os_valores) <= 1:
                 return pd.DataFrame()
             
-            # Cria o DataFrame
             df = pd.DataFrame(todos_os_valores[1:], columns=todos_os_valores[0])
-            
-            # --- A MÁGICA: LIMPEZA DOS NOMES DAS COLUNAS ---
-            # Transforma tudo em minúsculo e remove espaços extras (ex: "Data " vira "data")
             df.columns = [str(c).strip().lower() for c in df.columns]
-            # -----------------------------------------------
-            
             return df
         except Exception as e:
             st.error(f"Erro ao ler a aba {nome_aba}: {e}")
