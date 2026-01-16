@@ -99,18 +99,22 @@ def limpar_texto(texto):
     return str(texto).encode('latin-1', 'replace').decode('latin-1')
 
 def finalizar_pdf(pdf):
-    """Trata a saída do PDF para ser compatível com Local e Cloud (FPDF vs FPDF2)."""
+    """Garante o retorno de bytes real, compatível com FPDF e FPDF2."""
     try:
+        # Tenta o modo FPDF2 (retorna bytes)
         saida = pdf.output()
-        if isinstance(saida, str):
-            return saida.encode('latin-1')
-        return bytes(saida)
-    except Exception as e:
-        # Fallback para FPDF2 que as vezes exige dest='S' ou retorna bytearray
+        if saida and len(saida) > 0:
+            if isinstance(saida, str): return saida.encode('latin-1')
+            return bytes(saida)
+        
+        # Fallback para FPDF clássico (exige dest='S' para retornar string)
+        return pdf.output(dest='S').encode('latin-1')
+    except:
+        # Última tentativa forçando string
         try:
             return pdf.output(dest='S').encode('latin-1')
         except:
-            return pdf.output()
+            return b""
 
 def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
     pdf = FPDF()
