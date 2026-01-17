@@ -256,6 +256,11 @@ if menu == "🏠 Início / Dashboard":
 
         # --- SEÇÃO 2: DESEMPENHO ---
         st.subheader("📈 Desempenho e Frequência")
+        
+        # INICIALIZAÇÃO DE SEGURANÇA PARA VARIÁVEIS DA IA
+        freq_global = 0.0
+        temas_vistos = []
+
         if df_pres.empty:
             st.info("Ainda não há registros de presença.")
         else:
@@ -276,6 +281,7 @@ if menu == "🏠 Início / Dashboard":
             with c2:
                 total_encontros = df_pres['data_encontro'].nunique()
                 freq_global = df_pres['status_num'].mean() * 100
+                temas_vistos = df_pres['tema_do_dia'].unique().tolist()
                 st.metric("Encontros Realizados", total_encontros)
                 st.write(f"**Frequência Global:** {freq_global:.1f}%")
                 st.progress(freq_global / 100)
@@ -312,7 +318,6 @@ if menu == "🏠 Início / Dashboard":
         st.subheader("🤖 Assistente Pastoral (IA Gemini)")
         if st.button("✨ Gerar Relatório Inteligente com IA"):
             with st.spinner("O Gemini está analisando os dados..."):
-                temas_vistos = df_pres['tema_do_dia'].unique().tolist() if not df_pres.empty else []
                 resumo_para_ia = f"Total: {total_cat}, Freq: {freq_global:.1f}%, Temas: {temas_vistos}"
                 from ai_engine import gerar_analise_pastoral
                 st.markdown(gerar_analise_pastoral(resumo_para_ia))
@@ -925,7 +930,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
     with tab_hist:
         st.subheader("📜 Histórico de Eventos Sacramentais")
         if not df_sac_eventos.empty:
-            # CORREÇÃO: Ordenação segura por 'data'
             df_hist_show = df_sac_eventos.copy()
             if 'data' in df_hist_show.columns:
                 df_hist_show = df_hist_show.sort_values(by='data', ascending=False)
