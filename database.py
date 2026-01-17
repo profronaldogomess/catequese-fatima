@@ -93,17 +93,16 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
     return False
 
 def mover_catequizandos_em_massa(lista_ids, nova_turma):
-    """Atualiza a turma de vários catequizandos de uma vez na planilha."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("catequizandos")
-            headers = aba.row_values(1)
+            headers = [h.lower() for h in aba.row_values(1)]
             col_id = headers.index("id_catequizando") + 1
             col_etapa = headers.index("etapa") + 1
             
             for cid in lista_ids:
-                celula = aba.find(str(cid), in_col=col_id)
+                celula = aba.find(str(cid), in_column=col_id) # CORREÇÃO: in_column
                 if celula:
                     aba.update_cell(celula.row, col_etapa, nova_turma)
             
@@ -114,7 +113,6 @@ def mover_catequizandos_em_massa(lista_ids, nova_turma):
     return False
 
 def excluir_turma(id_turma):
-    """Remove uma turma da planilha."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -201,23 +199,14 @@ def salvar_presenca_formacao(lista_presencas):
         except: return False
     return False
 
-# --- NOVAS FUNÇÕES DE SACRAMENTOS (FASE 2) ---
-
 def registrar_evento_sacramento_completo(dados_evento, lista_participantes, tipo_sacramento):
-    """
-    Salva o evento, os participantes e ATUALIZA a ficha individual de cada um automaticamente.
-    """
     planilha = conectar_google_sheets()
     if not planilha: return False
     
     try:
-        # 1. Salva o Evento na aba 'sacramentos_eventos'
         planilha.worksheet("sacramentos_eventos").append_row(dados_evento)
-        
-        # 2. Salva os Participantes na aba 'sacramentos_recebidos'
         planilha.worksheet("sacramentos_recebidos").append_rows(lista_participantes)
         
-        # 3. Atualização Automática na aba 'catequizandos'
         aba_cat = planilha.worksheet("catequizandos")
         headers = [h.lower() for h in aba_cat.row_values(1)]
         col_id = headers.index("id_catequizando") + 1
@@ -226,12 +215,11 @@ def registrar_evento_sacramento_completo(dados_evento, lista_participantes, tipo
         
         for p in lista_participantes:
             id_cat = p[1]
-            celula = aba_cat.find(str(id_cat), in_col=col_id)
+            celula = aba_cat.find(str(id_cat), in_column=col_id) # CORREÇÃO: in_column
             if celula:
                 if tipo_sacramento == "BATISMO":
                     aba_cat.update_cell(celula.row, col_batizado, "SIM")
                 else:
-                    # Para Eucaristia e Crisma, adicionamos ao texto existente sem duplicar
                     valor_atual = aba_cat.cell(celula.row, col_sacramentos).value or ""
                     if tipo_sacramento not in valor_atual.upper():
                         novo_valor = f"{valor_atual}, {tipo_sacramento}".strip(", ")
