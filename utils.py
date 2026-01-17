@@ -3,6 +3,7 @@ from datetime import date, datetime
 import pandas as pd
 from fpdf import FPDF
 import os
+import re
 
 # --- FUNÇÕES DE CÁLCULO E DATA ---
 def calcular_idade(data_nascimento):
@@ -96,7 +97,9 @@ def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
 
 def limpar_texto(texto):
     if not texto: return ""
-    return str(texto).encode('latin-1', 'replace').decode('latin-1')
+    # Remove Markdown (asteriscos, hashtags, etc)
+    texto = re.sub(r'[*#_~-]', '', str(texto))
+    return texto.encode('latin-1', 'replace').decode('latin-1')
 
 def finalizar_pdf(pdf):
     try:
@@ -337,67 +340,87 @@ def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
         
     return finalizar_pdf(pdf)
 
-# --- NOVOS RELATÓRIOS DE DASHBOARD (FASE 2) ---
+# --- RELATÓRIOS TÉCNICOS (FASE 2 - REVISADOS) ---
 
-def gerar_relatorio_diocesano_pdf(dados_gerais, turmas_detalhes, sacramentos_stats):
-    """Relatório formal para a Diocese com censo completo."""
+def gerar_relatorio_diocesano_pdf(dados_gerais, turmas_detalhes, sacramentos_stats, projecoes):
     pdf = FPDF()
     pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO ANUAL DA CATEQUESE", etapa="DIOCESANO")
+    adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO TÉCNICO DA CATEQUESE", etapa="DIOCESANO")
     
-    # 1. Métricas Gerais
+    # 1. CENSO POPULACIONAL
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, limpar_texto("  1. DADOS CONSOLIDADOS DA PARÓQUIA"), ln=True, fill=True)
+    pdf.cell(0, 7, limpar_texto("  1. CENSO DE CATEQUIZANDOS E EQUIPE"), ln=True, fill=True)
     pdf.ln(2)
     
     y = pdf.get_y()
-    desenhar_campo_box(pdf, "Total de Catequizandos:", str(dados_gerais['total_cat']), 10, y, 60)
-    desenhar_campo_box(pdf, "Total de Turmas:", str(dados_gerais['total_turmas']), 75, y, 60)
-    desenhar_campo_box(pdf, "Equipe de Catequistas:", str(dados_gerais['total_equipe']), 140, y, 55)
+    desenhar_campo_box(pdf, "Total Geral:", str(dados_gerais['total_cat']), 10, y, 45)
+    desenhar_campo_box(pdf, "Infantil/Juvenil:", str(dados_gerais['total_kids']), 58, y, 45)
+    desenhar_campo_box(pdf, "Adultos:", str(dados_gerais['total_adults']), 106, y, 45)
+    desenhar_campo_box(pdf, "Equipe Catequética:", str(dados_gerais['total_equipe']), 154, y, 41)
     
-    y += 16
+    pdf.set_y(y + 18)
+    
+    # 2. SITUAÇÃO SACRAMENTAL E PROJEÇÕES
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 7, limpar_texto("  2. STATUS SACRAMENTAL E CRONOGRAMA DE GRAÇAS"), ln=True, fill=True)
+    pdf.ln(2)
+    
+    y = pdf.get_y()
     desenhar_campo_box(pdf, "Batismos Realizados:", str(sacramentos_stats['batismos']), 10, y, 60)
     desenhar_campo_box(pdf, "Eucaristias Realizadas:", str(sacramentos_stats['eucaristias']), 75, y, 60)
     desenhar_campo_box(pdf, "Crismas Realizadas:", str(sacramentos_stats['crismas']), 140, y, 55)
     
-    pdf.set_y(y + 18)
+    y += 16
+    pdf.set_xy(10, y)
+    pdf.set_font("helvetica", "B", 9)
+    pdf.set_text_color(224, 61, 17)
+    pdf.cell(0, 6, limpar_texto("PROJEÇÕES E DATAS AGENDADAS:"), ln=True)
+    pdf.set_font("helvetica", "", 9)
+    pdf.set_text_color(0, 0, 0)
     
-    # 2. Detalhamento por Turma
+    if projecoes:
+        for p in projecoes:
+            pdf.cell(0, 5, limpar_texto(f"- {p}"), ln=True)
+    else:
+        pdf.cell(0, 5, limpar_texto("Nenhuma data futura registrada no sistema."), ln=True)
+
+    pdf.ln(5)
+    
+    # 3. DETALHAMENTO DE TURMAS
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 7, limpar_texto("  2. DETALHAMENTO DAS ETAPAS E TURMAS"), ln=True, fill=True)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 7, limpar_texto("  3. MAPA DE TURMAS E ETAPAS"), ln=True, fill=True)
     pdf.ln(2)
     
     pdf.set_font("helvetica", "B", 9)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(60, 7, "Nome da Turma", 1, 0, 'L')
-    pdf.cell(40, 7, "Etapa", 1, 0, 'L')
-    pdf.cell(30, 7, "Dia/Horário", 1, 0, 'C')
-    pdf.cell(20, 7, "Alunos", 1, 0, 'C')
-    pdf.cell(45, 7, "Catequista Resp.", 1, 1, 'L')
+    pdf.cell(70, 7, "Nome da Turma", 1, 0, 'L')
+    pdf.cell(50, 7, "Público Alvo", 1, 0, 'L')
+    pdf.cell(40, 7, "Dia Encontro", 1, 0, 'C')
+    pdf.cell(25, 7, "Qtd Alunos", 1, 1, 'C')
     
     pdf.set_font("helvetica", "", 8)
     for t in turmas_detalhes:
-        pdf.cell(60, 6, limpar_texto(t['nome']), 1, 0, 'L')
-        pdf.cell(40, 6, limpar_texto(t['etapa']), 1, 0, 'L')
-        pdf.cell(30, 6, limpar_texto(t['dias']), 1, 0, 'C')
-        pdf.cell(20, 6, str(t['qtd_alunos']), 1, 0, 'C')
-        pdf.cell(45, 6, limpar_texto(t['catequista'][:25]), 1, 1, 'L')
+        pdf.cell(70, 6, limpar_texto(t['nome']), 1, 0, 'L')
+        pdf.cell(50, 6, limpar_texto(t['publico']), 1, 0, 'L')
+        pdf.cell(40, 6, limpar_texto(t['dias']), 1, 0, 'C')
+        pdf.cell(25, 6, str(t['qtd_alunos']), 1, 1, 'C')
 
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_pastoral_interno_pdf(dados_gerais, analise_ia):
-    """Relatório para reuniões internas com análise da IA."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL DE ALINHAMENTO INTERNO", etapa="PASTORAL")
     
-    pdf.set_fill_color(224, 61, 17) # Laranja para interno
+    pdf.set_fill_color(224, 61, 17) 
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, limpar_texto("  DIAGNÓSTICO PASTORAL E PEDAGÓGICO"), ln=True, fill=True)
+    pdf.cell(0, 7, limpar_texto("  DIAGNÓSTICO PASTORAL E PEDAGÓGICO (IA)"), ln=True, fill=True)
     pdf.ln(4)
     
     pdf.set_font("helvetica", "", 11)
