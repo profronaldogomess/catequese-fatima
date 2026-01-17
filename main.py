@@ -570,7 +570,7 @@ elif menu == "📝 Cadastrar Catequizando":
                 if salvar_lote_catequizandos(lista_final):
                     st.success(f"✅ {len(lista_final)} importados!"); st.balloons(); st.rerun()
 
-# --- PÁGINA: PERFIL INDIVIDUAL (ATUALIZADA PARA EDIÇÃO) ---
+# --- PÁGINA: PERFIL INDIVIDUAL ---
 elif menu == "👤 Perfil Individual":
     st.title("👤 Perfil e Ficha do Catequizando")
     df_cat = ler_aba("catequizandos")
@@ -593,12 +593,10 @@ elif menu == "👤 Perfil Individual":
         
         st.divider()
         
-        # Melhoria: Seletor agora mostra Nome e Turma para evitar confusão com nomes iguais
         df_f['display_select'] = df_f['nome_completo'] + " (" + df_f['etapa'] + ")"
         escolha_display = st.selectbox("Selecione um catequizando para EDITAR ou gerar PDF:", [""] + df_f['display_select'].tolist())
 
         if escolha_display:
-            # Extrair o ID correto baseado na seleção
             nome_sel = escolha_display.split(" (")[0]
             turma_sel = escolha_display.split(" (")[1].replace(")", "")
             dados = df_cat[(df_cat['nome_completo'] == nome_sel) & (df_cat['etapa'] == turma_sel)].iloc[0]
@@ -612,7 +610,6 @@ elif menu == "👤 Perfil Individual":
                     ed_nome = c1.text_input("Nome Completo", value=dados['nome_completo']).upper()
                     ed_nasc = c2.date_input("Data de Nascimento", value=converter_para_data(dados['data_nascimento']), min_value=MIN_DATA, max_value=MAX_DATA)
                     
-                    # Seleção de Turma dentro da edição
                     lista_turmas_edit = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
                     idx_turma = lista_turmas_edit.index(dados['etapa']) if dados['etapa'] in lista_turmas_edit else 0
                     ed_etapa = c3.selectbox("Turma/Etapa", lista_turmas_edit, index=idx_turma)
@@ -643,7 +640,6 @@ elif menu == "👤 Perfil Individual":
                     ed_sacramentos = a3.text_input("Sacramentos já realizados", value=dados['sacramentos_ja_feitos']).upper()
 
                     if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                        # Montar lista na ordem exata das colunas da planilha (A-Q)
                         lista_atualizada = [
                             dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), 
                             ed_batizado, ed_contato, ed_endereco, ed_mae, ed_pai, 
@@ -668,7 +664,6 @@ elif menu == "👤 Perfil Individual":
                     st.subheader("Gerar Documento")
                     if st.button(f"Gerar Ficha de Inscrição PDF"):
                         with st.spinner("Preparando PDF..."):
-                            # Recarrega os dados para garantir que o PDF pegue a alteração recente
                             st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
                     
                     if "pdf_catequizando" in st.session_state:
@@ -830,7 +825,7 @@ elif menu == "🏫 Gestão de Turmas":
                             if mover_catequizandos_em_massa(lista_para_mover, turma_destino):
                                 st.success(f"✅ {len(lista_para_mover)} movidos!"); time.sleep(1); st.rerun()
 
-# --- PÁGINA: GESTÃO DE SACRAMENTOS ---
+# --- PÁGINA: GESTÃO DE SACRAMENTOS (CORREÇÃO VISUAL E LÓGICA) ---
 elif menu == "🕊️ Gestão de Sacramentos":
     import plotly.express as px
     st.title("🕊️ Gestão de Sacramentos")
@@ -845,19 +840,28 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.subheader(f"Estatísticas Gerais ({date.today().year})")
             c1, c2, c3 = st.columns(3)
             
-            bat_counts = df_cat['batizado_sn'].value_counts()
-            fig_bat = px.pie(values=bat_counts.values, names=bat_counts.index, title="Taxa de Batizados", color_discrete_sequence=['#417b99', '#e03d11'])
-            c1.plotly_chart(fig_bat, use_container_width=True)
-
+            # Lógica de Contagem Robusta
+            total_geral = len(df_cat)
+            bat_sim = len(df_cat[df_cat['batizado_sn'] == 'SIM'])
             euca_sim = df_cat['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-            euca_nao = len(df_cat) - euca_sim
-            fig_euca = px.pie(values=[euca_sim, euca_nao], names=['SIM', 'NÃO'], title="Taxa de Eucaristia", color_discrete_sequence=['#417b99', '#e03d11'])
-            c2.plotly_chart(fig_euca, use_container_width=True)
-
             cris_sim = df_cat['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
-            cris_nao = len(df_cat) - cris_sim
-            fig_cris = px.pie(values=[cris_sim, cris_nao], names=['SIM', 'NÃO'], title="Taxa de Crisma", color_discrete_sequence=['#417b99', '#e03d11'])
-            c3.plotly_chart(fig_cris, use_container_width=True)
+
+            # Função para criar gráficos elegantes
+            def criar_pizza_elegante(valores, nomes, titulo):
+                fig = px.pie(values=valores, names=nomes, title=titulo, 
+                             color_discrete_sequence=['#417b99', '#e03d11'], hole=0.4)
+                fig.update_layout(
+                    font=dict(color="#000000", size=12),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(t=50, b=20, l=20, r=20),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                )
+                return fig
+
+            c1.plotly_chart(criar_pizza_elegante([bat_sim, total_geral-bat_sim], ['SIM', 'NÃO'], "Taxa de Batizados"), use_container_width=True)
+            c2.plotly_chart(criar_pizza_elegante([euca_sim, total_geral-euca_sim], ['SIM', 'NÃO'], "Taxa de Eucaristia"), use_container_width=True)
+            c3.plotly_chart(criar_pizza_elegante([cris_sim, total_geral-cris_sim], ['SIM', 'NÃO'], "Taxa de Crisma"), use_container_width=True)
 
             st.divider()
             st.subheader("⚠️ Lista de Catequizandos sem Sacramento")
@@ -871,47 +875,61 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.dataframe(pendentes[['nome_completo', 'etapa', 'contato_principal']], use_container_width=True, hide_index=True)
 
             if st.button("🤖 Gerar Relatório Inteligente de Sacramentos"):
-                resumo = f"Batizados: {len(df_cat[df_cat['batizado_sn']=='SIM'])}, Eucaristia: {euca_sim}, Crisma: {cris_sim}. Total: {len(df_cat)}"
+                resumo = f"Batizados: {bat_sim}, Eucaristia: {euca_sim}, Crisma: {cris_sim}. Total: {total_geral}"
                 st.info(gerar_relatorio_sacramentos_ia(resumo))
 
     with tab_reg:
         st.subheader("✍️ Registrar Celebração de Sacramento")
-        st.info("Ao salvar, o cadastro individual de cada aluno será atualizado automaticamente.")
-        with st.form("form_sacramento_v2"):
-            tipo_s = st.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
-            data_s = st.date_input("Data da Celebração", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
-            turmas_s = st.multiselect("Selecione as Turmas Envolvidas", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-            
-            st.markdown("---")
-            if turmas_s:
-                st.write("✅ **Marque os catequizandos que receberam o sacramento:**")
-                alunos_filtrados = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
-                selecionados = []
-                for _, row in alunos_filtrados.iterrows():
-                    if st.checkbox(f"{row['nome_completo']} ({row['etapa']})", key=f"sac_{row['id_catequizando']}"):
-                        selecionados.append(row)
+        st.info("Selecione as turmas para listar os catequizandos. Ao salvar, o cadastro individual será atualizado automaticamente.")
+        
+        # Seleção de Turmas FORA do formulário para ser reativo
+        turmas_s = st.multiselect("1. Selecione as Turmas Envolvidas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+        
+        if turmas_s:
+            with st.form("form_sacramento_v2"):
+                c1, c2 = st.columns(2)
+                tipo_s = c1.selectbox("2. Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
+                data_s = c2.date_input("3. Data da Celebração", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
                 
-                if st.form_submit_button("💾 FINALIZAR E ATUALIZAR CADASTROS"):
-                    if selecionados:
-                        id_ev = f"SAC-{int(time.time())}"
-                        dados_ev = [id_ev, tipo_s, str(data_s), ", ".join(turmas_s), st.session_state.usuario['nome']]
-                        lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in selecionados]
-                        
-                        if registrar_evento_sacramento_completo(dados_ev, lista_p, tipo_s):
-                            st.success(f"✅ Sucesso! {len(selecionados)} catequizandos atualizados e evento registrado.")
-                            st.balloons()
-                            time.sleep(2)
-                            st.rerun()
-                    else:
-                        st.warning("Selecione ao menos um catequizando para salvar.")
-            else:
-                st.info("Selecione as turmas acima para listar os alunos.")
-                st.form_submit_button("Aguardando seleção...", disabled=True)
+                st.markdown("---")
+                st.write("✅ **4. Marque os catequizandos que receberam o sacramento:**")
+                
+                alunos_filtrados = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
+                
+                if not alunos_filtrados.empty:
+                    selecionados_ids = []
+                    # Criar colunas para a lista de marcação ficar mais organizada
+                    cols_check = st.columns(2)
+                    for i, (_, row) in enumerate(alunos_filtrados.iterrows()):
+                        with cols_check[i % 2]:
+                            if st.checkbox(f"{row['nome_completo']} ({row['etapa']})", key=f"sac_{row['id_catequizando']}"):
+                                selecionados_ids.append(row)
+                    
+                    st.markdown("---")
+                    if st.form_submit_button("💾 FINALIZAR E ATUALIZAR CADASTROS"):
+                        if selecionados_ids:
+                            id_ev = f"SAC-{int(time.time())}"
+                            dados_ev = [id_ev, tipo_s, str(data_s), ", ".join(turmas_s), st.session_state.usuario['nome']]
+                            lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in selecionados_ids]
+                            
+                            if registrar_evento_sacramento_completo(dados_ev, lista_p, tipo_s):
+                                st.success(f"✅ Sucesso! {len(selecionados_ids)} catequizandos atualizados e evento registrado.")
+                                st.cache_data.clear() # Limpa cache para atualizar gráficos
+                                st.balloons()
+                                time.sleep(2)
+                                st.rerun()
+                        else:
+                            st.warning("Selecione ao menos um catequizando para salvar.")
+                else:
+                    st.warning("Nenhum catequizando encontrado nestas turmas.")
+                    st.form_submit_button("Aguardando alunos...", disabled=True)
+        else:
+            st.warning("Aguardando seleção de turmas para listar os alunos...")
 
     with tab_hist:
         st.subheader("📜 Histórico de Eventos Sacramentais")
         if not df_sac_eventos.empty:
-            st.dataframe(df_sac_eventos, use_container_width=True, hide_index=True)
+            st.dataframe(df_sac_eventos.sort_values(by='data_celebracao', ascending=False), use_container_width=True, hide_index=True)
         else:
             st.info("Nenhum evento registrado ainda.")
 
