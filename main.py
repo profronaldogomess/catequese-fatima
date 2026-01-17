@@ -825,7 +825,7 @@ elif menu == "🏫 Gestão de Turmas":
                             if mover_catequizandos_em_massa(lista_para_mover, turma_destino):
                                 st.success(f"✅ {len(lista_para_mover)} movidos!"); time.sleep(1); st.rerun()
 
-# --- PÁGINA: GESTÃO DE SACRAMENTOS (CORREÇÃO VISUAL E LÓGICA) ---
+# --- PÁGINA: GESTÃO DE SACRAMENTOS ---
 elif menu == "🕊️ Gestão de Sacramentos":
     import plotly.express as px
     st.title("🕊️ Gestão de Sacramentos")
@@ -840,13 +840,11 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.subheader(f"Estatísticas Gerais ({date.today().year})")
             c1, c2, c3 = st.columns(3)
             
-            # Lógica de Contagem Robusta
             total_geral = len(df_cat)
             bat_sim = len(df_cat[df_cat['batizado_sn'] == 'SIM'])
             euca_sim = df_cat['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
             cris_sim = df_cat['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
 
-            # Função para criar gráficos elegantes
             def criar_pizza_elegante(valores, nomes, titulo):
                 fig = px.pie(values=valores, names=nomes, title=titulo, 
                              color_discrete_sequence=['#417b99', '#e03d11'], hole=0.4)
@@ -882,7 +880,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
         st.subheader("✍️ Registrar Celebração de Sacramento")
         st.info("Selecione as turmas para listar os catequizandos. Ao salvar, o cadastro individual será atualizado automaticamente.")
         
-        # Seleção de Turmas FORA do formulário para ser reativo
         turmas_s = st.multiselect("1. Selecione as Turmas Envolvidas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
         
         if turmas_s:
@@ -898,7 +895,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 
                 if not alunos_filtrados.empty:
                     selecionados_ids = []
-                    # Criar colunas para a lista de marcação ficar mais organizada
                     cols_check = st.columns(2)
                     for i, (_, row) in enumerate(alunos_filtrados.iterrows()):
                         with cols_check[i % 2]:
@@ -914,7 +910,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             
                             if registrar_evento_sacramento_completo(dados_ev, lista_p, tipo_s):
                                 st.success(f"✅ Sucesso! {len(selecionados_ids)} catequizandos atualizados e evento registrado.")
-                                st.cache_data.clear() # Limpa cache para atualizar gráficos
+                                st.cache_data.clear()
                                 st.balloons()
                                 time.sleep(2)
                                 st.rerun()
@@ -929,7 +925,11 @@ elif menu == "🕊️ Gestão de Sacramentos":
     with tab_hist:
         st.subheader("📜 Histórico de Eventos Sacramentais")
         if not df_sac_eventos.empty:
-            st.dataframe(df_sac_eventos.sort_values(by='data_celebracao', ascending=False), use_container_width=True, hide_index=True)
+            # CORREÇÃO: Ordenação segura por 'data'
+            df_hist_show = df_sac_eventos.copy()
+            if 'data' in df_hist_show.columns:
+                df_hist_show = df_hist_show.sort_values(by='data', ascending=False)
+            st.dataframe(df_hist_show, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhum evento registrado ainda.")
 
