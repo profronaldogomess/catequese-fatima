@@ -60,12 +60,12 @@ def marcar_opcao(pdf, texto, condicao, x, y):
     pdf.cell(0, 5, limpar_texto(f"{texto} ( {mark} )"), ln=0)
 
 # ==========================================
-# 2. CABEÇALHO E COMPONENTES
+# 2. CABEÇALHO OFICIAL
 # ==========================================
 
 def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
     if os.path.exists("logo.png"):
-        # Logo movido para y=15 para garantir que não corte
+        # Logo com margem de segurança para não cortar
         pdf.image("logo.png", 10, 15, 22)
     
     pdf.set_xy(38, 15)
@@ -78,7 +78,7 @@ def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
     pdf.set_font("helvetica", "B", 11); pdf.set_text_color(65, 123, 153)
     pdf.cell(100, 5, limpar_texto("Paróquia: Nossa Senhora de Fátima"), ln=True)
     
-    pdf.ln(12) # Espaço extra para o título
+    pdf.ln(12) 
     y_topo = pdf.get_y()
     pdf.set_fill_color(245, 245, 245)
     pdf.rect(10, y_topo, 105, 20, 'F')
@@ -98,13 +98,13 @@ def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
     pdf.ln(8)
 
 # ==========================================
-# 3. GERADOR DE FICHA DE INSCRIÇÃO
+# 3. GERADOR DE FICHA DE INSCRIÇÃO (CORRIGIDO)
 # ==========================================
 
 def gerar_ficha_cadastral_catequizando(dados):
     pdf = FPDF(); pdf.add_page()
     
-    # Lógica de identificação de público
+    # Lógica de identificação de público (Adulto vs Infantil)
     est_civil_raw = str(dados.get('estado_civil_pais_ou_proprio', 'N/A')).upper()
     is_adulto = est_civil_raw != "N/A"
     
@@ -173,6 +173,7 @@ def gerar_ficha_cadastral_catequizando(dados):
     nome_cat = dados.get('nome_completo', '________________')
     nome_resp = dados.get('nome_responsavel', '______________________________________________________')
     
+    # --- LÓGICA DE CONSENTIMENTO CORRIGIDA ---
     if is_adulto:
         texto_lgpd = (f"Eu {nome_cat}, AUTORIZO o uso da publicação da minha imagem nos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
     else:
@@ -180,11 +181,12 @@ def gerar_ficha_cadastral_catequizando(dados):
     
     pdf.multi_cell(0, 4, limpar_texto(texto_lgpd))
 
-    # --- ASSINATURAS ---
+    # --- ASSINATURAS (DIFERENCIADAS) ---
     pdf.ln(12); y_ass = pdf.get_y()
     pdf.line(10, y_ass, 90, y_ass); pdf.line(110, y_ass, 190, y_ass)
     pdf.set_xy(10, y_ass + 1); pdf.set_font("helvetica", "B", 8)
     
+    # Rótulo da assinatura muda conforme a idade/tipo de ficha
     label_ass = "Assinatura do catequizando (a)" if is_adulto else "Assinatura do Pai/Mãe ou Responsável"
     pdf.cell(80, 5, limpar_texto(label_ass), align='C')
     pdf.set_xy(110, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
