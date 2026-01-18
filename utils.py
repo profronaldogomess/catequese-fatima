@@ -187,3 +187,38 @@ def gerar_relatorio_pastoral_interno_pdf(dados, analise_ia):
     pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL", etapa="PASTORAL")
     pdf.ln(10); pdf.multi_cell(0, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
+
+# --- BLOCO: utils.py (gerar_relatorio_sacramentos_tecnico_pdf) ---
+def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
+    pdf = FPDF(); pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "AUDITORIA PASTORAL E SACRAMENTAL", etapa="SACRAMENTOS")
+    
+    # 1. QUADRO DE FRUTOS
+    pdf.set_fill_color(248, 249, 240)
+    pdf.set_font("helvetica", "B", 12); pdf.set_text_color(224, 61, 17)
+    pdf.cell(0, 12, limpar_texto(f"FRUTOS DA EVANGELIZAÇÃO EM {date.today().year}: {stats.get('bat_ano', 0)} BATISMOS"), border=1, ln=True, align='C', fill=True)
+    pdf.ln(5)
+
+    # 2. DIAGNÓSTICO PASTORAL
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 7, limpar_texto("  DIAGNÓSTICO PASTORAL E CANÔNICO (IA GEMINI)"), ln=True, fill=True); pdf.ln(2)
+    pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 6, limpar_texto(analise_ia))
+    pdf.ln(5)
+
+    # 3. TABELA DE TURMAS
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 7, limpar_texto("  DETALHAMENTO POR TURMA"), ln=True, fill=True); pdf.ln(2)
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0)
+    pdf.cell(50, 6, "Turma", 1, 0, 'L'); pdf.cell(25, 6, "Freq.", 1, 0, 'C'); pdf.cell(25, 6, "Idades", 1, 0, 'C'); pdf.cell(25, 6, "Batizados", 1, 0, 'C'); pdf.cell(30, 6, "Pendentes", 1, 0, 'C'); pdf.cell(35, 6, "Prev. Euca", 1, 1, 'C')
+    
+    pdf.set_font("helvetica", "", 8)
+    for t in analise_turmas:
+        pdf.cell(50, 6, limpar_texto(t.get('turma', 'N/A')), 1, 0, 'L')
+        pdf.cell(25, 6, str(t.get('freq', '0%')), 1, 0, 'C')
+        pdf.cell(25, 6, str(t.get('idades', 'N/A')), 1, 0, 'C')
+        pdf.cell(25, 6, str(t.get('batizados', 0)), 1, 0, 'C')
+        pdf.cell(30, 6, str(t.get('pendentes', 0)), 1, 0, 'C') # USANDO .get PARA EVITAR KEYERROR
+        pdf.cell(35, 6, limpar_texto(t.get('prev_e', 'N/A')), 1, 1, 'C')
+
+    return finalizar_pdf(pdf)
