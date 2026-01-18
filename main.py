@@ -603,25 +603,87 @@ elif menu == "📝 Cadastrar Catequizando":
                     if salvar_lote_catequizandos(registro):
                         st.success(f"✅ {nome} CADASTRADO!"); st.balloons(); time.sleep(1); st.rerun()
 
+# --- SUBSTITUIÇÃO INTEGRAL: ABA tab_csv (COM MECANISMO DE MODULAÇÃO) ---
     with tab_csv:
-        st.subheader("📂 Importação em Massa (CSV)")
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="csv_uploader")
+        st.subheader("📂 Importação em Massa com Conferência")
+        st.write("Este módulo permite revisar os dados antes de salvá-los na planilha oficial.")
+        
+        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_modulado")
+        
         if arquivo_csv:
             try:
+                # Leitura inicial
                 df_import = pd.read_csv(arquivo_csv).fillna("N/A")
-                if st.button("🚀 CONFIRMAR IMPORTAÇÃO DE 29 COLUNAS"):
-                    lista_final = []
-                    for i, linha in df_import.iterrows():
-                        lista_final.append([
-                            f"CSV-{int(time.time()) + i}", str(linha.get('etapa', 'NÃO INFORMADO')).upper(), 
-                            str(linha.get('nome', 'SEM NOME')).upper(), str(linha.get('data_nasc', '2000-01-01')), 
-                            "NÃO INFORMADO", str(linha.get('contato', '00000000')), "N/A", "N/A", "N/A", "N/A", 
-                            "N/A", "N/A", "ATIVO", "NÃO", "NÃO", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", 
-                            "N/A", "N/A", "NÃO", "N/A", "NÃO", 0, "N/A", "N/A"
-                        ])
-                    if salvar_lote_catequizandos(lista_final):
-                        st.success("✅ Importado!"); st.rerun()
-            except Exception as e: st.error(f"Erro no CSV: {e}")
+                
+                # Padronização de colunas para conferência
+                df_import.columns = [c.strip().lower() for c in df_import.columns]
+                
+                # Interface de Modulação
+                st.markdown("### 🔍 1. Revisão dos Dados Importados")
+                
+                # Criamos uma visualização amigável para o Coordenador
+                df_preview = pd.DataFrame()
+                df_preview['Nome do Catequizando'] = df_import.get('nome', ['SEM NOME']*len(df_import))
+                df_preview['Turma no CSV'] = df_import.get('etapa', ['NÃO INFORMADA']*len(df_import))
+                df_preview['Contato'] = df_import.get('contato', ['N/A']*len(df_import))
+                
+                # Validação de Turmas Existentes
+                turmas_cadastradas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                df_preview['Status da Turma'] = df_preview['Turma nel CSV'].apply(
+                    lambda x: "✅ Turma Encontrada" if str(x).upper() in [t.upper() for t in turmas_cadastradas] else "⚠️ Turma Não Cadastrada"
+                )
+
+                st.dataframe(df_preview, use_container_width=True, hide_index=True)
+
+                # Resumo Estatístico da Importação
+                st.markdown("### 📊 2. Resumo da Carga")
+                resumo = df_preview['Turma no CSV'].value_counts()
+                cols_resumo = st.columns(len(resumo) if len(resumo) < 4 else 4)
+                for i, (turma, qtd) in enumerate(resumo.items()):
+                    with cols_resumo[i % 4]:
+                        st.metric(f"Turma: {turma}", f"{qtd} alunos")
+
+                st.divider()
+                
+                # Botão de Confirmação Final
+                if st.button("🚀 CONFIRMAR E GRAVAR 29 COLUNAS NO BANCO", key="btn_confirmar_import_final"):
+                    with st.spinner("Processando e alinhando colunas..."):
+                        lista_final = []
+                        for i, linha in df_import.iterrows():
+                            t_final = str(linha.get('etapa', 'NÃO INFORMADO')).upper()
+                            
+                            # Montagem técnica das 29 colunas (A até AC)
+                            # Garante que cada linha do CSV se torne um registro completo para o Google Sheets
+                            nova_linha = [
+                                f"CSV-{int(time.time()) + i}",              # A: ID
+                                t_final,                                    # B: Etapa
+                                str(linha.get('nome', 'SEM NOME')).upper(), # C: Nome
+                                str(linha.get('data_nasc', '2000-01-01')),  # D: Nascimento
+                                "NÃO INFORMADO",                            # E: Batizado
+                                str(linha.get('contato', '00000000')),      # F: Contato
+                                str(linha.get('endereco', 'N/A')).upper(),  # G: Endereço
+                                "N/A", "N/A", "N/A",                        # H, I, J: Mãe, Pai, Responsável
+                                "N/A", "N/A",                               # K, L: Docs, Pastoral
+                                "ATIVO",                                    # M: Status
+                                "NÃO", "NÃO",                               # N, O: Medicamento, TGO
+                                "N/A", "N/A",                               # P, Q: Est. Civil, Sacramentos
+                                "N/A", "N/A", "N/A", "N/A",                 # R, S, T, U: Prof/Tel Pais
+                                "N/A", "N/A",                               # V, W: Est. Civil Pais, Sac. Pais
+                                "NÃO", "N/A",                               # X, Y: Part. Grupo, Qual
+                                "NÃO", 0,                                   # Z, AA: Irmãos, Qtd
+                                "N/A", "N/A"                                # AB, AC: Turno, Local
+                            ]
+                            lista_final.append(nova_linha)
+                        
+                        if salvar_lote_catequizandos(lista_final):
+                            st.success(f"✅ Sucesso! {len(lista_final)} catequizandos foram inseridos e modulados.")
+                            st.balloons()
+                            time.sleep(2)
+                            st.rerun()
+                            
+            except Exception as e:
+                st.error(f"❌ Erro na modulação: {e}. Verifique se o CSV usa vírgulas como separador.")
+# --- FIM DA SUBSTITUIÇÃO ---
 
 elif menu == "👤 Perfil Individual":
     st.title("👤 Perfil e Ficha do Catequizando")
