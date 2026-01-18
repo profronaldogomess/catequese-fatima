@@ -721,84 +721,83 @@ elif menu == "🏫 Gestão de Turmas":
 # --- SUBSTITUIR O CONTEÚDO DA TAB t2 (CRIAR NOVA TURMA) ---
     with t2:
         st.subheader("Cadastrar Nova Turma")
-        with st.form("nova_turma_v_final", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            n_t = c1.text_input("Nome da Turma (Ex: TURMA SANTA RITA)").upper()
+        
+        # Campos fora do form para permitir atualização dinâmica da tela
+        c1, c2 = st.columns(2)
+        n_t = c1.text_input("Nome da Turma (Ex: TURMA SANTA RITA)").upper()
+        
+        etapas_lista = [
+            "PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", 
+            "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"
+        ]
+        e_t = c1.selectbox("Etapa Base", etapas_lista)
+        ano = c2.number_input("Ano Letivo", value=2026)
+        n_dias = st.multiselect("Dias de Encontro:", dias_opcoes)
+        
+        st.markdown("---")
+        # LÓGICA CONDICIONAL DINÂMICA (Agora funciona!)
+        p_euca, p_crisma = "", ""
+        if e_t in ["TERCEIRA ETAPA", "ADULTOS TURMA EUCARISTIA/BATISMO"]:
+            p_euca = st.text_input("📅 Previsão da Eucaristia (Ex: Outubro/2026)")
+        elif e_t == "ADULTOS CRISMA":
+            p_crisma = st.text_input("🕊️ Previsão da Crisma (Ex: Novembro/2026)")
+        else:
+            st.info("ℹ️ Etapa de base: O Batismo é tratado individualmente. Não há previsão de Eucaristia/Crisma coletiva.")
+
+        lista_nomes_disponiveis = equipe_tecnica['nome'].astype(str).unique().tolist() if not equipe_tecnica.empty else []
+        selecao_catequistas = st.multiselect("Catequistas Responsáveis:", lista_nomes_disponiveis)
+
+        if st.button("🚀 CRIAR TURMA DEFINITIVAMENTE"):
+            nomes_existentes = [str(n).strip().upper() for n in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
             
-            # Lista de etapas atualizada conforme sua solicitação
-            etapas_lista = [
-                "PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", 
-                "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"
-            ]
-            e_t = c1.selectbox("Etapa Base", etapas_lista)
-            ano = c2.number_input("Ano Letivo", value=2026)
-            n_dias = st.multiselect("Dias de Encontro:", dias_opcoes)
-            
-            st.markdown("---")
-            # LÓGICA CONDICIONAL: Só mostra datas para etapas de conclusão
-            p_euca, p_crisma = "", ""
-            if e_t in ["TERCEIRA ETAPA", "ADULTOS TURMA EUCARISTIA/BATISMO"]:
-                p_euca = st.text_input("📅 Previsão da Eucaristia (Ex: Outubro/2026)")
-            elif e_t == "ADULTOS CRISMA":
-                p_crisma = st.text_input("🕊️ Previsão da Crisma (Ex: Novembro/2026)")
+            if not n_t or not selecao_catequistas or not n_dias:
+                st.error("Preencha Nome, Catequistas e Dias da Semana.")
+            elif n_t.strip().upper() in nomes_existentes:
+                st.error(f"⚠️ Erro: Já existe uma turma cadastrada com o nome '{n_t}'.")
             else:
-                st.info("ℹ️ Etapa de base: O Batismo é tratado individualmente. Não há previsão de Eucaristia/Crisma coletiva.")
-
-            lista_nomes_disponiveis = equipe_tecnica['nome'].astype(str).unique().tolist() if not equipe_tecnica.empty else []
-            selecao_catequistas = st.multiselect("Catequistas Responsáveis:", lista_nomes_disponiveis)
-
-            if st.form_submit_button("CRIAR TURMA"):
-                # TRAVA DE DUPLICIDADE
-                nomes_existentes = [str(n).strip().upper() for n in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
-                
-                if not n_t or not selecao_catequistas or not n_dias:
-                    st.error("Preencha Nome, Catequistas e Dias da Semana.")
-                elif n_t.strip().upper() in nomes_existentes:
-                    st.error(f"⚠️ Erro: Já existe uma turma cadastrada com o nome '{n_t}'.")
-                else:
-                    catequistas_str = ", ".join(selecao_catequistas)
-                    dias_str = ", ".join(n_dias)
-                    # Ordem das colunas: ID, Nome, Etapa, Ano, Catequistas, Dias, Euca, Crisma
-                    if conectar_google_sheets().worksheet("turmas").append_row([
-                        f"TRM-{int(time.time())}", n_t, e_t, ano, catequistas_str, dias_str, p_euca, p_crisma
-                    ]):
-                        st.success(f"Turma {n_t} criada com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
+                catequistas_str = ", ".join(selecao_catequistas)
+                dias_str = ", ".join(n_dias)
+                if conectar_google_sheets().worksheet("turmas").append_row([
+                    f"TRM-{int(time.time())}", n_t, e_t, ano, catequistas_str, dias_str, p_euca, p_crisma
+                ]):
+                    st.success(f"Turma {n_t} criada com sucesso!")
+                    st.cache_data.clear()
+                    time.sleep(1)
+                    st.rerun()
 
     with t3:
         if not df_turmas.empty:
             st.subheader("✏️ Detalhes e Edição")
-            turma_para_editar = st.selectbox("Selecione a turma:", [""] + df_turmas['nome_turma'].tolist())
+            turma_para_editar = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist())
             if turma_para_editar:
                 dados_t = df_turmas[df_turmas['nome_turma'] == turma_para_editar].iloc[0]
-                with st.form("form_edicao_turma_v_final"):
-                    c1, c2 = st.columns(2)
-                    ed_nome = c1.text_input("Nome da Turma", value=str(dados_t['nome_turma'])).upper()
-                    
-                    etapas_lista = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"]
-                    idx_etapa = etapas_lista.index(dados_t['etapa']) if dados_t['etapa'] in etapas_lista else 0
-                    ed_etapa = c1.selectbox("Etapa Base", etapas_lista, index=idx_etapa)
-                    
-                    ed_ano = c2.number_input("Ano Letivo", value=int(dados_t['ano']))
-                    ed_p_euca = c2.text_input("Previsão Eucaristia", value=str(dados_t.get('previsao_eucaristia', '')))
-                    ed_p_crisma = c2.text_input("Previsão Crisma", value=str(dados_t.get('previsao_crisma', '')))
+                
+                c1, c2 = st.columns(2)
+                ed_nome = c1.text_input("Nome da Turma", value=str(dados_t['nome_turma'])).upper()
+                
+                etapas_lista = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"]
+                idx_etapa = etapas_lista.index(dados_t['etapa']) if dados_t['etapa'] in etapas_lista else 0
+                ed_etapa = c1.selectbox("Etapa Base", etapas_lista, index=idx_etapa)
+                
+                ed_ano = c2.number_input("Ano Letivo", value=int(dados_t['ano']))
+                ed_p_euca = c2.text_input("Previsão Eucaristia", value=str(dados_t.get('previsao_eucaristia', '')))
+                ed_p_crisma = c2.text_input("Previsão Crisma", value=str(dados_t.get('previsao_crisma', '')))
 
-                    dias_atuais = str(dados_t.get('dias_semana', '')).split(", ")
-                    ed_dias = st.multiselect("Dias de Encontro:", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
-                    
-                    lista_nomes = equipe_tecnica['nome'].astype(str).unique().tolist() if not equipe_tecnica.empty else []
-                    cats_salvos = str(dados_t.get('catequista_responsavel', ''))
-                    cats_atuais = [c.strip() for c in cats_salvos.split(",")] if cats_salvos else []
-                    ed_selecao_cats = st.multiselect("Equipe de Catequistas:", lista_nomes, default=[c for c in cats_atuais if c in lista_nomes])
+                dias_atuais = str(dados_t.get('dias_semana', '')).split(", ")
+                ed_dias = st.multiselect("Dias de Encontro:", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
+                
+                lista_nomes = equipe_tecnica['nome'].astype(str).unique().tolist() if not equipe_tecnica.empty else []
+                cats_salvos = str(dados_t.get('catequista_responsavel', ''))
+                cats_atuais = [c.strip() for c in cats_salvos.split(",")] if cats_salvos else []
+                ed_selecao_cats = st.multiselect("Equipe de Catequistas:", lista_nomes, default=[c for c in cats_atuais if c in lista_nomes])
 
-                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                        # Ordem rigorosa das 8 colunas para o banco de dados
-                        lista_up = [str(dados_t['id_turma']), ed_nome, ed_etapa, ed_ano, ", ".join(ed_selecao_cats), ", ".join(ed_dias), ed_p_euca, ed_p_crisma]
-                        if atualizar_turma(dados_t['id_turma'], lista_up):
-                            st.success("Turma atualizada!")
-                            time.sleep(1)
-                            st.rerun()
+                if st.button("💾 SALVAR ALTERAÇÕES"):
+                    lista_up = [str(dados_t['id_turma']), ed_nome, ed_etapa, ed_ano, ", ".join(ed_selecao_cats), ", ".join(ed_dias), ed_p_euca, ed_p_crisma]
+                    if atualizar_turma(dados_t['id_turma'], lista_up):
+                        st.success("Turma atualizada!")
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
 
     with t4:
         if not df_turmas.empty:
