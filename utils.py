@@ -358,3 +358,126 @@ def gerar_relatorio_pastoral_interno_pdf(dados, analise_ia):
     pdf.ln(10); pdf.set_font("helvetica", "", 11)
     pdf.multi_cell(0, 7, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
+
+def gerar_ficha_cadastral_catequizando(dados):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # --- CABEÇALHO DUPLO (ESTILO OFICIAL) ---
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 10, 22)
+    
+    pdf.set_xy(35, 10)
+    pdf.set_font("helvetica", "B", 11)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(100, 5, limpar_texto("Pastoral da Catequese Diocese de Itabuna-BA."), ln=False)
+    pdf.set_font("helvetica", "", 10)
+    pdf.cell(0, 5, limpar_texto(f"Data: {date.today().strftime('%d / %m / %Y')}"), ln=True, align='R')
+    
+    pdf.set_x(35)
+    pdf.set_font("helvetica", "B", 11)
+    pdf.cell(100, 5, limpar_texto("Paróquia: Nossa Senhora de Fátima"), ln=True)
+    
+    pdf.ln(5)
+    # Caixa de Ano/Etapa/Turma
+    y_topo = pdf.get_y()
+    pdf.set_fill_color(248, 249, 240)
+    pdf.rect(10, y_topo, 100, 15, 'F')
+    pdf.rect(10, y_topo, 100, 15)
+    pdf.set_xy(12, y_topo + 2)
+    pdf.set_font("helvetica", "B", 11); pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(95, 5, limpar_texto("Ficha de Inscrição da Catequese com Inspiração Catecumenal"))
+    
+    pdf.set_xy(115, y_topo)
+    pdf.cell(40, 15, limpar_texto(f"Ano: {date.today().year}"), border=1, align='C')
+    pdf.set_xy(155, y_topo)
+    pdf.set_font("helvetica", "", 9)
+    pdf.multi_cell(45, 7.5, limpar_texto(f"Etapa: {dados.get('etapa', '')}\nTurma: {dados.get('etapa', '')}"), border=1)
+
+    pdf.ln(5)
+    # Turno e Local
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 8, limpar_texto(f"Turno: (  ) M  (  ) T  (  ) N        Local: _________________________________________"), ln=True)
+
+    # --- TÍTULO SEÇÃO ---
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 7, limpar_texto("IDENTIFICAÇÃO DA/O CATEQUIZANDA/O"), ln=True, fill=True, align='C')
+    pdf.ln(2)
+
+    # --- GRADE DE DADOS ---
+    pdf.set_text_color(0, 0, 0)
+    y = pdf.get_y()
+    desenhar_campo_box(pdf, "Nome:", dados.get('nome_completo', ''), 10, y, 190)
+    y += 15
+    desenhar_campo_box(pdf, "Data de nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 10, y, 50)
+    desenhar_campo_box(pdf, "Idade:", str(calcular_idade(dados.get('data_nascimento', ''))), 65, y, 30)
+    desenhar_campo_box(pdf, "Batizado:", f"Sim ( { 'X' if dados.get('batizado_sn')=='SIM' else ' ' } )  Não ( { 'X' if dados.get('batizado_sn')=='NÃO' else ' ' } )", 100, y, 100)
+    y += 15
+    desenhar_campo_box(pdf, "Morada (Endereço):", dados.get('endereco_completo', ''), 10, y, 190)
+    y += 15
+    desenhar_campo_box(pdf, "Telefone:", dados.get('contato_principal', ''), 10, y, 60)
+    desenhar_campo_box(pdf, "Tomar algum medicamento?", dados.get('toma_medicamento_sn', 'NÃO'), 75, y, 125)
+
+    # --- FILIAÇÃO ---
+    pdf.set_y(y + 18)
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 7, limpar_texto("FILIAÇÃO"), ln=True, fill=True)
+    pdf.ln(2)
+    pdf.set_text_color(0, 0, 0)
+    y = pdf.get_y()
+    desenhar_campo_box(pdf, "Nome da Mãe:", dados.get('nome_mae', ''), 10, y, 190)
+    y += 15
+    desenhar_campo_box(pdf, "Nome do Pai:", dados.get('nome_pai', ''), 10, y, 190)
+    
+    # --- OUTROS ELEMENTOS ---
+    pdf.set_y(y + 18)
+    pdf.set_font("helvetica", "B", 9); pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 7, limpar_texto("OUTROS ELEMENTOS - Estado civil dos pais e Vida Eclesial"), ln=True)
+    pdf.set_font("helvetica", "", 9); pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 6, limpar_texto("Estado Civil: Casados ( )  União de Facto ( )  Separados ( )  Solteiros ( )  Viúvo ( )"), ln=True)
+    pdf.cell(0, 6, limpar_texto("Sacramentos dos pais: Batismo ( )  Crisma ( )  Eucaristia ( )  Matrimônio ( )"), ln=True)
+    pdf.cell(0, 6, limpar_texto("Participam de Pastoral? Sim ( ) Não ( )  Qual: ____________________________________"), ln=True)
+    pdf.cell(0, 6, limpar_texto("Tem irmãos na catequese? Sim ( ) Não ( )  Quantos: ________"), ln=True)
+    
+    pdf.ln(2)
+    pdf.set_font("helvetica", "B", 9); pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 6, limpar_texto("A criança tem algum Transtorno Global do Desenvolvimento (TGO)?"), ln=True)
+    pdf.set_font("helvetica", "", 9); pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, limpar_texto(f"Resposta: {dados.get('tgo_sn', 'NÃO')} __________________________________________________________________"), border=1, ln=True)
+
+    # --- TERMO DE CONSENTIMENTO (TEXTO EXATO DA IMAGEM) ---
+    pdf.ln(4)
+    pdf.set_font("helvetica", "B", 10); pdf.set_text_color(224, 61, 17)
+    pdf.cell(0, 6, limpar_texto("Termo de Consentimento"), ln=True)
+    pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
+    
+    nome_resp = dados.get('nome_responsavel', '_________________________________')
+    nome_cat = dados.get('nome_completo', '_________________________________')
+    
+    texto_lgpd = (f"Eu {nome_resp}, na qualidade de pai/mãe ou responsável pelo (a) catequizando (a), {nome_cat}, "
+                  "AUTORIZO o uso da publicação da imagem do (a) meu (minha) filho (a) dos eventos realizados pela "
+                  "Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social "
+                  "da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da "
+                  "Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos "
+                  "no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
+    
+    pdf.multi_cell(0, 4, limpar_texto(texto_lgpd))
+
+    # --- ASSINATURAS ---
+    pdf.ln(10)
+    y_ass = pdf.get_y()
+    pdf.line(10, y_ass, 90, y_ass)
+    pdf.line(110, y_ass, 190, y_ass)
+    pdf.set_xy(10, y_ass + 1)
+    pdf.set_font("helvetica", "B", 8)
+    pdf.cell(80, 5, limpar_texto("Assinatura do Pai/Mãe ou Responsável"), align='C')
+    pdf.set_xy(110, y_ass + 1)
+    pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
+    
+    pdf.ln(10)
+    pdf.set_font("helvetica", "I", 7)
+    pdf.cell(0, 5, limpar_texto("Obs.: Apresentou os documentos na inscrição: SIM ( )  NÃO ( )  Parcialmente. Faltou: ____________________"), ln=True)
+
+    return finalizar_pdf(pdf)
+
