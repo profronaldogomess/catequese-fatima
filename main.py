@@ -605,90 +605,77 @@ elif menu == "📝 Cadastrar Catequizando":
       
 # --- SUBSTITUIÇÃO CORRIGIDA: ABA tab_csv (MECANISMO DE MODULAÇÃO SEM ERROS) ---
     with tab_csv:
-        st.subheader("📂 Importação em Massa com Conferência")
-        st.write("Revise os dados abaixo antes de confirmar a gravação definitiva.")
-        
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_modulado_v2")
-        
-        if arquivo_csv:
-            try:
-                # 1. Leitura e Padronização
-                df_import = pd.read_csv(arquivo_csv).fillna("N/A")
-                # Limpa nomes de colunas (remove espaços e coloca em minúsculo)
-                df_import.columns = [c.strip().lower() for c in df_import.columns]
-                
-                st.markdown("### 🔍 1. Revisão dos Dados Importados")
-                
-                # 2. Construção do Painel de Conferência (Preview)
-                df_preview = pd.DataFrame()
-                
-                # Mapeamento inteligente de colunas
-                col_nome = 'nome' if 'nome' in df_import.columns else None
-                col_etapa = 'etapa' if 'etapa' in df_import.columns else None
-                col_contato = 'contato' if 'contato' in df_import.columns else None
+            st.subheader("📂 Importação em Massa com Conferência")
+            st.write("Revise os dados abaixo. Turmas não cadastradas serão enviadas para a Fila de Espera.")
+            
+            arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_modulado_v3")
+            
+            if arquivo_csv:
+                try:
+                    # 1. Leitura e Padronização
+                    df_import = pd.read_csv(arquivo_csv).fillna("N/A")
+                    df_import.columns = [c.strip().lower() for c in df_import.columns]
+                    
+                    st.markdown("### 🔍 1. Revisão dos Dados Importados")
+                    
+                    # 2. Construção do Painel de Conferência
+                    df_preview = pd.DataFrame()
+                    col_nome = 'nome' if 'nome' in df_import.columns else None
+                    col_etapa = 'etapa' if 'etapa' in df_import.columns else None
+                    col_contato = 'contato' if 'contato' in df_import.columns else None
 
-                df_preview['Nome do Catequizando'] = df_import[col_nome].astype(str).str.upper() if col_nome else ["NOME NÃO ENCONTRADO"]*len(df_import)
-                df_preview['Turma no CSV'] = df_import[col_etapa].astype(str).str.upper() if col_etapa else ["TURMA NÃO ENCONTRADA"]*len(df_import)
-                df_preview['Contato'] = df_import[col_contato].astype(str) if col_contato else ["N/A"]*len(df_import)
-                
-                # 3. Validação de Turmas (Compara com o que já existe no sistema)
-                turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
-                
-                # CORREÇÃO DO TYPO AQUI: 'Turma no CSV'
-                df_preview['Status da Turma'] = df_preview['Turma no CSV'].apply(
-                    lambda x: "✅ Turma Encontrada" if x in turmas_cadastradas else "⚠️ Turma Não Cadastrada"
-                )
+                    df_preview['Nome do Catequizando'] = df_import[col_nome].astype(str).str.upper() if col_nome else ["NOME NÃO ENCONTRADO"]*len(df_import)
+                    df_preview['Turma no CSV'] = df_import[col_etapa].astype(str).str.upper() if col_etapa else ["TURMA NÃO ENCONTRADA"]*len(df_import)
+                    df_preview['Contato'] = df_import[col_contato].astype(str) if col_contato else ["N/A"]*len(df_import)
+                    
+                    # 3. Validação de Turmas (Compara com o sistema)
+                    turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
+                    
+                    df_preview['Status da Turma'] = df_preview['Turma no CSV'].apply(
+                        lambda x: "✅ Turma Encontrada" if x in turmas_cadastradas else "⏳ Irá para Fila de Espera"
+                    )
 
-                st.dataframe(df_preview, use_container_width=True, hide_index=True)
+                    st.dataframe(df_preview, use_container_width=True, hide_index=True)
 
-                # 4. Resumo Estatístico
-                st.markdown("### 📊 2. Resumo da Carga")
-                resumo = df_preview['Turma no CSV'].value_counts()
-                cols_resumo = st.columns(len(resumo) if len(resumo) < 4 else 4)
-                for i, (turma, qtd) in enumerate(resumo.items()):
-                    with cols_resumo[i % 4]:
-                        st.metric(f"Turma: {turma}", f"{qtd} alunos")
+                    # 4. Resumo Estatístico
+                    st.markdown("### 📊 2. Resumo da Carga")
+                    resumo = df_preview['Turma no CSV'].value_counts()
+                    cols_resumo = st.columns(len(resumo) if len(resumo) < 4 else 4)
+                    for i, (turma, qtd) in enumerate(resumo.items()):
+                        with cols_resumo[i % 4]:
+                            st.metric(f"Turma: {turma}", f"{qtd} alunos")
 
-                st.divider()
-                
-                # 5. Botão de Gravação (29 Colunas)
-                if st.button("🚀 CONFIRMAR E GRAVAR NO BANCO DE DADOS", key="btn_confirmar_import_v2"):
-                    with st.spinner("Alinhando 29 colunas para o Google Sheets..."):
-                        lista_final = []
-                        for i, linha in df_import.iterrows():
-                            t_final = str(linha.get('etapa', 'NÃO INFORMADO')).upper()
+                    st.divider()
+                    
+                    # 5. Botão de Gravação (COM PROTEÇÃO ANTI-LIMBO)
+                    if st.button("🚀 CONFIRMAR E GRAVAR NO BANCO DE DADOS", key="btn_confirmar_import_v3"):
+                        with st.spinner("Processando 29 colunas e validando turmas..."):
+                            lista_final = []
+                            for i, linha in df_import.iterrows():
+                                t_csv = str(linha.get('etapa', 'NÃO INFORMADO')).upper()
+                                
+                                # LÓGICA DE PROTEÇÃO: Se a turma não existe, move para a Fila de Espera
+                                t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
+                                
+                                # Montagem das 29 colunas
+                                nova_linha = [
+                                    f"CSV-{int(time.time()) + i}", t_final, str(linha.get('nome', 'SEM NOME')).upper(),
+                                    str(linha.get('data_nasc', '2000-01-01')), "NÃO INFORMADO", str(linha.get('contato', '00000000')),
+                                    str(linha.get('endereco', 'N/A')).upper(), "N/A", "N/A", "N/A", "N/A", "N/A", "ATIVO", 
+                                    "NÃO", "NÃO", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "NÃO", "N/A", "NÃO", 0, "N/A", "N/A"
+                                ]
+                                lista_final.append(nova_linha)
                             
-                            # Montagem técnica rigorosa das 29 colunas (A até AC)
-                            nova_linha = [
-                                f"CSV-{int(time.time()) + i}",              # A: ID
-                                t_final,                                    # B: Etapa
-                                str(linha.get('nome', 'SEM NOME')).upper(), # C: Nome
-                                str(linha.get('data_nasc', '2000-01-01')),  # D: Nascimento
-                                "NÃO INFORMADO",                            # E: Batizado
-                                str(linha.get('contato', '00000000')),      # F: Contato
-                                str(linha.get('endereco', 'N/A')).upper(),  # G: Endereço
-                                "N/A", "N/A", "N/A",                        # H, I, J: Mãe, Pai, Responsável
-                                "N/A", "N/A",                               # K, L: Docs, Pastoral
-                                "ATIVO",                                    # M: Status
-                                "NÃO", "NÃO",                               # N, O: Medicamento, TGO
-                                "N/A", "N/A",                               # P, Q: Est. Civil, Sacramentos
-                                "N/A", "N/A", "N/A", "N/A",                 # R, S, T, U: Prof/Tel Pais
-                                "N/A", "N/A",                               # V, W: Est. Civil Pais, Sac. Pais
-                                "NÃO", "N/A",                               # X, Y: Part. Grupo, Qual
-                                "NÃO", 0,                                   # Z, AA: Irmãos, Qtd
-                                "N/A", "N/A"                                # AB, AC: Turno, Local
-                            ]
-                            lista_final.append(nova_linha)
-                        
-                        if salvar_lote_catequizandos(lista_final):
-                            st.success(f"✅ Sucesso! {len(lista_final)} catequizandos importados.")
-                            st.balloons()
-                            time.sleep(2)
-                            st.rerun()
-                            
-            except Exception as e:
-                st.error(f"❌ Erro na modulação: {e}")
-# --- FIM DA SUBSTITUIÇÃO ---
+                            if salvar_lote_catequizandos(lista_final):
+                                st.success(f"✅ Importação concluída! {len(lista_final)} registros processados.")
+                                st.info("Alunos em turmas não cadastradas foram movidos para a 'Fila de Espera'.")
+                                st.balloons()
+                                st.cache_data.clear()
+                                time.sleep(2)
+                                st.rerun()
+                                
+                except Exception as e:
+                    st.error(f"❌ Erro na modulação: {e}")
 
 elif menu == "👤 Perfil Individual":
     st.title("👤 Perfil e Ficha do Catequizando")
@@ -777,16 +764,34 @@ elif menu == "🏫 Gestão de Turmas":
     ]
 
     with t0:
-        st.subheader("⏳ Catequizandos aguardando Turma")
-        # Identifica quem está na etapa especial de espera
-        fila_espera = df_cat[df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA"] if not df_cat.empty else pd.DataFrame()
-        
-        if not fila_espera.empty:
-            st.warning(f"Existem {len(fila_espera)} catequizandos aguardando alocação em uma turma.")
-            st.dataframe(fila_espera[['nome_completo', 'contato_principal', 'data_nascimento']], use_container_width=True, hide_index=True)
-            st.info("💡 Para mover estes alunos para uma turma, utilize a aba '🚀 Movimentação em Massa'.")
-        else:
-            st.success("Não há catequizandos na fila de espera no momento.")
+            st.subheader("⏳ Fila de Espera e Catequizandos Órfãos")
+            
+            # LÓGICA DE AUDITORIA: 
+            # 1. Pega a lista de todas as turmas que REALMENTE existem no cadastro
+            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+            
+            # 2. Filtra catequizandos que estão em "CATEQUIZANDOS SEM TURMA" 
+            # OU que estão em turmas que NÃO existem na lista acima (Órfãos)
+            if not df_cat.empty:
+                fila_espera = df_cat[
+                    (df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | 
+                    (~df_cat['etapa'].isin(turmas_reais))
+                ]
+            else:
+                fila_espera = pd.DataFrame()
+            
+            if not fila_espera.empty:
+                st.warning(f"Atenção: Existem {len(fila_espera)} catequizandos sem uma turma válida vinculada.")
+                
+                # Criamos uma coluna temporária para explicar o motivo de estar na fila
+                fila_espera['Motivo'] = fila_espera['etapa'].apply(
+                    lambda x: "Aguardando Alocação" if x == "CATEQUIZANDOS SEM TURMA" else f"Turma '{x}' não existe"
+                )
+                
+                st.dataframe(fila_espera[['nome_completo', 'etapa', 'Motivo', 'contato_principal']], use_container_width=True, hide_index=True)
+                st.info("💡 Para corrigir, vá na aba '🚀 Movimentação em Massa', selecione a turma de origem (ex: TURMA INEXISTENTE) e mova-os para uma turma real.")
+            else:
+                st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
 
     with t1:
         st.subheader("📋 Turmas Cadastradas")
