@@ -28,16 +28,24 @@ def ler_aba(nome_aba):
         try:
             aba = planilha.worksheet(nome_aba)
             todos_os_valores = aba.get_all_values()
-            if len(todos_os_valores) <= 1: return pd.DataFrame()
+            if not todos_os_valores or len(todos_os_valores) < 1:
+                return pd.DataFrame()
             
-            # Limpeza rigorosa de cabeçalhos
+            # Limpeza de cabeçalhos
             headers = [str(h).strip().lower() for h in todos_os_valores[0]]
-            # Trata colunas vazias no meio do cabeçalho
             headers = [h if h != "" else f"col_{i}" for i, h in enumerate(headers)]
             
-            df = pd.DataFrame(todos_os_valores[1:], columns=headers)
-            # Limpeza de espaços nos dados
-            df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+            data = todos_os_valores[1:]
+            # Garante que todas as linhas tenham o mesmo número de colunas do cabeçalho
+            num_cols = len(headers)
+            data_ajustada = []
+            for row in data:
+                row_fixed = list(row)
+                if len(row_fixed) < num_cols:
+                    row_fixed.extend([""] * (num_cols - len(row_fixed)))
+                data_ajustada.append(row_fixed[:num_cols])
+                
+            df = pd.DataFrame(data_ajustada, columns=headers)
             return df
         except Exception as e:
             st.error(f"Erro ao ler a aba {nome_aba}: {e}")
