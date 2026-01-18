@@ -10,34 +10,41 @@ import re
 # ==========================================
 
 def formatar_data_br(valor):
-    """Converte datas de diversos formatos para DD/MM/YYYY."""
+    """Força a conversão de qualquer formato para DD/MM/YYYY."""
     if not valor or str(valor).strip() in ["None", "", "N/A"]:
         return "N/A"
     
-    valor_str = str(valor).strip().replace("-", "").replace("/", "")
+    # Remove decimais (ex: 19960824.0) e espaços
+    s = str(valor).strip().split('.')[0]
     
-    # Tenta tratar formato YYYYMMDD (comum em exportações de planilhas)
-    if len(valor_str) == 8 and valor_str.isdigit():
-        try:
-            return f"{valor_str[6:8]}/{valor_str[4:6]}/{valor_str[0:4]}"
-        except: pass
-
-    # Tenta tratar formato ISO YYYY-MM-DD
+    # Caso 1: YYYYMMDD (8 dígitos puros) - Ex: 19960824
+    if len(s) == 8 and s.isdigit():
+        return f"{s[6:8]}/{s[4:6]}/{s[0:4]}"
+    
+    # Caso 2: YYYY-MM-DD (ISO) - Ex: 1996-08-24
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}/{s[5:7]}/{s[0:4]}"
+    
+    # Caso 3: Tenta via Pandas (Fallback)
     try:
         dt = pd.to_datetime(valor)
         if pd.notnull(dt):
             return dt.strftime('%d/%m/%Y')
-    except: pass
+    except:
+        pass
     
-    return str(valor)
+    return s
 
 def calcular_idade(data_nascimento):
-    if not data_nascimento or data_nascimento == "None" or data_nascimento == "": return 0
+    if not data_nascimento or str(data_nascimento).strip() in ["None", "", "N/A"]: return 0
     hoje = date.today()
-    if isinstance(data_nascimento, str):
-        try: data_nascimento = date.fromisoformat(data_nascimento[:10])
-        except: return 0
-    return hoje.year - data_nascimento.year - ((hoje.month, hoje.day) < (data_nascimento.month, data_nascimento.day))
+    try:
+        # Usa o formatador para garantir que temos uma data válida para o cálculo
+        d_str = formatar_data_br(data_nascimento)
+        dt = datetime.strptime(d_str, "%d/%m/%Y").date()
+        return hoje.year - dt.year - ((hoje.month, hoje.day) < (dt.month, dt.day))
+    except:
+        return 0
 
 def sugerir_etapa(data_nascimento):
     idade = calcular_idade(data_nascimento)
@@ -49,8 +56,9 @@ def sugerir_etapa(data_nascimento):
 
 def eh_aniversariante_da_semana(data_nasc_str):
     try:
-        if not data_nasc_str or data_nasc_str == "None" or data_nasc_str == "": return False
-        nasc = datetime.strptime(str(data_nasc_str)[:10], "%Y-%m-%d").date()
+        d_str = formatar_data_br(data_nasc_str)
+        if d_str == "N/A": return False
+        nasc = datetime.strptime(d_str, "%d/%m/%Y").date()
         hoje = date.today()
         nasc_este_ano = nasc.replace(year=hoje.year)
         diferenca = (nasc_este_ano - hoje).days
@@ -58,8 +66,10 @@ def eh_aniversariante_da_semana(data_nasc_str):
     except: return False
 
 def converter_para_data(valor_str):
-    if not valor_str or valor_str == "None" or valor_str == "": return date.today()
-    try: return datetime.strptime(str(valor_str)[:10], "%Y-%m-%d").date()
+    if not valor_str or str(valor_str).strip() in ["None", "", "N/A"]: return date.today()
+    try:
+        d_str = formatar_data_br(valor_str)
+        return datetime.strptime(d_str, "%d/%m/%Y").date()
     except: return date.today()
 
 def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_ministerio):
@@ -67,8 +77,12 @@ def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_min
         return "MINISTRO", 0 
     try:
         hoje = date.today()
-        inicio = pd.to_datetime(data_inicio)
-        anos = (hoje.year - inicio.year)
+        # Converte data de início para calcular anos
+        d_ini_str = formatar_data_br(data_inicio)
+        inicio = datetime.strptime(d_ini_str, "%d/%m/%Y").date()
+        anos = hoje.year - inicio.year
+        
+        # Verifica se possui as datas dos sacramentos
         tem_sacramentos = all([
             str(d_batismo).strip() not in ["None", "", "N/A"],
             str(d_euca).strip() not in ["None", "", "N/A"],
@@ -87,43 +101,53 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
     niver_hoje = []
     if not df_cat.empty:
         df_limpo = df_cat.drop_duplicates(subset=['nome_completo'])
-        df_limpo['dt'] = pd.to_datetime(df_limpo['data_nascimento'], errors='coerce')
-        hoje_cat = df_limpo[(df_limpo['dt'].dt.month == hoje.month) & (df_limpo['dt'].dt.day == hoje.day)]
-        for _, r in hoje_cat.iterrows(): niver_hoje.append(f"😇 Catequizando: **{r['nome_completo']}**")
+        for _, r in df_limpo.iterrows():
+            d_str = formatar_data_br(r['data_nascimento'])
+            if d_str != "N/A":
+                dt = datetime.strptime(d_str, "%d/%m/%Y")
+                if dt.month == hoje.month and dt.day == hoje.day:
+                    niver_hoje.append(f"😇 Catequizando: **{r['nome_completo']}**")
     if not df_usuarios.empty:
         df_usu_limpo = df_usuarios[df_usuarios['papel'] != 'ADMIN'].drop_duplicates(subset=['nome'])
-        df_usu_limpo['dt'] = pd.to_datetime(df_usu_limpo['data_nascimento'], errors='coerce')
-        hoje_usu = df_usu_limpo[(df_usu_limpo['dt'].dt.month == hoje.month) & (df_usu_limpo['dt'].dt.day == hoje.day)]
-        for _, r in hoje_usu.iterrows(): niver_hoje.append(f"🛡️ Catequista: **{r['nome']}**")
+        for _, r in df_usu_limpo.iterrows():
+            d_str = formatar_data_br(r['data_nascimento'])
+            if d_str != "N/A":
+                dt = datetime.strptime(d_str, "%d/%m/%Y")
+                if dt.month == hoje.month and dt.day == hoje.day:
+                    niver_hoje.append(f"🛡️ Catequista: **{r['nome']}**")
     return niver_hoje
 
 def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
     hoje = date.today()
     lista_mes = []
     if not df_cat.empty:
-        df_cat_limpo = df_cat.drop_duplicates(subset=['nome_completo'])
-        df_cat_limpo['dt'] = pd.to_datetime(df_cat_limpo['data_nascimento'], errors='coerce')
-        mes_cat = df_cat_limpo[df_cat_limpo['dt'].dt.month == hoje.month].copy()
-        for _, r in mes_cat.iterrows(): 
-            lista_mes.append({'dia': r['dt'].day, 'nome': r['nome_completo'], 'tipo': 'CATEQUIZANDO', 'info': r['etapa']})
+        for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
+            d_str = formatar_data_br(r['data_nascimento'])
+            if d_str != "N/A":
+                dt = datetime.strptime(d_str, "%d/%m/%Y")
+                if dt.month == hoje.month:
+                    lista_mes.append({'dia': dt.day, 'nome': r['nome_completo'], 'tipo': 'CATEQUIZANDO', 'info': r['etapa']})
     if not df_usuarios.empty:
-        df_usu_limpo = df_usuarios[df_usuarios['papel'] != 'ADMIN'].drop_duplicates(subset=['nome'])
-        df_usu_limpo['dt'] = pd.to_datetime(df_usu_limpo['data_nascimento'], errors='coerce')
-        mes_usu = df_usu_limpo[df_usu_limpo['dt'].dt.month == hoje.month].copy()
-        for _, r in mes_usu.iterrows(): 
-            lista_mes.append({'dia': r['dt'].day, 'nome': r['nome'], 'tipo': 'CATEQUISTA', 'info': r['papel']})
+        for _, r in df_usuarios[df_usuarios['papel'] != 'ADMIN'].drop_duplicates(subset=['nome']).iterrows():
+            d_str = formatar_data_br(r['data_nascimento'])
+            if d_str != "N/A":
+                dt = datetime.strptime(d_str, "%d/%m/%Y")
+                if dt.month == hoje.month:
+                    lista_mes.append({'dia': dt.day, 'nome': r['nome'], 'tipo': 'CATEQUISTA', 'info': r['papel']})
     if lista_mes: return pd.DataFrame(lista_mes).sort_values(by='dia')
     return pd.DataFrame()
 
 def obter_aniversariantes_mes(df_cat):
     if df_cat.empty: return pd.DataFrame()
     hoje = date.today()
-    df_cat['dt'] = pd.to_datetime(df_cat['data_nascimento'], errors='coerce')
-    aniversariantes = df_cat[df_cat['dt'].dt.month == hoje.month].copy()
-    if not aniversariantes.empty:
-        aniversariantes['dia'] = aniversariantes['dt'].dt.day
-        return aniversariantes.sort_values(by='dia')[['nome_completo', 'dia', 'etapa']]
-    return pd.DataFrame()
+    lista = []
+    for _, r in df_cat.iterrows():
+        d_str = formatar_data_br(r['data_nascimento'])
+        if d_str != "N/A":
+            dt = datetime.strptime(d_str, "%d/%m/%Y")
+            if dt.month == hoje.month:
+                lista.append({'nome_completo': r['nome_completo'], 'dia': dt.day, 'etapa': r['etapa']})
+    return pd.DataFrame(lista).sort_values(by='dia') if lista else pd.DataFrame()
 
 # ==========================================
 # 3. NÚCLEO GERADOR DE PDF (PADRÃO DIOCESANO)
@@ -231,7 +255,7 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 4, limpar_texto("Declaro que as informações prestadas são verdadeiras e assumo o compromisso com a missão evangelizadora."))
     
-    # BLOCO DE ASSINATURAS
+    # BLOCO DE ASSINATURAS (CORRIGIDO)
     pdf.ln(20)
     y_ass = pdf.get_y()
     pdf.line(15, y_ass, 95, y_ass)
