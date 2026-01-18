@@ -97,17 +97,13 @@ def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
     pdf.ln(8)
 
 # ==========================================
-# 3. GERADOR DE FICHA DE INSCRIÇÃO (CORRIGIDO)
+# 3. GERADOR DE FICHA DE INSCRIÇÃO (RESTRUTURADO)
 # ==========================================
 
-def gerar_ficha_cadastral_catequizando(dados):
-    pdf = FPDF(); pdf.add_page()
-    
-    # --- LÓGICA DE AUDITORIA DE IDADE E CONSENTIMENTO ---
+def _desenhar_corpo_ficha(pdf, dados):
+    """Função interna que desenha o conteúdo da ficha na página atual do PDF."""
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_menor = idade_real < 18
-    
-    # Identificação de público para campos específicos
     est_civil_raw = str(dados.get('estado_civil_pais_ou_proprio', 'N/A')).upper()
     is_adulto_cadastro = est_civil_raw != "N/A"
     
@@ -175,24 +171,16 @@ def gerar_ficha_cadastral_catequizando(dados):
     
     nome_cat = dados.get('nome_completo', '________________')
     
-    # --- LÓGICA DE COMPOSIÇÃO DOS RESPONSÁVEIS (REFINADA) ---
     if is_menor:
         mae = str(dados.get('nome_mae', '')).strip()
         pai = str(dados.get('nome_pai', '')).strip()
-        
-        # Limpa placeholders comuns
         mae = "" if mae.upper() in ["N/A", "NONE", ""] else mae
         pai = "" if pai.upper() in ["N/A", "NONE", ""] else pai
         
-        # Composição prioritária: Mãe e Pai
-        if mae and pai:
-            responsaveis = f"{mae} e {pai}"
-        elif mae:
-            responsaveis = mae
-        elif pai:
-            responsaveis = pai
+        if mae and pai: responsaveis = f"{mae} e {pai}"
+        elif mae: responsaveis = mae
+        elif pai: responsaveis = pai
         else:
-            # Fallback para o campo 'responsavel' se os campos individuais falharem
             resp_campo = str(dados.get('nome_responsavel', '')).strip()
             responsaveis = resp_campo if resp_campo.upper() not in ["N/A", "NONE", ""] else "________________________________"
         
@@ -203,15 +191,25 @@ def gerar_ficha_cadastral_catequizando(dados):
         label_assinatura_principal = "Assinatura do(a) Catequizando(a)"
     
     pdf.multi_cell(0, 4, limpar_texto(texto_lgpd))
-
-    # --- ASSINATURAS (DINÂMICAS) ---
     pdf.ln(12); y_ass = pdf.get_y()
     pdf.line(10, y_ass, 90, y_ass); pdf.line(110, y_ass, 190, y_ass)
     pdf.set_xy(10, y_ass + 1); pdf.set_font("helvetica", "B", 8)
-    
     pdf.cell(80, 5, limpar_texto(label_assinatura_principal), align='C')
     pdf.set_xy(110, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
-    
+
+def gerar_ficha_cadastral_catequizando(dados):
+    """Gera o PDF de um único catequizando."""
+    pdf = FPDF(); pdf.add_page()
+    _desenhar_corpo_ficha(pdf, dados)
+    return finalizar_pdf(pdf)
+
+def gerar_fichas_turma_completa(nome_turma, df_alunos):
+    """Gera um único PDF contendo as fichas de todos os alunos de uma turma (uma por página)."""
+    if df_alunos.empty: return None
+    pdf = FPDF()
+    for _, row in df_alunos.iterrows():
+        pdf.add_page()
+        _desenhar_corpo_ficha(pdf, row.to_dict())
     return finalizar_pdf(pdf)
 
 # ==========================================
