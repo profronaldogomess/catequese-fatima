@@ -155,8 +155,8 @@ def atualizar_turma(id_turma, novos_dados_lista):
             aba = planilha.worksheet("turmas")
             celula = aba.find(str(id_turma))
             if celula:
-                # Atualizado para 8 colunas (A até H)
-                aba.update(f"A{celula.row}:H{celula.row}", [novos_dados_lista])
+                # Atualizado para J (10 colunas: ID, Nome, Etapa, Ano, Catequistas, Dias, Euca, Crisma, Turno, Local)
+                aba.update(f"A{celula.row}:J{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
     return False
@@ -216,3 +216,18 @@ def registrar_evento_sacramento_completo(dados_evento, lista_participantes, tipo
         st.cache_data.clear(); return True
     except Exception as e:
         st.error(f"Erro crítico: {e}"); return False
+
+# --- SUBSTITUIR NO database.py ---
+def atualizar_catequizando(id_catequizando, novos_dados_lista):
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("catequizandos")
+            celula = aba.find(str(id_catequizando))
+            if celula:
+                # Atualizado para AC (29 colunas)
+                aba.update(f"A{celula.row}:AC{celula.row}", [novos_dados_lista])
+                st.cache_data.clear()
+                return True
+        except Exception as e: st.error(f"Erro: {e}")
+    return False
