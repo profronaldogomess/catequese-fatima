@@ -164,9 +164,12 @@ def atualizar_turma(id_turma, novos_dados_lista):
             aba = planilha.worksheet("turmas")
             celula = aba.find(str(id_turma))
             if celula:
-                aba.update(f"A{celula.row}:F{celula.row}", [novos_dados_lista])
+                # Expandido para H (8 colunas: ID, Nome, Etapa, Ano, Catequistas, Dias, Prev_Euca, Prev_Crisma)
+                aba.update(f"A{celula.row}:H{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
-        except: return False
+        except Exception as e: 
+            st.error(f"Erro ao atualizar turma: {e}")
+            return False
     return False
 
 def atualizar_usuario(email_original, novos_dados_lista):
