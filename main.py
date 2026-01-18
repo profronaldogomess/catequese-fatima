@@ -803,24 +803,50 @@ elif menu == "🏫 Gestão de Turmas":
                     st.success(f"Turma {n_t} criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with t3:
-        st.subheader("✏️ Detalhes e Edição")
-        if not df_turmas.empty:
-            sel_t = st.selectbox("Selecione a turma:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_t_v5")
-            if sel_t:
-                d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
-                c1, c2 = st.columns(2)
-                en = c1.text_input("Nome", value=d['nome_turma'], key="en_edit_v5").upper()
-                ee = c1.selectbox("Etapa", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="ee_edit_v5")
-                ea = c2.number_input("Ano", value=int(d['ano']), key="ea_edit_v5")
-                c3, c4 = st.columns(2)
-                et = c3.selectbox("Turno", ["MANHÃ", "TARDE", "NOITE"], index=["MANHÃ", "TARDE", "NOITE"].index(d.get('turno', 'MANHÃ')) if d.get('turno') in ["MANHÃ", "TARDE", "NOITE"] else 0, key="et_edit_v5")
-                el = c4.text_input("Local", value=d.get('local', ''), key="el_edit_v5").upper()
-                pe = c1.text_input("Prev. Euca", value=d.get('previsao_eucaristia', ''), key="pe_edit_v5")
-                pc = c2.text_input("Prev. Crisma", value=d.get('previsao_crisma', ''), key="pc_edit_v5")
-                if st.button("💾 SALVAR ALTERAÇÕES", key="btn_edit_t_v5"):
-                    lista_up = [str(d['id_turma']), en, ee, ea, d['catequista_responsavel'], d['dias_semana'], pe, pc, et, el]
-                    if atualizar_turma(d['id_turma'], lista_up):
-                        st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+            st.subheader("✏️ Detalhes e Edição")
+            if not df_turmas.empty:
+                sel_t = st.selectbox("Selecione a turma:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_t_v5")
+                if sel_t:
+                    d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
+                    c1, c2 = st.columns(2)
+                    en = c1.text_input("Nome", value=d['nome_turma'], key="en_edit_v5").upper()
+                    ee = c1.selectbox("Etapa", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="ee_edit_v5")
+                    ea = c2.number_input("Ano", value=int(d['ano']), key="ea_edit_v5")
+                    c3, c4 = st.columns(2)
+                    et = c3.selectbox("Turno", ["MANHÃ", "TARDE", "NOITE"], index=["MANHÃ", "TARDE", "NOITE"].index(d.get('turno', 'MANHÃ')) if d.get('turno') in ["MANHÃ", "TARDE", "NOITE"] else 0, key="et_edit_v5")
+                    el = c4.text_input("Local", value=d.get('local', ''), key="el_edit_v5").upper()
+                    pe = c1.text_input("Prev. Euca", value=d.get('previsao_eucaristia', ''), key="pe_edit_v5")
+                    pc = c2.text_input("Prev. Crisma", value=d.get('previsao_crisma', ''), key="pc_edit_v5")
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 SALVAR ALTERAÇÕES", key="btn_edit_t_v5", use_container_width=True):
+                            lista_up = [str(d['id_turma']), en, ee, ea, d['catequista_responsavel'], d['dias_semana'], pe, pc, et, el]
+                            if atualizar_turma(d['id_turma'], lista_up):
+                                st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    
+                    with col_btn2:
+                        # --- NOVA FUNCIONALIDADE: GERAR TODAS AS FICHAS ---
+                        if st.button("📄 GERAR TODAS AS FICHAS (PDF)", key="btn_gerar_lote_fichas", use_container_width=True):
+                            alunos_turma = df_cat[df_cat['etapa'] == sel_t]
+                            if not alunos_turma.empty:
+                                with st.spinner(f"Gerando {len(alunos_turma)} fichas..."):
+                                    from utils import gerar_fichas_turma_completa
+                                    pdf_lote = gerar_fichas_turma_completa(sel_t, alunos_turma)
+                                    st.session_state[f"pdf_lote_{sel_t}"] = pdf_lote
+                            else:
+                                st.warning("Esta turma não possui catequizandos cadastrados.")
+                    
+                    # Exibe o botão de download se o PDF foi gerado
+                    if f"pdf_lote_{sel_t}" in st.session_state:
+                        st.markdown("---")
+                        st.download_button(
+                            label=f"📥 BAIXAR FICHAS DA TURMA: {sel_t}",
+                            data=st.session_state[f"pdf_lote_{sel_t}"],
+                            file_name=f"Fichas_Inscricao_{sel_t.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
