@@ -222,3 +222,99 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
         pdf.cell(35, 6, limpar_texto(t.get('prev_e', 'N/A')), 1, 1, 'C')
 
     return finalizar_pdf(pdf)
+
+def gerar_ficha_catequista_pdf(dados, df_formacoes):
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "FICHA CADASTRAL DO CATEQUISTA", etapa="EQUIPE")
+    
+    # 1. DADOS PESSOAIS
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 7, limpar_texto("  1. IDENTIFICAÇÃO E CONTATO"), ln=True, fill=True)
+    pdf.ln(2)
+    
+    y = pdf.get_y()
+    desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome', ''), 10, y, 135)
+    desenhar_campo_box(pdf, "Data de Nascimento:", dados.get('data_nascimento', 'N/A'), 150, y, 45)
+    y += 16
+    desenhar_campo_box(pdf, "E-mail de Acesso:", dados.get('email', ''), 10, y, 90)
+    desenhar_campo_box(pdf, "Telefone / WhatsApp:", dados.get('telefone', 'N/A'), 105, y, 90)
+    y += 16
+    desenhar_campo_box(pdf, "Turmas Vinculadas (Ano Vigente):", dados.get('turma_vinculada', 'NÃO VINCULADO'), 10, y, 185)
+    
+    # 2. VIDA SACRAMENTAL E MINISTÉRIO
+    pdf.set_y(y + 18)
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 7, limpar_texto("  2. VIDA SACRAMENTAL E QUALIFICAÇÃO"), ln=True, fill=True)
+    pdf.ln(2)
+    
+    y = pdf.get_y()
+    desenhar_campo_box(pdf, "Batismo:", dados.get('data_batismo', 'N/A'), 10, y, 45)
+    desenhar_campo_box(pdf, "Eucaristia:", dados.get('data_eucaristia', 'N/A'), 58, y, 45)
+    desenhar_campo_box(pdf, "Crisma:", dados.get('data_crisma', 'N/A'), 106, y, 45)
+    desenhar_campo_box(pdf, "Ministério:", dados.get('data_ministerio', 'NÃO POSSUI'), 154, y, 41)
+    y += 16
+    
+    # Cálculo de Status para o PDF
+    status_min, anos = verificar_status_ministerial(
+        str(dados.get('data_inicio_catequese', '')),
+        str(dados.get('data_batismo', '')),
+        str(dados.get('data_eucaristia', '')),
+        str(dados.get('data_crisma', '')),
+        str(dados.get('data_ministerio', ''))
+    )
+    desenhar_campo_box(pdf, "Tempo de Caminhada:", f"{anos} anos na Pastoral", 10, y, 90)
+    desenhar_campo_box(pdf, "Status Ministerial Atual:", status_min, 105, y, 90)
+
+    # 3. HISTÓRICO DE FORMAÇÕES (ANO VIGENTE)
+    pdf.set_y(y + 18)
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    ano_atual = date.today().year
+    pdf.cell(0, 7, limpar_texto(f"  3. HISTÓRICO DE FORMAÇÕES - ANO {ano_atual}"), ln=True, fill=True)
+    pdf.ln(2)
+    
+    if not df_formacoes.empty:
+        # Filtra apenas formações do ano atual para o PDF
+        df_formacoes['dt'] = pd.to_datetime(df_formacoes['data'], errors='coerce')
+        df_ano = df_formacoes[df_formacoes['dt'].dt.year == ano_atual]
+        
+        if not df_ano.empty:
+            pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0)
+            pdf.cell(30, 7, "Data", 1, 0, 'C'); pdf.cell(100, 7, "Tema", 1, 0, 'L'); pdf.cell(55, 7, "Formador", 1, 1, 'L')
+            pdf.set_font("helvetica", "", 8)
+            for _, row in df_ano.iterrows():
+                pdf.cell(30, 6, str(row.get('data', '')), 1, 0, 'C')
+                pdf.cell(100, 6, limpar_texto(str(row.get('tema', ''))[:55]), 1, 0, 'L')
+                pdf.cell(55, 6, limpar_texto(str(row.get('formador', ''))[:30]), 1, 1, 'L')
+        else:
+            pdf.set_font("helvetica", "I", 10); pdf.set_text_color(0, 0, 0)
+            pdf.cell(0, 10, limpar_texto("Nenhuma formação registrada neste ano."), ln=1)
+    else:
+        pdf.set_font("helvetica", "I", 10); pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, limpar_texto("Sem histórico de formações."), ln=1)
+
+    # 4. TERMO DE COMPROMISSO
+    pdf.ln(5)
+    pdf.set_font("helvetica", "B", 10); pdf.set_text_color(224, 61, 17)
+    pdf.cell(0, 5, limpar_texto("TERMO DE COMPROMISSO E VERACIDADE"), ln=True)
+    pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
+    
+    texto_comp = (f"Eu, {dados.get('nome')}, na qualidade de Catequista da Paróquia Nossa Senhora de Fátima, "
+                  "declaro que as informações acima prestadas são verdadeiras e assumo o compromisso de "
+                  "zelar pela sã doutrina e pelas diretrizes da Igreja Católica em minha missão evangelizadora.")
+    pdf.multi_cell(0, 4, limpar_texto(texto_comp))
+
+    pdf.ln(15)
+    y_ass = pdf.get_y() + 10
+    pdf.line(15, y_ass, 95, y_ass)
+    pdf.line(115, y_ass, 195, y_ass)
+    pdf.set_xy(15, y_ass + 1)
+    pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
+    pdf.set_xy(115, y_ass + 1)
+    pdf.cell(80, 5, limpar_texto("Assinatura do Coordenador"), align='C')
+    
+    return finalizar_pdf(pdf)
