@@ -835,26 +835,18 @@ elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
     tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
     
+    # --- SUBSTITUIR APENAS A tab_dash DENTRO DE GESTÃO DE SACRAMENTOS ---
     with tab_dash:
-        # 1. Censo de Batismos do Ano (Frutos da Evangelização) com Proteção de Coluna
         df_recebidos = ler_aba("sacramentos_recebidos")
         total_batismos_ano = 0
-        
         if not df_recebidos.empty:
             cols_rec = df_recebidos.columns.tolist()
-            # Identifica as colunas de forma flexível
             c_tipo = 'tipo_sacramento' if 'tipo_sacramento' in cols_rec else None
             c_data = 'data_recebimento' if 'data_recebimento' in cols_rec else ('data' if 'data' in cols_rec else None)
-
             if c_tipo and c_data:
                 try:
                     df_recebidos['data_dt'] = pd.to_datetime(df_recebidos[c_data], errors='coerce')
-                    ano_atual = date.today().year
-                    batismos_f = df_recebidos[
-                        (df_recebidos[c_tipo].str.upper() == 'BATISMO') & 
-                        (df_recebidos['data_dt'].dt.year == ano_atual)
-                    ]
-                    total_batismos_ano = len(batismos_f)
+                    total_batismos_ano = len(df_recebidos[(df_recebidos[c_tipo].str.upper() == 'BATISMO') & (df_recebidos['data_dt'].dt.year == date.today().year)])
                 except: pass
 
         st.markdown(f"""
@@ -864,7 +856,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
             </div>
         """, unsafe_allow_html=True)
 
-        # 2. Segmentação de Público
         df_kids = df_cat[df_cat['estado_civil_pais_ou_proprio'] == 'N/A'] if not df_cat.empty else pd.DataFrame()
         df_adults = df_cat[df_cat['estado_civil_pais_ou_proprio'] != 'N/A'] if not df_cat.empty else pd.DataFrame()
 
@@ -872,14 +863,12 @@ elif menu == "🕊️ Gestão de Sacramentos":
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
-            if not df_kids.empty:
-                k_bat = len(df_kids[df_kids['batizado_sn'] == 'SIM'])
-                st.metric("Batizados (Kids)", f"{k_bat}/{len(df_kids)}")
+            k_bat = len(df_kids[df_kids['batizado_sn'] == 'SIM']) if not df_kids.empty else 0
+            st.metric("Batizados (Kids)", f"{k_bat}/{len(df_kids) if not df_kids.empty else 0}")
         with c2:
             st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
-            if not df_adults.empty:
-                a_bat = len(df_adults[df_adults['batizado_sn'] == 'SIM'])
-                st.metric("Batizados (Adultos)", f"{a_bat}/{len(df_adults)}")
+            a_bat = len(df_adults[df_adults['batizado_sn'] == 'SIM']) if not df_adults.empty else 0
+            st.metric("Batizados (Adultos)", f"{a_bat}/{len(df_adults) if not df_adults.empty else 0}")
 
         st.divider()
         st.subheader("🏫 Auditoria Nominal e Pastoral por Turma")
@@ -897,6 +886,9 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     batizados = alunos_t[alunos_t['batizado_sn'] == 'SIM']
                     nao_batizados = alunos_t[alunos_t['batizado_sn'] != 'SIM']
                     
+                    prev_e = t.get('previsao_eucaristia', 'N/A')
+                    prev_c = t.get('previsao_crisma', 'N/A')
+                    
                     with st.expander(f"📍 {t['nome_turma']} ({t['etapa']}) - Frequência: {freq_media:.1f}%"):
                         col_p1, col_p2 = st.columns([2, 1])
                         with col_p1:
@@ -905,30 +897,29 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             st.markdown("---")
                             cb1, cb2 = st.columns(2)
                             cb1.success(f"✅ Batizados ({len(batizados)})")
+                            # CORREÇÃO AQUI: Usando 'n' corretamente
                             for n in batizados['nome_completo'].tolist(): st.write(f"· {n}")
                             cb2.error(f"❌ Pendentes ({len(nao_batizados)})")
+                            # CORREÇÃO AQUI: Usando 'n' corretamente
                             for n in nao_batizados['nome_completo'].tolist(): st.write(f"· {n}")
                         with col_p2:
                             st.markdown("**Previsões:**")
-                            st.write(f"Eucaristia: `{t.get('previsao_eucaristia', 'N/A')}`")
-                            st.write(f"Crisma: `{t.get('previsao_crisma', 'N/A')}`")
+                            st.write(f"Eucaristia: `{prev_e if prev_e else 'N/A'}`")
+                            st.write(f"Crisma: `{prev_c if prev_c else 'N/A'}`")
 
                     analise_detalhada_ia.append({
                         "turma": t['nome_turma'], "etapa": t['etapa'], "freq": f"{freq_media:.1f}%",
                         "idades": f"{min(idades)}-{max(idades)}", "impedimentos_civel": impedimentos,
-                        "batizados": len(batizados), "total": len(alunos_t),
-                        "prev_e": t.get('previsao_eucaristia', ''), "prev_c": t.get('previsao_crisma', '')
+                        "batizados": len(batizados), "pendentes": len(nao_batizados),
+                        "total": len(alunos_t), "prev_e": prev_e, "prev_c": prev_c
                     })
 
-        if st.button("🏛️ Gerar Auditoria Pastoral Completa (PDF)", key="btn_pdf_sac"):
+        if st.button("🏛️ Gerar Auditoria Pastoral Completa (PDF)", key="btn_pdf_sac_v3"):
             with st.spinner("Analisando dados..."):
                 resumo_ia = f"Batismos no Ano: {total_batismos_ano}. Detalhes: {analise_detalhada_ia}"
                 analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
-                stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': 0, 'euca_k': 0, 'bat_a': 0, 'euca_a': 0, 'cris_a': 0}
+                stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'euca_k': 0, 'bat_a': a_bat, 'euca_a': 0, 'cris_a': 0}
                 st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
-        
-        if "pdf_sac_tecnico" in st.session_state:
-            st.download_button("📥 Baixar Auditoria Sacramental PDF", st.session_state.pdf_sac_tecnico, "Auditoria_Pastoral.pdf", "application/pdf")
 
     with tab_reg:
         st.subheader("✍️ Registro de Sacramento")
