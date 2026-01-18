@@ -112,11 +112,11 @@ from utils import (
     obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
     gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, gerar_pdf_perfil_turma,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_pastoral_interno_pdf,
-    gerar_relatorio_sacramentos_tecnico_pdf
+    gerar_relatorio_sacramentos_tecnico_pdf, gerar_relatorio_sacramentos_tecnico_pdf
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
-    analisar_turma_local, gerar_relatorio_sacramentos_ia
+    analisar_turma_local, gerar_relatorio_sacramentos_ia, gerar_relatorio_sacramentos_ia
 )
 
 # --- FUNÇÕES AUXILIARES DE LOGO ---
@@ -830,172 +830,177 @@ elif menu == "🏫 Gestão de Turmas":
         # (Mantenha sua lógica de movimentação aqui se já tiver, ou use a padrão)
 
 
-# --- PÁGINA: GESTÃO DE SACRAMENTOS (AUDITORIA TÉCNICA) ---
+# --- INÍCIO DO BLOCO: GESTÃO DE SACRAMENTOS (VERSÃO FINAL PASTORAL) ---
 elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
     tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
     
     with tab_dash:
-        # 1. SEGMENTAÇÃO DE PÚBLICO (Censo para Relatórios Precisos)
-        # Lógica: Se estado civil é N/A, é Infantil/Juvenil. Caso contrário, Adulto.
+        # 1. Censo de Batismos do Ano Vigente (Frutos da Evangelização)
+        df_recebidos = ler_aba("sacramentos_recebidos")
+        total_batismos_ano = 0
+        if not df_recebidos.empty:
+            # Tenta converter a data para contar apenas o ano atual
+            df_recebidos['data_dt'] = pd.to_datetime(df_recebidos['data_recebimento'], errors='coerce')
+            ano_atual = date.today().year
+            total_batismos_ano = len(df_recebidos[(df_recebidos['tipo_sacramento'] == 'BATISMO') & (df_recebidos['data_dt'].dt.year == ano_atual)])
+        
+        st.markdown(f"""
+            <div style='background-color:#f8f9f0; padding:20px; border-radius:10px; border:1px solid #e03d11; text-align:center; margin-bottom:20px;'>
+                <h3 style='margin:0; color:#e03d11;'>🕊️ Frutos da Evangelização {date.today().year}</h3>
+                <p style='font-size:22px; color:#417b99; margin:5px 0;'><b>{total_batismos_ano} Batismos realizados</b></p>
+                <p style='font-size:14px; color:#666;'>Catequizandos que receberam a graça do Batismo este ano.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # 2. Segmentação de Público
         df_kids = df_cat[df_cat['estado_civil_pais_ou_proprio'] == 'N/A'] if not df_cat.empty else pd.DataFrame()
         df_adults = df_cat[df_cat['estado_civil_pais_ou_proprio'] != 'N/A'] if not df_cat.empty else pd.DataFrame()
 
-        st.subheader("📊 Quadro Geral de Sacramentos Realizados")
+        st.subheader("📊 Quadro Geral de Sacramentos")
         c1, c2 = st.columns(2)
-
         with c1:
-            st.markdown("<div style='background-color:#f8f9f0; padding:10px; border-radius:5px; border-left:5px solid #417b99;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
+            st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
             if not df_kids.empty:
-                k_total = len(df_kids)
                 k_bat = len(df_kids[df_kids['batizado_sn'] == 'SIM'])
-                k_euca = df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-                
-                m_k1, m_k2 = st.columns(2)
-                m_k1.metric("Batizados (Kids)", f"{k_bat}/{k_total}")
-                m_k2.metric("Eucaristia (Kids)", f"{k_euca}/{k_total}")
-            else:
-                st.write("Nenhum catequizando infantil cadastrado.")
-
+                st.metric("Batizados (Kids)", f"{k_bat}/{len(df_kids)}")
         with c2:
-            st.markdown("<div style='background-color:#f8f9f0; padding:10px; border-radius:5px; border-left:5px solid #e03d11;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
+            st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
             if not df_adults.empty:
-                a_total = len(df_adults)
                 a_bat = len(df_adults[df_adults['batizado_sn'] == 'SIM'])
-                a_euca = df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-                a_cris = df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
-                
-                m_a1, m_a2, m_a3 = st.columns(3)
-                m_a1.metric("Batizados", f"{a_bat}/{a_total}")
-                m_a2.metric("Eucaristia", f"{a_euca}/{a_total}")
-                m_a3.metric("Crisma", f"{a_cris}/{a_total}")
-            else:
-                st.write("Nenhum catequizando adulto cadastrado.")
+                st.metric("Batizados (Adultos)", f"{a_bat}/{len(df_adults)}")
 
         st.divider()
-        st.subheader("🏫 Auditoria Nominal e Previsões por Turma")
-        st.info("Abaixo você confere quem já possui os sacramentos e as datas previstas para as turmas de conclusão.")
-
-        analise_para_pdf = []
+        st.subheader("🏫 Auditoria Nominal e Pastoral por Turma")
+        
+        analise_detalhada_ia = []
         if not df_turmas.empty:
             for _, t in df_turmas.iterrows():
                 alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
                 
                 if not alunos_t.empty:
+                    # Cálculo de Frequência da Turma
+                    pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
+                    freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
+                    
+                    # Coleta de idades e impedimentos matrimoniais (Adultos)
+                    idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
+                    impedimentos = len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL'])])
+                    
                     batizados = alunos_t[alunos_t['batizado_sn'] == 'SIM']
                     nao_batizados = alunos_t[alunos_t['batizado_sn'] != 'SIM']
                     
-                    # Recupera as datas previstas cadastradas na Gestão de Turmas
-                    prev_e = t.get('previsao_eucaristia', 'NÃO DEFINIDA')
-                    prev_c = t.get('previsao_crisma', 'NÃO DEFINIDA')
-                    
-                    with st.expander(f"📍 Turma: {t['nome_turma']} ({t['etapa']}) - {len(alunos_t)} Alunos"):
-                        col_info, col_datas = st.columns([2, 1])
-                        
-                        with col_datas:
-                            st.markdown("**Previsões da Paróquia:**")
-                            if "ADULTO" in str(t['etapa']).upper() or "TERCEIRA" in str(t['etapa']).upper():
-                                st.write(f"🔸 Eucaristia: `{prev_e if prev_e else 'Sem data prevista'}`")
-                                st.write(f"🔸 Crisma: `{prev_c if prev_c else 'Sem data prevista'}`")
-                            else:
-                                st.caption("Etapa inicial: Batismos ocorrem individualmente conforme agenda paroquial.")
-
-                        st.markdown("---")
-                        col_b, col_nb = st.columns(2)
-                        with col_b:
-                            st.success(f"✅ Batizados ({len(batizados)})")
-                            if not batizados.empty:
-                                for nome in batizados['nome_completo'].tolist():
-                                    st.write(f"· {nome}")
-                            else: st.write("Ninguém batizado ainda.")
+                    with st.expander(f"📍 {t['nome_turma']} ({t['etapa']}) - Frequência: {freq_media:.1f}%"):
+                        col_p1, col_p2 = st.columns([2, 1])
+                        with col_p1:
+                            st.write(f"**Faixa Etária:** {min(idades)} a {max(idades)} anos")
+                            if impedimentos > 0:
+                                st.warning(f"⚠️ {impedimentos} adultos com situação matrimonial a regularizar (Impedimento para Eucaristia/Crisma).")
                             
-                        with col_nb:
-                            st.error(f"❌ Não Batizados ({len(nao_batizados)})")
-                            if not nao_batizados.empty:
-                                for nome in nao_batizados['nome_completo'].tolist():
-                                    st.write(f"· {nome}")
-                                    if "ADULTO" in str(t['etapa']).upper() or "TERCEIRA" in str(t['etapa']).upper():
-                                        st.caption("⚠️ Pendência Crítica: Necessário Batismo para receber Eucaristia/Crisma.")
-                            else: st.write("Todos são batizados! 🎉")
+                            st.markdown("---")
+                            cb1, cb2 = st.columns(2)
+                            cb1.success(f"✅ Batizados ({len(batizados)})")
+                            for n in batizados['nome_completo'].tolist(): st.write(f"· {n}")
+                            cb2.error(f"❌ Pendentes ({len(nao_batizados)})")
+                            for n in nao_batizados['nome_completo'].tolist(): st.write(f"· {n}")
+                        
+                        with col_p2:
+                            st.markdown("**Previsões:**")
+                            st.write(f"Eucaristia: `{t.get('previsao_eucaristia', 'N/A')}`")
+                            st.write(f"Crisma: `{t.get('previsao_crisma', 'N/A')}`")
 
-                        # Prepara dados para o Relatório PDF
-                        analise_para_pdf.append({
-                            "turma": t['nome_turma'], 
-                            "batizados": len(batizados), 
-                            "pendentes": len(nao_batizados), 
-                            "prev_e": prev_e, 
-                            "prev_c": prev_c
-                        })
+                    # Dados para a IA
+                    analise_detalhada_ia.append({
+                        "turma": t['nome_turma'], "etapa": t['etapa'], "freq": f"{freq_media:.1f}%",
+                        "idades": f"{min(idades)}-{max(idades)}", "impedimentos_civel": impedimentos,
+                        "batizados": len(batizados), "total": len(alunos_t),
+                        "prev_e": t.get('previsao_eucaristia', ''), "prev_c": t.get('previsao_crisma', '')
+                    })
 
         st.divider()
-        if st.button("🏛️ Gerar Relatório Técnico de Auditoria Sacramental (PDF)"):
-            with st.spinner("O Auditor IA está processando os dados nominais..."):
-                resumo_ia = f"Censo: Kids({len(df_kids)}), Adultos({len(df_adults)}). Turmas Analisadas: {analise_para_pdf}"
+        if st.button("🏛️ Gerar Auditoria Pastoral Completa (PDF)"):
+            with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
+                resumo_ia = f"Batismos no Ano: {total_batismos_ano}. Detalhes das Turmas: {analise_detalhada_ia}"
                 analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
                 
-                # Organiza estatísticas para o gerador de PDF no utils.py
                 stats_pdf = {
+                    'bat_ano': total_batismos_ano,
                     'bat_k': len(df_kids[df_kids['batizado_sn'] == 'SIM']) if not df_kids.empty else 0,
                     'euca_k': df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_kids.empty else 0,
                     'bat_a': len(df_adults[df_adults['batizado_sn'] == 'SIM']) if not df_adults.empty else 0,
                     'euca_a': df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_adults.empty else 0,
                     'cris_a': df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not df_adults.empty else 0
                 }
-                st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_para_pdf, analise_ia_sac)
+                st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
         
         if "pdf_sac_tecnico" in st.session_state:
-            st.download_button("📥 Baixar Auditoria Sacramental Completa (PDF)", st.session_state.pdf_sac_tecnico, "Auditoria_Sacramental_Fatima.pdf", "application/pdf")
+            st.download_button("📥 Baixar Auditoria Sacramental PDF", st.session_state.pdf_sac_tecnico, "Auditoria_Pastoral_Fatima.pdf", "application/pdf")
 
     with tab_reg:
-        st.info("Selecione as turmas para registrar o recebimento de sacramentos em lote.")
-        turmas_s = st.multiselect("1. Selecione as Turmas Envolvidas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+        st.subheader("✍️ Registro de Sacramento")
+        modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True)
         
-        if turmas_s:
-            with st.form("form_sacramento_v2"):
-                c1, c2 = st.columns(2)
-                tipo_s = c1.selectbox("2. Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
-                data_s = c2.date_input("3. Data da Celebração", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
-                
-                st.markdown("---")
-                st.write("✅ **4. Marque os catequizandos que receberam o sacramento:**")
-                
-                alunos_filtrados = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
-                selecionados_ids = []
-                
-                if not alunos_filtrados.empty:
-                    cols_check = st.columns(2)
-                    for i, (_, row) in enumerate(alunos_filtrados.iterrows()):
-                        with cols_check[i % 2]:
-                            if st.checkbox(f"{row['nome_completo']} ({row['etapa']})", key=f"sac_{row['id_catequizando']}"):
-                                selecionados_ids.append(row)
-                
-                if st.form_submit_button("💾 FINALIZAR E ATUALIZAR CADASTROS"):
-                    if selecionados_ids:
-                        id_ev = f"SAC-{int(time.time())}"
-                        dados_ev = [id_ev, tipo_s, str(data_s), ", ".join(turmas_s), st.session_state.usuario['nome']]
-                        lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in selecionados_ids]
+        if modo_reg == "Individual (Busca por Nome)":
+            nome_busca = st.text_input("🔍 Digite o nome do catequizando para buscar:").upper()
+            if nome_busca:
+                sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
+                if not sugestoes.empty:
+                    escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist())
+                    dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
+                    
+                    with st.form("form_sac_individual"):
+                        st.write(f"Registrando sacramento para: **{escolhido}** (Turma: {dados_c['etapa']})")
+                        c1, c2 = st.columns(2)
+                        tipo_s = c1.selectbox("Sacramento Recebido", ["BATISMO", "EUCARISTIA", "CRISMA"])
+                        data_s = c2.date_input("Data da Celebração", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
                         
-                        if registrar_evento_sacramento_completo(dados_ev, lista_p, tipo_s):
-                            st.success(f"✅ Sucesso! {len(selecionados_ids)} cadastros atualizados.")
-                            st.cache_data.clear()
-                            st.balloons()
-                            time.sleep(2)
-                            st.rerun()
-                    else:
-                        st.warning("Selecione ao menos um catequizando para registrar.")
+                        if st.form_submit_button("💾 SALVAR REGISTRO INDIVIDUAL"):
+                            id_ev = f"IND-{int(time.time())}"
+                            # Salva no histórico de eventos e atualiza a ficha do catequizando
+                            if registrar_evento_sacramento_completo(
+                                [id_ev, tipo_s, str(data_s), dados_c['etapa'], st.session_state.usuario['nome']], 
+                                [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s, str(data_s)]], 
+                                tipo_s
+                            ):
+                                st.success(f"✅ Sacramento de {escolhido} registrado com sucesso!")
+                                st.cache_data.clear(); time.sleep(1); st.rerun()
+                else:
+                    st.warning("Nenhum catequizando encontrado com este nome.")
+        
         else:
-            st.warning("Aguardando seleção de turmas para listar os catequizandos...")
+            # Registro por Turma (Mutirão)
+            turmas_s = st.multiselect("Selecione as Turmas Envolvidas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+            if turmas_s:
+                with st.form("form_sacramento_lote"):
+                    c1, c2 = st.columns(2)
+                    tipo_s = c1.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
+                    data_s = c2.date_input("Data da Celebração", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
+                    st.markdown("---")
+                    st.write("✅ **Marque quem recebeu o sacramento:**")
+                    alunos_filtrados = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
+                    selecionados_ids = []
+                    if not alunos_filtrados.empty:
+                        cols_check = st.columns(2)
+                        for i, (_, row) in enumerate(alunos_filtrados.iterrows()):
+                            with cols_check[i % 2]:
+                                if st.checkbox(f"{row['nome_completo']} ({row['etapa']})", key=f"sac_lote_{row['id_catequizando']}"):
+                                    selecionados_ids.append(row)
+                    if st.form_submit_button("💾 FINALIZAR REGISTRO EM LOTE"):
+                        if selecionados_ids:
+                            id_ev = f"SAC-{int(time.time())}"
+                            dados_ev = [id_ev, tipo_s, str(data_s), ", ".join(turmas_s), st.session_state.usuario['nome']]
+                            lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in selecionados_ids]
+                            if registrar_evento_sacramento_completo(dados_ev, lista_p, tipo_s):
+                                st.success("✅ Registros em lote finalizados!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                        else: st.warning("Selecione ao menos um catequizando.")
 
     with tab_hist:
         st.subheader("📜 Histórico de Eventos Sacramentais")
-        st.write("Lista de celebrações coletivas ou mutirões registrados no sistema.")
         if not df_sac_eventos.empty:
             df_hist_show = df_sac_eventos.copy()
-            if 'data' in df_hist_show.columns:
-                df_hist_show = df_hist_show.sort_values(by='data', ascending=False)
+            if 'data' in df_hist_show.columns: df_hist_show = df_hist_show.sort_values(by='data', ascending=False)
             st.dataframe(df_hist_show, use_container_width=True, hide_index=True)
-        else:
-            st.info("Nenhum evento sacramental registrado no histórico.")
+        else: st.info("Nenhum evento registrado ainda.")
 # --- FIM DO BLOCO: GESTÃO DE SACRAMENTOS ---
 
 # --- PÁGINA: FAZER CHAMADA ---
