@@ -602,40 +602,46 @@ elif menu == "📝 Cadastrar Catequizando":
                     ]]
                     if salvar_lote_catequizandos(registro):
                         st.success(f"✅ {nome} CADASTRADO!"); st.balloons(); time.sleep(1); st.rerun()
-
-# --- SUBSTITUIÇÃO INTEGRAL: ABA tab_csv (COM MECANISMO DE MODULAÇÃO) ---
+      
+# --- SUBSTITUIÇÃO CORRIGIDA: ABA tab_csv (MECANISMO DE MODULAÇÃO SEM ERROS) ---
     with tab_csv:
         st.subheader("📂 Importação em Massa com Conferência")
-        st.write("Este módulo permite revisar os dados antes de salvá-los na planilha oficial.")
+        st.write("Revise os dados abaixo antes de confirmar a gravação definitiva.")
         
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_modulado")
+        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_modulado_v2")
         
         if arquivo_csv:
             try:
-                # Leitura inicial
+                # 1. Leitura e Padronização
                 df_import = pd.read_csv(arquivo_csv).fillna("N/A")
-                
-                # Padronização de colunas para conferência
+                # Limpa nomes de colunas (remove espaços e coloca em minúsculo)
                 df_import.columns = [c.strip().lower() for c in df_import.columns]
                 
-                # Interface de Modulação
                 st.markdown("### 🔍 1. Revisão dos Dados Importados")
                 
-                # Criamos uma visualização amigável para o Coordenador
+                # 2. Construção do Painel de Conferência (Preview)
                 df_preview = pd.DataFrame()
-                df_preview['Nome do Catequizando'] = df_import.get('nome', ['SEM NOME']*len(df_import))
-                df_preview['Turma no CSV'] = df_import.get('etapa', ['NÃO INFORMADA']*len(df_import))
-                df_preview['Contato'] = df_import.get('contato', ['N/A']*len(df_import))
                 
-                # Validação de Turmas Existentes
-                turmas_cadastradas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                df_preview['Status da Turma'] = df_preview['Turma nel CSV'].apply(
-                    lambda x: "✅ Turma Encontrada" if str(x).upper() in [t.upper() for t in turmas_cadastradas] else "⚠️ Turma Não Cadastrada"
+                # Mapeamento inteligente de colunas
+                col_nome = 'nome' if 'nome' in df_import.columns else None
+                col_etapa = 'etapa' if 'etapa' in df_import.columns else None
+                col_contato = 'contato' if 'contato' in df_import.columns else None
+
+                df_preview['Nome do Catequizando'] = df_import[col_nome].astype(str).str.upper() if col_nome else ["NOME NÃO ENCONTRADO"]*len(df_import)
+                df_preview['Turma no CSV'] = df_import[col_etapa].astype(str).str.upper() if col_etapa else ["TURMA NÃO ENCONTRADA"]*len(df_import)
+                df_preview['Contato'] = df_import[col_contato].astype(str) if col_contato else ["N/A"]*len(df_import)
+                
+                # 3. Validação de Turmas (Compara com o que já existe no sistema)
+                turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
+                
+                # CORREÇÃO DO TYPO AQUI: 'Turma no CSV'
+                df_preview['Status da Turma'] = df_preview['Turma no CSV'].apply(
+                    lambda x: "✅ Turma Encontrada" if x in turmas_cadastradas else "⚠️ Turma Não Cadastrada"
                 )
 
                 st.dataframe(df_preview, use_container_width=True, hide_index=True)
 
-                # Resumo Estatístico da Importação
+                # 4. Resumo Estatístico
                 st.markdown("### 📊 2. Resumo da Carga")
                 resumo = df_preview['Turma no CSV'].value_counts()
                 cols_resumo = st.columns(len(resumo) if len(resumo) < 4 else 4)
@@ -645,15 +651,14 @@ elif menu == "📝 Cadastrar Catequizando":
 
                 st.divider()
                 
-                # Botão de Confirmação Final
-                if st.button("🚀 CONFIRMAR E GRAVAR 29 COLUNAS NO BANCO", key="btn_confirmar_import_final"):
-                    with st.spinner("Processando e alinhando colunas..."):
+                # 5. Botão de Gravação (29 Colunas)
+                if st.button("🚀 CONFIRMAR E GRAVAR NO BANCO DE DADOS", key="btn_confirmar_import_v2"):
+                    with st.spinner("Alinhando 29 colunas para o Google Sheets..."):
                         lista_final = []
                         for i, linha in df_import.iterrows():
                             t_final = str(linha.get('etapa', 'NÃO INFORMADO')).upper()
                             
-                            # Montagem técnica das 29 colunas (A até AC)
-                            # Garante que cada linha do CSV se torne um registro completo para o Google Sheets
+                            # Montagem técnica rigorosa das 29 colunas (A até AC)
                             nova_linha = [
                                 f"CSV-{int(time.time()) + i}",              # A: ID
                                 t_final,                                    # B: Etapa
@@ -676,13 +681,13 @@ elif menu == "📝 Cadastrar Catequizando":
                             lista_final.append(nova_linha)
                         
                         if salvar_lote_catequizandos(lista_final):
-                            st.success(f"✅ Sucesso! {len(lista_final)} catequizandos foram inseridos e modulados.")
+                            st.success(f"✅ Sucesso! {len(lista_final)} catequizandos importados.")
                             st.balloons()
                             time.sleep(2)
                             st.rerun()
                             
             except Exception as e:
-                st.error(f"❌ Erro na modulação: {e}. Verifique se o CSV usa vírgulas como separador.")
+                st.error(f"❌ Erro na modulação: {e}")
 # --- FIM DA SUBSTITUIÇÃO ---
 
 elif menu == "👤 Perfil Individual":
