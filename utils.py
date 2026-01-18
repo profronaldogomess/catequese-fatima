@@ -9,6 +9,28 @@ import re
 # 1. FUNÇÕES DE LÓGICA E CÁLCULO
 # ==========================================
 
+def formatar_data_br(valor):
+    """Converte datas de diversos formatos para DD/MM/YYYY."""
+    if not valor or str(valor).strip() in ["None", "", "N/A"]:
+        return "N/A"
+    
+    valor_str = str(valor).strip().replace("-", "").replace("/", "")
+    
+    # Tenta tratar formato YYYYMMDD (comum em exportações de planilhas)
+    if len(valor_str) == 8 and valor_str.isdigit():
+        try:
+            return f"{valor_str[6:8]}/{valor_str[4:6]}/{valor_str[0:4]}"
+        except: pass
+
+    # Tenta tratar formato ISO YYYY-MM-DD
+    try:
+        dt = pd.to_datetime(valor)
+        if pd.notnull(dt):
+            return dt.strftime('%d/%m/%Y')
+    except: pass
+    
+    return str(valor)
+
 def calcular_idade(data_nascimento):
     if not data_nascimento or data_nascimento == "None" or data_nascimento == "": return 0
     hoje = date.today()
@@ -41,14 +63,12 @@ def converter_para_data(valor_str):
     except: return date.today()
 
 def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_ministerio):
-    # Se já possui data de ministério, é Ministro
     if d_ministerio and str(d_ministerio).strip() not in ["None", "", "N/A"]: 
         return "MINISTRO", 0 
     try:
         hoje = date.today()
-        inicio = datetime.strptime(str(data_inicio)[:10], "%Y-%m-%d").date()
-        anos = (hoje - inicio).days // 365
-        # Regra: Batismo, Eucaristia e Crisma são obrigatórios para ser Apto
+        inicio = pd.to_datetime(data_inicio)
+        anos = (hoje.year - inicio.year)
         tem_sacramentos = all([
             str(d_batismo).strip() not in ["None", "", "N/A"],
             str(d_euca).strip() not in ["None", "", "N/A"],
@@ -71,7 +91,6 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
         hoje_cat = df_limpo[(df_limpo['dt'].dt.month == hoje.month) & (df_limpo['dt'].dt.day == hoje.day)]
         for _, r in hoje_cat.iterrows(): niver_hoje.append(f"😇 Catequizando: **{r['nome_completo']}**")
     if not df_usuarios.empty:
-        # Filtra Admin para não aparecer em aniversários pastorais
         df_usu_limpo = df_usuarios[df_usuarios['papel'] != 'ADMIN'].drop_duplicates(subset=['nome'])
         df_usu_limpo['dt'] = pd.to_datetime(df_usu_limpo['data_nascimento'], errors='coerce')
         hoje_usu = df_usu_limpo[(df_usu_limpo['dt'].dt.month == hoje.month) & (df_usu_limpo['dt'].dt.day == hoje.day)]
@@ -112,7 +131,6 @@ def obter_aniversariantes_mes(df_cat):
 
 def limpar_texto(texto):
     if not texto: return ""
-    # Remove caracteres de Markdown que quebram o PDF
     texto = re.sub(r'[*#_~-]', '', str(texto))
     return texto.encode('latin-1', 'replace').decode('latin-1')
 
@@ -154,7 +172,7 @@ def gerar_ficha_cadastral_catequizando(dados):
     
     y = pdf.get_y()
     desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome_completo', ''), 10, y, 135)
-    desenhar_campo_box(pdf, "Data de Nascimento:", dados.get('data_nascimento', ''), 150, y, 45)
+    desenhar_campo_box(pdf, "Data de Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 150, y, 45)
     y += 16
     desenhar_campo_box(pdf, "Endereço Completo:", dados.get('endereco_completo', ''), 10, y, 135)
     desenhar_campo_box(pdf, "Batizado:", dados.get('batizado_sn', ''), 150, y, 45)
@@ -180,7 +198,7 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     
     y = pdf.get_y()
     desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome', ''), 10, y, 135)
-    desenhar_campo_box(pdf, "Nascimento:", dados.get('data_nascimento', 'N/A'), 150, y, 45)
+    desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 150, y, 45)
     y += 16
     desenhar_campo_box(pdf, "E-mail:", dados.get('email', ''), 10, y, 90)
     desenhar_campo_box(pdf, "Telefone:", dados.get('telefone', 'N/A'), 105, y, 90)
@@ -189,10 +207,10 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 7, limpar_texto("  2. VIDA SACRAMENTAL E QUALIFICAÇÃO"), ln=True, fill=True); pdf.ln(2)
     y = pdf.get_y()
-    desenhar_campo_box(pdf, "Batismo:", dados.get('data_batismo', 'N/A'), 10, y, 45)
-    desenhar_campo_box(pdf, "Eucaristia:", dados.get('data_eucaristia', 'N/A'), 58, y, 45)
-    desenhar_campo_box(pdf, "Crisma:", dados.get('data_crisma', 'N/A'), 106, y, 45)
-    desenhar_campo_box(pdf, "Ministério:", dados.get('data_ministerio', 'NÃO'), 154, y, 41)
+    desenhar_campo_box(pdf, "Batismo:", formatar_data_br(dados.get('data_batismo', '')), 10, y, 45)
+    desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(dados.get('data_eucaristia', '')), 58, y, 45)
+    desenhar_campo_box(pdf, "Crisma:", formatar_data_br(dados.get('data_crisma', '')), 106, y, 45)
+    desenhar_campo_box(pdf, "Ministério:", formatar_data_br(dados.get('data_ministerio', '')), 154, y, 41)
     
     pdf.set_y(y + 20)
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
@@ -203,7 +221,7 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
         pdf.cell(30, 7, "Data", 1, 0, 'C'); pdf.cell(100, 7, "Tema", 1, 0, 'L'); pdf.cell(55, 7, "Formador", 1, 1, 'L')
         pdf.set_font("helvetica", "", 8)
         for _, row in df_formacoes.iterrows():
-            pdf.cell(30, 6, str(row.get('data', '')), 1, 0, 'C')
+            pdf.cell(30, 6, formatar_data_br(row.get('data', '')), 1, 0, 'C')
             pdf.cell(100, 6, limpar_texto(str(row.get('tema', ''))[:55]), 1, 0, 'L')
             pdf.cell(55, 6, limpar_texto(str(row.get('formador', ''))[:30]), 1, 1, 'L')
     
@@ -213,50 +231,51 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 4, limpar_texto("Declaro que as informações prestadas são verdadeiras e assumo o compromisso com a missão evangelizadora."))
     
+    # BLOCO DE ASSINATURAS
+    pdf.ln(20)
+    y_ass = pdf.get_y()
+    pdf.line(15, y_ass, 95, y_ass)
+    pdf.line(115, y_ass, 195, y_ass)
+    pdf.set_xy(15, y_ass + 1)
+    pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
+    pdf.set_xy(115, y_ass + 1)
+    pdf.cell(80, 5, limpar_texto("Assinatura do Coordenador"), align='C')
+    
     return finalizar_pdf(pdf)
 
 def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
     pdf = FPDF(); pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, f"PERFIL DA TURMA: {nome_turma}", etapa=nome_turma)
-    
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("  ESTATÍSTICAS E DADOS GERAIS"), ln=True, fill=True); pdf.ln(2)
-    
     pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
     for chave, valor in metricas.items():
         pdf.write(7, limpar_texto(f"{chave}: {valor}\n"))
-    
     pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 7, limpar_texto("  ANÁLISE PASTORAL (IA GEMINI)"), ln=True, fill=True); pdf.ln(2)
     pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, limpar_texto(analise_ia))
-    
     pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 7, limpar_texto("  RELAÇÃO DE CATEQUIZANDOS"), ln=True, fill=True); pdf.ln(2)
     pdf.set_font("helvetica", "", 9); pdf.set_text_color(0, 0, 0)
     for i, aluno in enumerate(lista_alunos, 1):
         pdf.cell(0, 6, limpar_texto(f"{i}. {aluno}"), ln=True)
-        
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
     pdf = FPDF(); pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "AUDITORIA PASTORAL E SACRAMENTAL", etapa="SACRAMENTOS")
-    
     pdf.set_fill_color(248, 249, 240); pdf.set_font("helvetica", "B", 12); pdf.set_text_color(224, 61, 17)
     pdf.cell(0, 12, limpar_texto(f"FRUTOS DA EVANGELIZAÇÃO EM {date.today().year}: {stats.get('bat_ano', 0)} BATISMOS"), border=1, ln=True, align='C', fill=True)
     pdf.ln(5)
-
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("  DIAGNÓSTICO PASTORAL E CANÔNICO (IA)"), ln=True, fill=True); pdf.ln(2)
     pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, limpar_texto(analise_ia))
-    
     pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 7, limpar_texto("  DETALHAMENTO POR TURMA"), ln=True, fill=True); pdf.ln(2)
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0)
     pdf.cell(50, 6, "Turma", 1, 0, 'L'); pdf.cell(25, 6, "Freq.", 1, 0, 'C'); pdf.cell(25, 6, "Idades", 1, 0, 'C'); pdf.cell(25, 6, "Batizados", 1, 0, 'C'); pdf.cell(30, 6, "Pendentes", 1, 0, 'C'); pdf.cell(35, 6, "Prev. Euca", 1, 1, 'C')
-    
     pdf.set_font("helvetica", "", 8)
     for t in analise_turmas:
         pdf.cell(50, 6, limpar_texto(t.get('turma', 'N/A')), 1, 0, 'L')
@@ -265,20 +284,17 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
         pdf.cell(25, 6, str(t.get('batizados', 0)), 1, 0, 'C')
         pdf.cell(30, 6, str(t.get('pendentes', 0)), 1, 0, 'C')
         pdf.cell(35, 6, limpar_texto(t.get('prev_e', 'N/A')), 1, 1, 'C')
-
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_diocesano_pdf(dados_g, turmas_list, sac_stats, proj_list, analise_tecnica):
     pdf = FPDF(); pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO DIOCESANO", etapa="DIOCESANO")
-    
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("  1. CENSO GERAL"), ln=True, fill=True); pdf.ln(2)
     y = pdf.get_y()
     desenhar_campo_box(pdf, "Total Catequizandos:", str(dados_g.get('total_cat', 0)), 10, y, 60)
     desenhar_campo_box(pdf, "Total Turmas:", str(dados_g.get('total_turmas', 0)), 75, y, 60)
     desenhar_campo_box(pdf, "Equipe Técnica:", str(dados_g.get('total_equipe', 0)), 140, y, 55)
-    
     pdf.set_y(y + 20); pdf.multi_cell(0, 6, limpar_texto(analise_tecnica))
     return finalizar_pdf(pdf)
 
