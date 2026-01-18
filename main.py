@@ -1003,20 +1003,28 @@ elif menu == "🕊️ Gestão de Sacramentos":
 
         st.divider()
         # 3. Geração de PDF
-        if st.button("🏛️ Gerar Auditoria Pastoral Completa (PDF)", key="btn_gerar_pdf_sac_v_final"):
-            with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
-                try:
-                    resumo_ia = f"Batismos no Ano: {total_batismos_ano}. Detalhes: {analise_detalhada_ia}"
-                    analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
-                    stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'euca_k': 0, 'bat_a': a_bat, 'euca_a': 0, 'cris_a': 0}
-                    
-                    pdf_data = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
-                    if pdf_data:
-                        st.session_state.pdf_sac_tecnico = pdf_data
-                        st.success("✅ Relatório gerado! O botão de download apareceu abaixo.")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Erro na geração do PDF: {e}")
+        with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
+            try:
+                # Enriquecendo o resumo para a IA
+                resumo_ia = {
+                    "total_batismos_ano": total_batismos_ano,
+                    "censo_kids": {"total": len(df_kids), "batizados": k_bat},
+                    "censo_adultos": {"total": len(df_adults), "batizados": a_bat},
+                    "detalhes_por_turma": analise_detalhada_ia
+                }
+                
+                analise_ia_sac = gerar_relatorio_sacramentos_ia(str(resumo_ia))
+                stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'bat_a': a_bat}
+                
+                # Chama a função reelaborada no utils.py
+                pdf_data = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
+                
+                if pdf_data:
+                    st.session_state.pdf_sac_tecnico = pdf_data
+                    st.success("✅ Auditoria Diocesana gerada com sucesso!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Erro na geração do PDF: {e}")
 
         if "pdf_sac_tecnico" in st.session_state:
             st.download_button(
