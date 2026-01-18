@@ -193,13 +193,13 @@ st.sidebar.success(f"Bem-vindo(a),\n**{nome_usuario}**")
 st.sidebar.divider()
 
 # 3. Botões de Ação
-if st.sidebar.button("🔄 Atualizar Dados (Limpar Memória)"):
+if st.sidebar.button("🔄 Atualizar Dados", key="btn_sidebar_refresh_definitivo"):
     st.cache_data.clear()
     st.toast("Memória limpa! Os dados foram atualizados.", icon="✅")
     time.sleep(1)
     st.rerun()
 
-if st.sidebar.button("🚪 Sair / Logoff"):
+if st.sidebar.button("🚪 Sair / Logoff", key="btn_sidebar_logout_definitivo"):
     st.session_state.logado = False
     st.rerun()
 
@@ -712,6 +712,7 @@ elif menu == "👤 Perfil Individual":
 
 # --- PÁGINA: GESTÃO DE TURMAS ---
 # --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE TURMAS (VERSÃO ARQUITETURA FINAL) ---
+# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE TURMAS (VERSÃO CONSOLIDADA) ---
 elif menu == "🏫 Gestão de Turmas":
     st.title("🏫 Gestão de Turmas")
     
@@ -745,6 +746,7 @@ elif menu == "🏫 Gestão de Turmas":
         
         st.markdown("---")
         p_euca, p_crisma = "", ""
+        # Lógica Condicional Dinâmica para Datas
         if e_t in ["TERCEIRA ETAPA", "ADULTOS TURMA EUCARISTIA/BATISMO"]:
             p_euca = st.text_input("📅 Previsão da Eucaristia (Ex: Outubro/2026)", key="p_euca_criar_v4")
         elif e_t == "ADULTOS CRISMA":
@@ -769,8 +771,7 @@ elif menu == "🏫 Gestão de Turmas":
                 ]):
                     st.success(f"Turma {n_t} criada com sucesso!")
                     st.cache_data.clear()
-                    time.sleep(1)
-                    st.rerun()
+                    time.sleep(1); st.rerun()
 
     with t3:
         st.subheader("✏️ Detalhes e Edição")
@@ -809,187 +810,89 @@ elif menu == "🏫 Gestão de Turmas":
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
-        
         if not df_turmas.empty:
-            # 1. Seleção da Turma
             t_alvo = st.selectbox("Selecione a turma para análise profunda:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v_final")
-            
-            # 2. Filtragem de Dados Específicos
             dados_t_ref = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
             pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
             
             if not alunos_t.empty:
-                # --- CÁLCULOS DE MÉTRICAS ---
+                # Métricas
                 total_alunos = len(alunos_t)
                 idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
                 media_idade = sum(idades) / len(idades)
-                
-                # Frequência
-                freq_media = 0.0
-                if not pres_t.empty:
-                    freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100)
-                
-                # Cobertura Sacramental
+                freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
                 batizados_t = len(alunos_t[alunos_t['batizado_sn'] == 'SIM'])
-                perc_batismo = (batizados_t / total_alunos) * 100
 
-                # --- LINHA 1: MÉTRICAS PRINCIPAIS ---
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Catequizandos", total_alunos)
                 m2.metric("Idade Média", f"{media_idade:.1f} anos")
-                m3.metric("Frequência Média", f"{freq_media:.1f}%")
-                m4.metric("Cobertura Batismo", f"{perc_batismo:.0f}%")
+                m3.metric("Frequência", f"{freq_media:.1f}%")
+                m4.metric("Batizados", f"{batizados_t}/{total_alunos}")
 
                 st.divider()
-
-                # --- LINHA 2: GRÁFICOS E ALERTAS ---
                 col_graf, col_alertas = st.columns([2, 1])
-                
                 with col_graf:
-                    st.markdown("**📈 Evolução de Presença por Encontro**")
+                    st.markdown("**📈 Evolução de Presença**")
                     if not pres_t.empty:
-                        # Agrupa presença por data
                         df_graf = pres_t.groupby('data_encontro')['status'].value_counts(normalize=True).unstack().fillna(0)
                         if 'PRESENTE' in df_graf.columns:
-                            df_graf = df_graf[['PRESENTE']] * 100
-                            fig_pres = px.line(df_graf, y='PRESENTE', labels={'PRESENTE': 'Presença %', 'data_encontro': 'Data'},
-                                             color_discrete_sequence=['#417b99'])
-                            fig_pres.update_layout(height=300, margin=dict(l=0, r=0, t=0, b=0))
+                            fig_pres = px.line(df_graf[['PRESENTE']]*100, y='PRESENTE', color_discrete_sequence=['#417b99'])
                             st.plotly_chart(fig_pres, use_container_width=True)
-                        else: st.info("Dados insuficientes para gráfico.")
-                    else: st.info("Nenhum encontro registrado para gerar gráfico.")
-
                 with col_alertas:
-                    st.markdown("**🚨 Alertas de Atenção**")
-                    # Alerta de Evasão (Faltou nos últimos 2 encontros)
+                    st.markdown("**🚨 Alertas**")
                     if not pres_t.empty:
-                        ultimas_datas = sorted(pres_t['data_encontro'].unique())[-2:]
-                        faltosos_recorrentes = []
+                        ultimas = sorted(pres_t['data_encontro'].unique())[-2:]
                         for nome in alunos_t['nome_completo'].unique():
-                            faltas = pres_t[(pres_t['nome_catequizando'] == nome) & 
-                                           (pres_t['data_encontro'].isin(ultimas_datas)) & 
-                                           (pres_t['status'] == 'AUSENTE')]
-                            if len(faltas) >= 2:
-                                faltosos_recorrentes.append(nome)
-                        
-                        if faltosos_recorrentes:
-                            for f in faltosos_recorrentes:
-                                st.error(f"Evasão: {f}")
-                        else: st.success("Nenhum risco de evasão detectado.")
-                    
-                    # Alerta de Batismo para Etapas Finais
-                    if "TERCEIRA" in t_alvo or "ADULTO" in t_alvo:
-                        pendentes = alunos_t[alunos_t['batizado_sn'] != 'SIM']
-                        if not pendentes.empty:
-                            st.warning(f"{len(pendentes)} pendentes de Batismo para a Eucaristia.")
+                            if len(pres_t[(pres_t['nome_catequizando']==nome) & (pres_t['data_encontro'].isin(ultimas)) & (pres_t['status']=='AUSENTE')]) >= 2:
+                                st.error(f"Evasão: {nome}")
 
                 st.divider()
-
-                # --- LINHA 3: AUDITORIA NOMINAL E IA ---
                 col_nom, col_ia = st.columns([1, 1])
-                
                 with col_nom:
-                    st.markdown("**📜 Relação Nominal e Status**")
-                    st.dataframe(alunos_t[['nome_completo', 'batizado_sn', 'status']], 
-                                 use_container_width=True, hide_index=True)
-                    
-                    # Sacramentos feitos no ano (Frutos da Turma)
-                    df_recebidos = ler_aba("sacramentos_recebidos")
-                    if not df_recebidos.empty:
-                        meus_ids = alunos_t['id_catequizando'].tolist()
-                        frutos = df_recebidos[df_recebidos['id_catequizando'].isin(meus_ids)]
-                        if not frutos.empty:
-                            st.markdown("**✨ Sacramentos Recebidos este Ano:**")
-                            for _, f in frutos.iterrows():
-                                st.write(f"· {f['nome_catequizando']} ({f['tipo_sacramento']})")
-
+                    st.markdown("**📜 Relação Nominal**")
+                    st.dataframe(alunos_t[['nome_completo', 'batizado_sn', 'status']], use_container_width=True, hide_index=True)
                 with col_ia:
-                    st.markdown("**🤖 Diagnóstico Pastoral Inteligente**")
-                    if st.button(f"✨ Analisar Perfil de {t_alvo}", key="btn_ia_local"):
-                        with st.spinner("IA analisando perfil da turma..."):
-                            # Prepara resumo para IA
-                            resumo_ia_local = {
-                                "turma": t_alvo, "etapa": dados_t_ref['etapa'],
-                                "total": total_alunos, "freq": f"{freq_media:.1f}%",
-                                "idades": f"{min(idades)}-{max(idades)}",
-                                "batizados": f"{batizados_t}/{total_alunos}",
-                                "prev_euca": dados_t_ref.get('previsao_eucaristia', 'N/A'),
-                                "impedimentos": len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL'])])
-                            }
-                            diagnostico = analisar_turma_local(t_alvo, str(resumo_ia_local))
-                            st.info(diagnostico)
-                            st.session_state[f"ia_dash_{t_alvo}"] = diagnostico
-                    
-                    if f"ia_dash_{t_alvo}" in st.session_state:
-                        if st.button("📄 Exportar Perfil em PDF"):
-                            metricas_pdf = {
-                                "Total": total_alunos, "Frequência": f"{freq_media:.1f}%",
-                                "Batizados": f"{batizados_t}/{total_alunos}",
-                                "Catequistas": dados_t_ref['catequista_responsavel']
-                            }
-                            pdf_turma = gerar_pdf_perfil_turma(t_alvo, metricas_pdf, st.session_state[f"ia_dash_{t_alvo}"], alunos_t['nome_completo'].tolist())
-                            st.download_button("📥 Baixar PDF", pdf_turma, f"Perfil_{t_alvo}.pdf")
-
+                    st.markdown("**🤖 Diagnóstico IA**")
+                    if st.button(f"✨ Analisar {t_alvo}", key="btn_ia_local"):
+                        resumo = f"Turma {t_alvo}, {total_alunos} alunos, freq {freq_media:.1f}%, batizados {batizados_t}."
+                        st.info(analisar_turma_local(t_alvo, resumo))
             else:
-                st.warning("Esta turma ainda não possui catequizandos cadastrados.")
-        else:
-            st.info("Cadastre uma turma primeiro.")
+                st.warning("Sem catequizandos nesta turma.")
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
-        st.write("Use esta ferramenta para mover alunos de uma turma para outra (ex: avanço de etapa).")
-        
         if not df_turmas.empty and not df_cat.empty:
-            col_origem, col_destino = st.columns(2)
-            turma_origem = col_origem.selectbox("1. Turma de ORIGEM:", [""] + df_turmas['nome_turma'].tolist(), key="mov_origem_v4")
-            turma_destino = col_destino.selectbox("2. Turma de DESTINO:", [""] + df_turmas['nome_turma'].tolist(), key="mov_destino_v4")
-            
-            if turma_origem:
-                alunos_origem = df_cat[(df_cat['etapa'] == turma_origem) & (df_cat['status'] == 'ATIVO')]
-                
-                if not alunos_origem.empty:
-                    st.markdown(f"**Catequizandos ativos em {turma_origem}:**")
-                    selecionar_todos = st.checkbox("Selecionar todos os alunos", key="chk_mov_todos_v4")
-                    
-                    lista_ids_mover = []
-                    cols_alunos = st.columns(2)
-                    for i, (_, aluno) in enumerate(alunos_origem.iterrows()):
-                        with cols_alunos[i % 2]:
-                            if st.checkbox(f"{aluno['nome_completo']}", value=selecionar_todos, key=f"mov_aluno_{aluno['id_catequizando']}"):
-                                lista_ids_mover.append(aluno['id_catequizando'])
-                    
-                    st.divider()
-                    if st.button(f"🚀 EXECUTAR MOVIMENTAÇÃO ({len(lista_ids_mover)} ALUNOS)", key="btn_executar_mov_v4"):
-                        if not turma_destino:
-                            st.error("Selecione a turma de destino.")
-                        elif turma_origem == turma_destino:
-                            st.error("A turma de destino deve ser diferente da origem.")
-                        elif not lista_ids_mover:
-                            st.warning("Selecione ao menos um aluno.")
-                        else:
-                            with st.spinner("Movimentando catequizandos..."):
-                                if mover_catequizandos_em_massa(lista_ids_mover, turma_destino):
-                                    st.success(f"✅ Sucesso! {len(lista_ids_mover)} movidos para {turma_destino}.")
-                                    st.cache_data.clear(); time.sleep(2); st.rerun()
-                else:
-                    st.info(f"Não há catequizandos ativos na turma {turma_origem}.")
-        else:
-            st.warning("Certifique-se de ter turmas e catequizandos cadastrados.")
+            c1, c2 = st.columns(2)
+            t_origem = c1.selectbox("1. Turma de ORIGEM:", [""] + df_turmas['nome_turma'].tolist(), key="mov_orig_v4")
+            t_destino = c2.selectbox("2. Turma de DESTINO:", [""] + df_turmas['nome_turma'].tolist(), key="mov_destino_v4")
+            if t_origem:
+                alunos_orig = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
+                if not alunos_orig.empty:
+                    sel_todos = st.checkbox("Selecionar todos", key="chk_mov_todos_v4")
+                    lista_ids = []
+                    cols = st.columns(2)
+                    for i, (_, al) in enumerate(alunos_orig.iterrows()):
+                        with cols[i % 2]:
+                            if st.checkbox(f"{al['nome_completo']}", value=sel_todos, key=f"mov_al_{al['id_catequizando']}"):
+                                lista_ids.append(al['id_catequizando'])
+                    if st.button(f"🚀 MOVER {len(lista_ids)} ALUNOS", key="btn_exec_mov_v4"):
+                        if t_destino and t_origem != t_destino and lista_ids:
+                            if mover_catequizandos_em_massa(lista_ids, t_destino):
+                                st.success("Movimentação concluída!"); st.cache_data.clear(); time.sleep(2); st.rerun()
 # --- FIM DO BLOCO: GESTÃO DE TURMAS ---
 
 
-# --- BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (VERSÃO ARQUITETURA FINAL) ---
+# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (VERSÃO CONSOLIDADA E AUDITADA) ---
 elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
     tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
     
     with tab_dash:
-        # 1. Inicialização de Variáveis de Segurança e Censo
+        # 1. Inicialização de Variáveis e Censo de Batismos do Ano
         k_bat, a_bat, total_batismos_ano = 0, 0, 0
         df_recebidos = ler_aba("sacramentos_recebidos")
         
-        # Cálculo de Batismos do Ano (Frutos da Evangelização)
         if not df_recebidos.empty:
             cols_rec = df_recebidos.columns.tolist()
             c_tipo = 'tipo_sacramento' if 'tipo_sacramento' in cols_rec else None
@@ -1049,7 +952,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     batizados_list = alunos_t[alunos_t['batizado_sn'] == 'SIM']
                     pendentes_list = alunos_t[alunos_t['batizado_sn'] != 'SIM']
                     
-                    # Limpeza de datas vazias
                     p_euca = t.get('previsao_eucaristia', 'N/A')
                     p_euca = p_euca if p_euca and str(p_euca).strip() != "" else "N/A"
                     p_cris = t.get('previsao_crisma', 'N/A')
@@ -1060,7 +962,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                         with col_p1:
                             st.write(f"**Faixa Etária:** {min(idades)} a {max(idades)} anos")
                             if impedimentos > 0: 
-                                st.warning(f"⚠️ {impedimentos} adultos com situação matrimonial a regularizar para Eucaristia.")
+                                st.warning(f"⚠️ {impedimentos} adultos com situação matrimonial a regularizar.")
                             
                             st.markdown("---")
                             cb1, cb2 = st.columns(2)
@@ -1084,18 +986,13 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     })
 
         st.divider()
-        # 3. Geração de PDF com Persistência de Estado
-        if st.button("🏛️ Gerar Auditoria Pastoral Completa (PDF)", key="btn_gerar_pdf_sac_final"):
+        # 3. Geração de PDF
+        if st.button("🏛️ Gerar Auditoria Pastoral Completa (PDF)", key="btn_gerar_pdf_sac_v_final"):
             with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
                 try:
                     resumo_ia = f"Batismos no Ano: {total_batismos_ano}. Detalhes: {analise_detalhada_ia}"
                     analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
-                    
-                    stats_pdf = {
-                        'bat_ano': total_batismos_ano,
-                        'bat_k': k_bat, 'euca_k': 0,
-                        'bat_a': a_bat, 'euca_a': 0, 'cris_a': 0
-                    }
+                    stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'euca_k': 0, 'bat_a': a_bat, 'euca_a': 0, 'cris_a': 0}
                     
                     pdf_data = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
                     if pdf_data:
@@ -1111,22 +1008,21 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 data=st.session_state.pdf_sac_tecnico,
                 file_name=f"Auditoria_Pastoral_Fatima_{date.today().year}.pdf",
                 mime="application/pdf",
-                key="btn_download_sac_definitivo"
+                key="btn_download_sac_v_final"
             )
 
     with tab_reg:
         st.subheader("✍️ Registro de Sacramento")
-        modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True, key="modo_reg_sac_v2")
+        modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True, key="modo_reg_sac_v_final")
         
         if modo_reg == "Individual (Busca por Nome)":
-            nome_busca = st.text_input("🔍 Digite o nome do catequizando:", key="busca_sac_ind_v2").upper()
+            nome_busca = st.text_input("🔍 Digite o nome do catequizando:", key="busca_sac_ind_v_final").upper()
             if nome_busca:
                 sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
                 if not sugestoes.empty:
-                    escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist(), key="sel_sac_ind_v2")
+                    escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist(), key="sel_sac_ind_v_final")
                     dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
-                    
-                    with st.form("form_sac_individual_v3"):
+                    with st.form("form_sac_individual_v_final"):
                         st.write(f"Registrando para: **{escolhido}**")
                         c1, c2 = st.columns(2)
                         tipo_s = c1.selectbox("Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
@@ -1137,18 +1033,18 @@ elif menu == "🕊️ Gestão de Sacramentos":
                                 st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                 else: st.warning("Não encontrado.")
         else:
-            turmas_s = st.multiselect("Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [], key="sel_turmas_lote_v2")
+            turmas_s = st.multiselect("Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [], key="sel_turmas_lote_v_final")
             if turmas_s:
-                with st.form("form_sac_lote_v3"):
+                with st.form("form_sac_lote_v_final"):
                     tipo_s = st.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
-                    data_s = st.date_input("Data", date.today())
+                    data_s = st.date_input("Data da Celebração", date.today())
                     alunos_f = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
                     sel_ids = []
                     if not alunos_f.empty:
                         cols = st.columns(2)
                         for i, (_, r) in enumerate(alunos_f.iterrows()):
                             with cols[i % 2]:
-                                if st.checkbox(f"{r['nome_completo']}", key=f"lote_chk_v2_{r['id_catequizando']}"): sel_ids.append(r)
+                                if st.checkbox(f"{r['nome_completo']}", key=f"lote_chk_v_final_{r['id_catequizando']}"): sel_ids.append(r)
                     if st.form_submit_button("💾 SALVAR EM LOTE"):
                         id_ev = f"SAC-{int(time.time())}"
                         lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in sel_ids]
@@ -1160,6 +1056,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
         if not df_sac_eventos.empty:
             st.dataframe(df_sac_eventos.sort_values(by=df_sac_eventos.columns[2], ascending=False), use_container_width=True, hide_index=True)
         else: st.info("Nenhum evento registrado.")
+# --- FIM DO BLOCO: GESTÃO DE SACRAMENTOS ---
 
 # --- PÁGINA: FAZER CHAMADA ---
 elif menu == "✅ Fazer Chamada":
