@@ -519,223 +519,77 @@ elif menu == "📖 Diário de Encontros":
             else:
                 st.write("Nenhum tema planejado ainda.")
 
-# --- PÁGINA: CADASTRAR CATEQUIZANDO (VERSÃO REFORMULADA 29 COLUNAS) ---
-# --- SUBSTITUIÇÃO INTEGRAL: MENU CADASTRAR CATEQUIZANDO (VERSÃO 29 COLUNAS - ADULTO/INFANTIL) ---
-elif menu == "📝 Cadastrar Catequizando":
-    st.title("📝 Cadastro de Catequizandos")
-    tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
-
-    with tab_manual:
-        tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
-        lista_turmas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["SEM TURMAS"]
-
-        with st.form("form_cadastro_29_colunas_v2", clear_on_submit=True):
-            st.subheader("📍 1. Identificação")
-            c1, c2, c3 = st.columns([2, 1, 1])
-            nome = c1.text_input("Nome Completo").upper()
-            data_nasc = c2.date_input("Data de Nascimento", value=date(1990, 1, 1), min_value=MIN_DATA, max_value=MAX_DATA)
-            etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
-
-            c4, c5, c6 = st.columns(3)
-            contato = c4.text_input("Telefone/WhatsApp Principal")
-            batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
-            docs_faltando = c6.text_input("Documentos em Falta").upper()
-            endereco = st.text_input("Endereço Completo (Morada)").upper()
-
-            st.divider()
-            st.subheader("👪 2. Filiação (Dados dos Pais)")
-            f1, f2 = st.columns(2)
-            nome_mae = f1.text_input("Nome da Mãe").upper()
-            prof_mae = f2.text_input("Profissão da Mãe").upper()
-            tel_mae = f2.text_input("Telemóvel da Mãe")
-            
-            nome_pai = f1.text_input("Nome do Pai").upper()
-            prof_pai = f2.text_input("Profissão do Pai").upper()
-            tel_pai = f2.text_input("Telemóvel do Pai")
-
-            st.divider()
-            if tipo_ficha == "Adulto":
-                st.subheader("💍 3. Vida Eclesial e Estado Civil (Adulto)")
-                a1, a2 = st.columns(2)
-                estado_civil = a1.selectbox("Seu Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"])
-                sacramentos = a2.multiselect("Sacramentos que VOCÊ já possui:", ["BATISMO", "EUCARISTIA", "MATRIMÔNIO"])
-                
-                part_grupo = a1.radio("Participa de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
-                qual_grupo = a1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
-                
-                # Campos de compatibilidade (vazios para adulto)
-                responsavel, est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", [], "NÃO", 0
-            else:
-                st.subheader("⛪ 3. Vida Eclesial da Família (Infantil)")
-                fe1, fe2 = st.columns(2)
-                est_civil_pais = fe1.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
-                sac_pais = fe2.multiselect("Sacramentos que os PAIS já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
-                
-                part_grupo = fe1.radio("Os pais ou a criança participam de Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
-                qual_grupo = fe1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
-                
-                tem_irmaos = fe2.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
-                qtd_irmaos = fe2.number_input("Se sim, quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
-                
-                # Campos de compatibilidade (vazios para infantil)
-                responsavel, estado_civil, sacramentos = f"{nome_mae} / {nome_pai}", "N/A", []
-
-            st.divider()
-            st.subheader("🏥 4. Saúde e Preferências")
-            s1, s2 = st.columns(2)
-            medicamento = s1.text_input("Toma algum medicamento? (Se sim, por quê?)").upper()
-            tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"])
-            turno = s1.selectbox("Turno de preferência", ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
-            local_enc = s2.text_input("Local do Encontro").upper()
-
-            if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
-                if nome and contato and etapa_inscricao != "SEM TURMAS":
-                    novo_id = f"CAT-{int(time.time())}"
-                    # MONTAGEM DA LISTA COM 29 COLUNAS (A até AC)
-                    registro = [[
-                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco, # A-G
-                        nome_mae, nome_pai, responsavel, docs_faltando, qual_grupo, "ATIVO",         # H-M
-                        medicamento, tgo, estado_civil, ", ".join(sacramentos),                     # N-Q
-                        prof_mae, tel_mae, prof_pai, tel_pai, est_civil_pais, ", ".join(sac_pais),  # R-W
-                        part_grupo, qual_grupo, tem_irmaos, qtd_irmaos, turno, local_enc            # X-AC
-                    ]]
-                    if salvar_lote_catequizandos(registro):
-                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
-                else:
-                    st.warning("Nome, Contato e Turma são obrigatórios.")
-
-    with tab_csv:
-        st.subheader("📥 Importação em Massa")
-        modo_importacao = st.radio("Como definir as turmas?", ["Fixar uma única turma", "Usar a turma do CSV"], horizontal=True)
-        turma_fixa = None
-        
-        if modo_importacao == "Fixar uma única turma":
-            if not df_turmas.empty:
-                turma_fixa = st.selectbox("Selecione a turma de destino:", df_turmas['nome_turma'].tolist())
-            else:
-                st.error("⚠️ Crie uma turma primeiro.")
-
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv")
-        if arquivo_csv:
-            df_import = pd.read_csv(arquivo_csv).fillna("")
-            st.dataframe(df_import.head())
-            if st.button("🚀 Confirmar Importação"):
-                lista_final = []
-                for i, linha in df_import.iterrows():
-                    if modo_importacao == "Fixar uma única turma":
-                        turma_final = turma_fixa
-                    else:
-                        turma_final = str(linha.get('etapa', 'NÃO INFORMADO')).upper()
-
-                    lista_final.append([
-                        f"CSV-{int(time.time()) + i}", turma_final, str(linha.get('nome', 'SEM NOME')).upper(),
-                        str(linha.get('data_nasc', '2000-01-01')), "NÃO INFORMADO", str(linha.get('contato', '')), 
-                        "", "N/A", "N/A", str(linha.get('responsavel', 'N/A')).upper(), "", "", "ATIVO", "NÃO", "NÃO", "N/A", "N/A"
-                    ])
-                if salvar_lote_catequizandos(lista_final):
-                    st.success(f"✅ {len(lista_final)} importados!"); st.balloons(); st.rerun()
-
-# --- PÁGINA: PERFIL INDIVIDUAL ---
+# --- PÁGINA: PERFIL INDIVIDUAL (VERSÃO 29 COLUNAS) ---
 elif menu == "👤 Perfil Individual":
     st.title("👤 Perfil e Ficha do Catequizando")
-    
     if df_cat.empty:
-        st.warning("⚠️ Nenhum catequizando encontrado na base de dados.")
+        st.warning("⚠️ Base de dados vazia.")
     else:
         c1, c2 = st.columns([2, 1])
         busca = c1.text_input("🔍 Pesquisar por nome:").upper()
-        
         lista_t = ["TODAS"] + df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["TODAS"]
         filtro_t = c2.selectbox("Filtrar por Turma:", lista_t)
 
         df_f = df_cat.copy()
         if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca)]
         if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
-
-        st.dataframe(df_f[['nome_completo', 'etapa', 'status']], use_container_width=True)
-        
-        st.divider()
+        st.dataframe(df_f[['nome_completo', 'etapa', 'status']], use_container_width=True, hide_index=True)
         
         df_f['display_select'] = df_f['nome_completo'] + " (" + df_f['etapa'] + ")"
-        escolha_display = st.selectbox("Selecione um catequizando para EDITAR ou gerar PDF:", [""] + df_f['display_select'].tolist())
+        escolha_display = st.selectbox("Selecione para EDITAR ou gerar PDF:", [""] + df_f['display_select'].tolist())
 
         if escolha_display:
             nome_sel = escolha_display.split(" (")[0]
             turma_sel = escolha_display.split(" (")[1].replace(")", "")
             dados = df_cat[(df_cat['nome_completo'] == nome_sel) & (df_cat['etapa'] == turma_sel)].iloc[0]
             
-            tab_edit, tab_doc = st.tabs(["✏️ Editar Dados Cadastrais", "📄 Documentação e PDF"])
+            tab_edit, tab_doc = st.tabs(["✏️ Editar Cadastro", "📄 Documentação PDF"])
             
             with tab_edit:
-                st.subheader(f"📍 Editando: {nome_sel}")
-                with st.form("form_edicao_individual"):
+                with st.form("form_edicao_29_colunas"):
                     c1, c2, c3 = st.columns([2, 1, 1])
                     ed_nome = c1.text_input("Nome Completo", value=dados['nome_completo']).upper()
-                    ed_nasc = c2.date_input("Data de Nascimento", value=converter_para_data(dados['data_nascimento']), min_value=MIN_DATA, max_value=MAX_DATA)
-                    
-                    lista_turmas_edit = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
-                    idx_turma = lista_turmas_edit.index(dados['etapa']) if dados['etapa'] in lista_turmas_edit else 0
-                    ed_etapa = c3.selectbox("Turma/Etapa", lista_turmas_edit, index=idx_turma)
+                    ed_nasc = c2.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']))
+                    ed_etapa = c3.selectbox("Turma", df_turmas['nome_turma'].tolist(), index=df_turmas['nome_turma'].tolist().index(dados['etapa']) if dados['etapa'] in df_turmas['nome_turma'].tolist() else 0)
 
                     c4, c5, c6 = st.columns(3)
-                    ed_contato = c4.text_input("Telefone/WhatsApp", value=dados['contato_principal'])
-                    ed_batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
-                    ed_status = c6.selectbox("Status no Sistema", ["ATIVO", "INATIVO", "TRANSFERIDO"], index=["ATIVO", "INATIVO", "TRANSFERIDO"].index(dados['status']) if dados['status'] in ["ATIVO", "INATIVO", "TRANSFERIDO"] else 0)
-                    
-                    ed_endereco = st.text_input("Endereço Completo", value=dados['endereco_completo']).upper()
-                    
+                    ed_contato = c4.text_input("WhatsApp", value=dados['contato_principal'])
+                    ed_batizado = c5.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
+                    ed_status = c6.selectbox("Status", ["ATIVO", "INATIVO", "TRANSFERIDO"], index=0)
+                    ed_end = st.text_input("Endereço", value=dados['endereco_completo']).upper()
+
                     st.divider()
                     f1, f2, f3 = st.columns(3)
-                    ed_mae = f1.text_input("Nome da Mãe", value=dados['nome_mae']).upper()
-                    ed_pai = f2.text_input("Nome do Pai", value=dados['nome_pai']).upper()
-                    ed_resp = f3.text_input("Responsável Legal", value=dados['nome_responsavel']).upper()
-                    
+                    ed_mae = f1.text_input("Mãe", value=dados['nome_mae']).upper()
+                    ed_pai = f2.text_input("Pai", value=dados['nome_pai']).upper()
+                    ed_resp = f3.text_input("Responsável", value=dados['nome_responsavel']).upper()
+
+                    # CAMPOS NOVOS NA EDIÇÃO
                     st.divider()
-                    s1, s2, s3 = st.columns(3)
-                    ed_med = s1.text_input("Medicamentos/Alergias", value=dados['toma_medicamento_sn']).upper()
-                    ed_tgo = s2.selectbox("Possui TGO?", ["NÃO", "SIM"], index=0 if dados['tgo_sn'] == "NÃO" else 1)
-                    ed_docs = s3.text_input("Documentos em Falta", value=dados['doc_em_falta']).upper()
-                    
-                    st.divider()
-                    a1, a2, a3 = st.columns([1, 1, 2])
-                    ed_est_civil = a1.text_input("Estado Civil (Pais ou Próprio)", value=dados['estado_civil_pais_ou_proprio']).upper()
-                    ed_pastoral = a2.text_input("Engajado em Pastoral?", value=dados['engajado_grupo']).upper()
-                    ed_sacramentos = a3.text_input("Sacramentos já realizados", value=dados['sacramentos_ja_feitos']).upper()
+                    n1, n2, n3, n4 = st.columns(4)
+                    ed_prof_m = n1.text_input("Prof. Mãe", value=dados.get('profissao_mae', 'N/A')).upper()
+                    ed_tel_m = n2.text_input("Tel. Mãe", value=dados.get('tel_mae', 'N/A'))
+                    ed_prof_p = n3.text_input("Prof. Pai", value=dados.get('profissao_pai', 'N/A')).upper()
+                    ed_tel_p = n4.text_input("Tel. Pai", value=dados.get('tel_pai', 'N/A'))
 
                     if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                        lista_atualizada = [
-                            dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), 
-                            ed_batizado, ed_contato, ed_endereco, ed_mae, ed_pai, 
-                            ed_resp, ed_docs, ed_pastoral, ed_status, ed_med, 
-                            ed_tgo, ed_est_civil, ed_sacramentos
+                        # Montagem rigorosa das 29 colunas para não quebrar a planilha
+                        lista_up = [
+                            dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, ed_contato, ed_end,
+                            ed_mae, ed_pai, ed_resp, dados['doc_em_falta'], dados['engajado_grupo'], ed_status,
+                            dados['toma_medicamento_sn'], dados['tgo_sn'], dados['estado_civil_pais_ou_proprio'], dados['sacramentos_ja_feitos'],
+                            ed_prof_m, ed_tel_m, ed_prof_p, ed_tel_p, dados.get('est_civil_pais', 'N/A'), dados.get('sac_pais', 'N/A'),
+                            dados.get('participa_grupo', 'NÃO'), dados.get('qual_grupo', 'N/A'), dados.get('tem_irmaos', 'NÃO'), 
+                            dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), dados.get('local_encontro', 'N/A')
                         ]
-                        if atualizar_catequizando(dados['id_catequizando'], lista_atualizada):
-                            st.success("✅ Dados atualizados com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
+                        if atualizar_catequizando(dados['id_catequizando'], lista_up):
+                            st.success("✅ Atualizado!"); time.sleep(1); st.rerun()
 
             with tab_doc:
-                col_info, col_pdf = st.columns([2, 1])
-                with col_info:
-                    st.subheader("Resumo Atual")
-                    st.write(f"**Nome:** {dados['nome_completo']}")
-                    st.write(f"**Turma:** {dados['etapa']}")
-                    st.write(f"**Status:** {dados['status']}")
-                    st.info("💡 Os dados acima refletem o que sairá no PDF. Se houver erros, corrija na aba 'Editar Dados Cadastrais'.")
-
-                with col_pdf:
-                    st.subheader("Gerar Documento")
-                    if st.button(f"Gerar Ficha de Inscrição PDF"):
-                        with st.spinner("Preparando PDF..."):
-                            st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
-                    
-                    if "pdf_catequizando" in st.session_state:
-                        st.download_button(
-                            label="📥 Baixar Ficha PDF",
-                            data=st.session_state.pdf_catequizando,
-                            file_name=f"Ficha_{nome_sel}.pdf",
-                            mime="application/pdf"
-                        )
+                if st.button("📄 Gerar Ficha PDF"):
+                    st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
+                if "pdf_catequizando" in st.session_state:
+                    st.download_button("📥 Baixar PDF", st.session_state.pdf_catequizando, f"Ficha_{nome_sel}.pdf")
 
 # --- PÁGINA: GESTÃO DE TURMAS ---
 # --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE TURMAS (VERSÃO ARQUITETURA FINAL) ---
