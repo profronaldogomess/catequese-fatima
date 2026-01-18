@@ -175,20 +175,26 @@ def gerar_ficha_cadastral_catequizando(dados):
     
     nome_cat = dados.get('nome_completo', '________________')
     
-    # --- LÓGICA DE COMPOSIÇÃO DOS RESPONSÁVEIS ---
+    # --- LÓGICA DE COMPOSIÇÃO DOS RESPONSÁVEIS (REFINADA) ---
     if is_menor:
         mae = str(dados.get('nome_mae', '')).strip()
         pai = str(dados.get('nome_pai', '')).strip()
-        resp_campo = str(dados.get('nome_responsavel', '')).strip()
         
-        # Se houver um responsável específico (ex: avó), usa ele. 
-        # Senão, tenta compor "Mãe e Pai".
-        if resp_campo and resp_campo.upper() not in ["N/A", ""]:
-            responsaveis = resp_campo
-        elif mae and pai and mae.upper() != "N/A" and pai.upper() != "N/A":
+        # Limpa placeholders comuns
+        mae = "" if mae.upper() in ["N/A", "NONE", ""] else mae
+        pai = "" if pai.upper() in ["N/A", "NONE", ""] else pai
+        
+        # Composição prioritária: Mãe e Pai
+        if mae and pai:
             responsaveis = f"{mae} e {pai}"
+        elif mae:
+            responsaveis = mae
+        elif pai:
+            responsaveis = pai
         else:
-            responsaveis = mae if mae and mae.upper() != "N/A" else (pai if pai and pai.upper() != "N/A" else "________________________________")
+            # Fallback para o campo 'responsavel' se os campos individuais falharem
+            resp_campo = str(dados.get('nome_responsavel', '')).strip()
+            responsaveis = resp_campo if resp_campo.upper() not in ["N/A", "NONE", ""] else "________________________________"
         
         texto_lgpd = (f"Nós/Eu, {responsaveis}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, AUTORIZAMOS o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
         label_assinatura_principal = "Assinatura do(s) Responsável(is) Legal(is)"
