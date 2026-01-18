@@ -808,12 +808,133 @@ elif menu == "🏫 Gestão de Turmas":
             st.info("Nenhuma turma para editar.")
 
     with t4:
-        st.subheader("📊 Dashboard Local")
+        st.subheader("📊 Inteligência Pastoral da Turma")
+        
         if not df_turmas.empty:
-            t_alvo = st.selectbox("Selecione a turma:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v4")
+            # 1. Seleção da Turma
+            t_alvo = st.selectbox("Selecione a turma para análise profunda:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v_final")
+            
+            # 2. Filtragem de Dados Específicos
+            dados_t_ref = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
-            st.metric("Total de Catequizandos", len(alunos_t))
-            st.dataframe(alunos_t[['nome_completo', 'status']] if not alunos_t.empty else pd.DataFrame(), use_container_width=True)
+            pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
+            
+            if not alunos_t.empty:
+                # --- CÁLCULOS DE MÉTRICAS ---
+                total_alunos = len(alunos_t)
+                idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
+                media_idade = sum(idades) / len(idades)
+                
+                # Frequência
+                freq_media = 0.0
+                if not pres_t.empty:
+                    freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100)
+                
+                # Cobertura Sacramental
+                batizados_t = len(alunos_t[alunos_t['batizado_sn'] == 'SIM'])
+                perc_batismo = (batizados_t / total_alunos) * 100
+
+                # --- LINHA 1: MÉTRICAS PRINCIPAIS ---
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Catequizandos", total_alunos)
+                m2.metric("Idade Média", f"{media_idade:.1f} anos")
+                m3.metric("Frequência Média", f"{freq_media:.1f}%")
+                m4.metric("Cobertura Batismo", f"{perc_batismo:.0f}%")
+
+                st.divider()
+
+                # --- LINHA 2: GRÁFICOS E ALERTAS ---
+                col_graf, col_alertas = st.columns([2, 1])
+                
+                with col_graf:
+                    st.markdown("**📈 Evolução de Presença por Encontro**")
+                    if not pres_t.empty:
+                        # Agrupa presença por data
+                        df_graf = pres_t.groupby('data_encontro')['status'].value_counts(normalize=True).unstack().fillna(0)
+                        if 'PRESENTE' in df_graf.columns:
+                            df_graf = df_graf[['PRESENTE']] * 100
+                            fig_pres = px.line(df_graf, y='PRESENTE', labels={'PRESENTE': 'Presença %', 'data_encontro': 'Data'},
+                                             color_discrete_sequence=['#417b99'])
+                            fig_pres.update_layout(height=300, margin=dict(l=0, r=0, t=0, b=0))
+                            st.plotly_chart(fig_pres, use_container_width=True)
+                        else: st.info("Dados insuficientes para gráfico.")
+                    else: st.info("Nenhum encontro registrado para gerar gráfico.")
+
+                with col_alertas:
+                    st.markdown("**🚨 Alertas de Atenção**")
+                    # Alerta de Evasão (Faltou nos últimos 2 encontros)
+                    if not pres_t.empty:
+                        ultimas_datas = sorted(pres_t['data_encontro'].unique())[-2:]
+                        faltosos_recorrentes = []
+                        for nome in alunos_t['nome_completo'].unique():
+                            faltas = pres_t[(pres_t['nome_catequizando'] == nome) & 
+                                           (pres_t['data_encontro'].isin(ultimas_datas)) & 
+                                           (pres_t['status'] == 'AUSENTE')]
+                            if len(faltas) >= 2:
+                                faltosos_recorrentes.append(nome)
+                        
+                        if faltosos_recorrentes:
+                            for f in faltosos_recorrentes:
+                                st.error(f"Evasão: {f}")
+                        else: st.success("Nenhum risco de evasão detectado.")
+                    
+                    # Alerta de Batismo para Etapas Finais
+                    if "TERCEIRA" in t_alvo or "ADULTO" in t_alvo:
+                        pendentes = alunos_t[alunos_t['batizado_sn'] != 'SIM']
+                        if not pendentes.empty:
+                            st.warning(f"{len(pendentes)} pendentes de Batismo para a Eucaristia.")
+
+                st.divider()
+
+                # --- LINHA 3: AUDITORIA NOMINAL E IA ---
+                col_nom, col_ia = st.columns([1, 1])
+                
+                with col_nom:
+                    st.markdown("**📜 Relação Nominal e Status**")
+                    st.dataframe(alunos_t[['nome_completo', 'batizado_sn', 'status']], 
+                                 use_container_width=True, hide_index=True)
+                    
+                    # Sacramentos feitos no ano (Frutos da Turma)
+                    df_recebidos = ler_aba("sacramentos_recebidos")
+                    if not df_recebidos.empty:
+                        meus_ids = alunos_t['id_catequizando'].tolist()
+                        frutos = df_recebidos[df_recebidos['id_catequizando'].isin(meus_ids)]
+                        if not frutos.empty:
+                            st.markdown("**✨ Sacramentos Recebidos este Ano:**")
+                            for _, f in frutos.iterrows():
+                                st.write(f"· {f['nome_catequizando']} ({f['tipo_sacramento']})")
+
+                with col_ia:
+                    st.markdown("**🤖 Diagnóstico Pastoral Inteligente**")
+                    if st.button(f"✨ Analisar Perfil de {t_alvo}", key="btn_ia_local"):
+                        with st.spinner("IA analisando perfil da turma..."):
+                            # Prepara resumo para IA
+                            resumo_ia_local = {
+                                "turma": t_alvo, "etapa": dados_t_ref['etapa'],
+                                "total": total_alunos, "freq": f"{freq_media:.1f}%",
+                                "idades": f"{min(idades)}-{max(idades)}",
+                                "batizados": f"{batizados_t}/{total_alunos}",
+                                "prev_euca": dados_t_ref.get('previsao_eucaristia', 'N/A'),
+                                "impedimentos": len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL'])])
+                            }
+                            diagnostico = analisar_turma_local(t_alvo, str(resumo_ia_local))
+                            st.info(diagnostico)
+                            st.session_state[f"ia_dash_{t_alvo}"] = diagnostico
+                    
+                    if f"ia_dash_{t_alvo}" in st.session_state:
+                        if st.button("📄 Exportar Perfil em PDF"):
+                            metricas_pdf = {
+                                "Total": total_alunos, "Frequência": f"{freq_media:.1f}%",
+                                "Batizados": f"{batizados_t}/{total_alunos}",
+                                "Catequistas": dados_t_ref['catequista_responsavel']
+                            }
+                            pdf_turma = gerar_pdf_perfil_turma(t_alvo, metricas_pdf, st.session_state[f"ia_dash_{t_alvo}"], alunos_t['nome_completo'].tolist())
+                            st.download_button("📥 Baixar PDF", pdf_turma, f"Perfil_{t_alvo}.pdf")
+
+            else:
+                st.warning("Esta turma ainda não possui catequizandos cadastrados.")
+        else:
+            st.info("Cadastre uma turma primeiro.")
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
