@@ -718,10 +718,6 @@ elif menu == "🏫 Gestão de Turmas":
     t1, t2, t3, t4, t5 = st.tabs(["Visualizar Turmas", "➕ Criar Nova Turma", "✏️ Detalhes e Edição", "📊 Dashboard Local", "🚀 Movimentação em Massa"])
     dias_opcoes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
 
-    with t1:
-        if not df_turmas.empty: st.dataframe(df_turmas, use_container_width=True)
-        else: st.info("Nenhuma turma cadastrada.")
-            
     with t2:
         st.subheader("Cadastrar Nova Turma")
         with st.form("nova_turma_v3", clear_on_submit=True):
@@ -731,22 +727,21 @@ elif menu == "🏫 Gestão de Turmas":
             ano = c2.number_input("Ano Letivo", value=2025)
             n_dias = st.multiselect("Dias de Encontro:", dias_opcoes)
             
+            c3, c4 = st.columns(2)
+            p_euca = c3.text_input("Previsão Eucaristia (Ex: Outubro/2025 ou Data)")
+            p_crisma = c4.text_input("Previsão Crisma (Ex: Novembro/2025)")
+
             lista_nomes_disponiveis = equipe_tecnica['nome'].astype(str).unique().tolist() if not equipe_tecnica.empty else []
             selecao_catequistas = st.multiselect("Catequistas Responsáveis:", lista_nomes_disponiveis)
 
             if st.form_submit_button("CRIAR TURMA"):
-                existentes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                if not n_t:
-                    st.error("O nome da turma não pode estar vazio.")
-                elif n_t in existentes:
-                    st.error(f"⚠️ Já existe uma turma chamada '{n_t}'.")
-                elif selecao_catequistas and n_dias:
+                if n_t and selecao_catequistas and n_dias:
                     catequistas_str = ", ".join(selecao_catequistas)
                     dias_str = ", ".join(n_dias)
-                    conectar_google_sheets().worksheet("turmas").append_row([f"TRM-{int(time.time())}", n_t, e_t, ano, catequistas_str, dias_str])
+                    # Ordem: ID, Nome, Etapa, Ano, Catequistas, Dias, Prev_Euca, Prev_Crisma
+                    conectar_google_sheets().worksheet("turmas").append_row([f"TRM-{int(time.time())}", n_t, e_t, ano, catequistas_str, dias_str, p_euca, p_crisma])
                     st.success(f"Turma {n_t} criada!")
-                    time.sleep(1)
-                    st.rerun()
+                    time.sleep(1); st.rerun()
                 else:
                     st.error("Preencha Nome, Catequistas e Dias da Semana.")
 
@@ -756,11 +751,15 @@ elif menu == "🏫 Gestão de Turmas":
             turma_para_editar = st.selectbox("Selecione a turma:", [""] + df_turmas['nome_turma'].tolist())
             if turma_para_editar:
                 dados_t = df_turmas[df_turmas['nome_turma'] == turma_para_editar].iloc[0]
-                with st.form("form_edicao_turma_v3"):
+                with st.form("form_edicao_turma_v4"):
                     c1, c2 = st.columns(2)
                     ed_nome = c1.text_input("Nome da Turma", value=str(dados_t['nome_turma'])).upper()
                     ed_ano = c2.number_input("Ano Letivo", value=int(dados_t['ano']))
                     
+                    c3, c4 = st.columns(2)
+                    ed_p_euca = c3.text_input("Previsão Eucaristia", value=str(dados_t.get('previsao_eucaristia', '')))
+                    ed_p_crisma = c4.text_input("Previsão Crisma", value=str(dados_t.get('previsao_crisma', '')))
+
                     dias_atuais = str(dados_t.get('dias_semana', '')).split(", ")
                     ed_dias = st.multiselect("Dias de Encontro:", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
                     
@@ -770,20 +769,9 @@ elif menu == "🏫 Gestão de Turmas":
                     ed_selecao_cats = st.multiselect("Equipe de Catequistas:", lista_nomes, default=[c for c in cats_atuais if c in lista_nomes])
 
                     if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                        lista_up = [str(dados_t['id_turma']), ed_nome, str(dados_t['etapa']), ed_ano, ", ".join(ed_selecao_cats), ", ".join(ed_dias)]
+                        lista_up = [str(dados_t['id_turma']), ed_nome, str(dados_t['etapa']), ed_ano, ", ".join(ed_selecao_cats), ", ".join(ed_dias), ed_p_euca, ed_p_crisma]
                         if atualizar_turma(dados_t['id_turma'], lista_up):
-                            st.success("Turma atualizada!")
-                            time.sleep(1)
-                            st.rerun()
-                
-                st.divider()
-                with st.expander("⚠️ ZONA DE PERIGO - Excluir Turma"):
-                    st.warning("Cuidado! Isso apagará a turma permanentemente.")
-                    if st.button(f"🔥 CONFIRMAR EXCLUSÃO DEFINITIVA DE: {turma_para_editar}"):
-                        if excluir_turma(dados_t['id_turma']):
-                            st.success(f"A turma {turma_para_editar} foi removida!")
-                            time.sleep(1)
-                            st.rerun()
+                            st.success("Turma atualizada!"); time.sleep(1); st.rerun()
 
     with t4:
         if not df_turmas.empty:
