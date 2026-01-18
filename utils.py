@@ -175,15 +175,23 @@ def gerar_ficha_cadastral_catequizando(dados):
     
     nome_cat = dados.get('nome_completo', '________________')
     
-    # --- CORREÇÃO JURÍDICA DO TERMO DE CONSENTIMENTO ---
+    # --- LÓGICA DE COMPOSIÇÃO DOS RESPONSÁVEIS ---
     if is_menor:
-        # Se for menor, busca o nome do responsável. Se não houver, usa o da mãe.
-        nome_resp = dados.get('nome_responsavel', '')
-        if not nome_resp or str(nome_resp).strip().upper() in ["N/A", ""]:
-            nome_resp = dados.get('nome_mae', '______________________________________________________')
+        mae = str(dados.get('nome_mae', '')).strip()
+        pai = str(dados.get('nome_pai', '')).strip()
+        resp_campo = str(dados.get('nome_responsavel', '')).strip()
         
-        texto_lgpd = (f"Eu {nome_resp}, na qualidade de pai/mãe ou responsável legal pelo(a) catequizando(a) menor de idade, {nome_cat}, AUTORIZO o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
-        label_assinatura_principal = "Assinatura do Pai/Mãe ou Responsável Legal"
+        # Se houver um responsável específico (ex: avó), usa ele. 
+        # Senão, tenta compor "Mãe e Pai".
+        if resp_campo and resp_campo.upper() not in ["N/A", ""]:
+            responsaveis = resp_campo
+        elif mae and pai and mae.upper() != "N/A" and pai.upper() != "N/A":
+            responsaveis = f"{mae} e {pai}"
+        else:
+            responsaveis = mae if mae and mae.upper() != "N/A" else (pai if pai and pai.upper() != "N/A" else "________________________________")
+        
+        texto_lgpd = (f"Nós/Eu, {responsaveis}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, AUTORIZAMOS o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
+        label_assinatura_principal = "Assinatura do(s) Responsável(is) Legal(is)"
     else:
         texto_lgpd = (f"Eu {nome_cat}, AUTORIZO o uso da publicação da minha imagem nos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
         label_assinatura_principal = "Assinatura do(a) Catequizando(a)"
@@ -195,7 +203,6 @@ def gerar_ficha_cadastral_catequizando(dados):
     pdf.line(10, y_ass, 90, y_ass); pdf.line(110, y_ass, 190, y_ass)
     pdf.set_xy(10, y_ass + 1); pdf.set_font("helvetica", "B", 8)
     
-    # Rótulo da assinatura agora respeita a idade real
     pdf.cell(80, 5, limpar_texto(label_assinatura_principal), align='C')
     pdf.set_xy(110, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
     
