@@ -519,7 +519,7 @@ elif menu == "📖 Diário de Encontros":
             else:
                 st.write("Nenhum tema planejado ainda.")
 
-# --- INÍCIO DA SUBSTITUIÇÃO: MENU CADASTRAR CATEQUIZANDO (VERSÃO 29 COLUNAS) ---
+# --- PÁGINA: CADASTRAR CATEQUIZANDO (VERSÃO REFORMULADA 29 COLUNAS) ---
 elif menu == "📝 Cadastrar Catequizando":
     st.title("📝 Cadastro de Catequizandos")
     tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
@@ -527,8 +527,11 @@ elif menu == "📝 Cadastrar Catequizando":
     with tab_manual:
         tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
         
-        # Define lista de turmas
-        lista_turmas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["SEM TURMAS"]
+        # Define lista de turmas baseada no papel do usuário
+        if papel_usuario == "CATEQUISTA":
+            lista_turmas = [turma_do_catequista]
+        else:
+            lista_turmas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["SEM TURMAS CADASTRADAS"]
 
         with st.form("form_cadastro_29_colunas", clear_on_submit=True):
             st.subheader("📍 1. Informações Básicas")
@@ -543,10 +546,10 @@ elif menu == "📝 Cadastrar Catequizando":
             docs_faltando = c6.text_input("Documentos em Falta").upper()
             endereco = st.text_input("Endereço Completo").upper()
 
-            # --- CAMPOS ESPECÍFICOS ---
+            # --- LÓGICA PARA INFANTIL (INSPIRAÇÃO CATECUMENAL) ---
             if tipo_ficha == "Infantil/Juvenil":
                 st.divider()
-                st.subheader("👪 2. Filiação e Vida Eclesial (Padrão Diocesano)")
+                st.subheader("👪 2. Filiação e Detalhes Familiares")
                 f1, f2 = st.columns(2)
                 nome_mae = f1.text_input("Nome da Mãe").upper()
                 prof_mae = f2.text_input("Profissão da Mãe").upper()
@@ -558,6 +561,8 @@ elif menu == "📝 Cadastrar Catequizando":
                 
                 responsavel = f1.text_input("Responsável Legal (se não for os pais)").upper()
                 
+                st.divider()
+                st.subheader("⛪ Vida Eclesial da Família")
                 fe1, fe2 = st.columns(2)
                 est_civil_pais = fe1.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
                 sac_pais = fe2.multiselect("Sacramentos que os pais já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
@@ -565,22 +570,22 @@ elif menu == "📝 Cadastrar Catequizando":
                 part_grupo = fe1.radio("Participam de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
                 qual_grupo = fe1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
                 
-                tem_irmaos = fe2.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
+                tem_irmaos = fe2.radio("Tem irmãos na catequese paroquial?", ["NÃO", "SIM"], horizontal=True)
                 qtd_irmaos = fe2.number_input("Se sim, quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
 
                 st.divider()
                 st.subheader("🏥 3. Saúde e Turno")
                 s1, s2 = st.columns(2)
-                medicamento = s1.text_input("Toma algum medicamento?").upper()
-                tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"])
+                medicamento = s1.text_input("Toma algum medicamento? (Se sim, qual?)").upper()
+                tgo = s2.selectbox("A criança tem algum Transtorno de Desenvolvimento (TGO)?", ["NÃO", "SIM"])
                 turno = s1.selectbox("Turno de preferência", ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
-                local_enc = s2.text_input("Local do Encontro").upper()
+                local_enc = s2.text_input("Local do Encontro (Comunidade/Setor)").upper()
 
-                # Valores padrão para colunas de Adulto
+                # Variáveis de compatibilidade para colunas de Adulto (vazias)
                 estado_civil, sacramentos, pastoral = "N/A", "N/A", "NÃO"
 
+            # --- LÓGICA PARA ADULTOS ---
             else:
-                # --- CAMPOS PARA ADULTOS ---
                 st.divider()
                 st.subheader("💍 2. Estado Civil e Caminhada (Adulto)")
                 a1, a2 = st.columns(2)
@@ -589,17 +594,17 @@ elif menu == "📝 Cadastrar Catequizando":
                 s_bat = a2.checkbox("Batismo"); s_euc = a2.checkbox("Eucaristia"); s_cri = a2.checkbox("Crisma"); s_mat = a2.checkbox("Matrimônio")
                 sacramentos = ", ".join([s for s, m in zip(["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"], [s_bat, s_euc, s_cri, s_mat]) if m])
                 
-                # Valores padrão para colunas de Infantil
+                # Preenche campos de Infantil com N/A para manter as 29 colunas
                 nome_mae, nome_pai, responsavel, medicamento, tgo = "N/A", "N/A", "N/A", "NÃO", "NÃO"
                 prof_mae, tel_mae, prof_pai, tel_pai, est_civil_pais, sac_pais = "N/A", "N/A", "N/A", "N/A", "N/A", []
                 part_grupo, qual_grupo, tem_irmaos, qtd_irmaos, turno, local_enc = "NÃO", "N/A", "NÃO", 0, "N/A", "N/A"
 
-            # --- BOTÃO SALVAR ---
+            # --- BOTÃO SALVAR (AQUI ESTÁ O SEGREDO DAS 29 COLUNAS) ---
             if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
-                if nome and contato and etapa_inscricao != "SEM TURMAS":
+                if nome and contato and etapa_inscricao != "SEM TURMAS CADASTRADAS":
                     novo_id = f"CAT-{int(time.time())}"
                     
-                    # MONTAGEM DA LISTA COM EXATAMENTE 29 COLUNAS (A até AC)
+                    # MONTAGEM DA LISTA COM EXATAMENTE 29 ITENS (A até AC)
                     registro = [[
                         novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco, # A-G
                         nome_mae, nome_pai, responsavel, docs_faltando, pastoral, "ATIVO",           # H-M
@@ -609,7 +614,7 @@ elif menu == "📝 Cadastrar Catequizando":
                     ]]
                     
                     if salvar_lote_catequizandos(registro):
-                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!")
+                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO NA TURMA {etapa_inscricao}!")
                         st.balloons()
                         time.sleep(1)
                         st.rerun()
