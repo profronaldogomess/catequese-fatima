@@ -997,3 +997,119 @@ elif menu == "🕊️ Gestão de Sacramentos":
         else:
             st.info("Nenhum evento sacramental registrado no histórico.")
 # --- FIM DO BLOCO: GESTÃO DE SACRAMENTOS ---
+
+# --- PÁGINA: FAZER CHAMADA ---
+elif menu == "✅ Fazer Chamada":
+    st.title("✅ Chamada Inteligente")
+    if eh_gestor:
+        lista_t = df_turmas['nome_turma'].tolist()
+        idx_sugerido = lista_t.index(turma_do_catequista) if turma_do_catequista in lista_t else 0
+        turma_selecionada = st.selectbox("Selecione a Turma para a Chamada:", lista_t, index=idx_sugerido)
+    else:
+        turma_selecionada = turma_do_catequista
+        st.subheader(f"Turma: {turma_selecionada}")    
+    
+    if df_turmas.empty or df_cat.empty:
+        st.warning("⚠️ Certifique-se de ter turmas e catequizandos cadastrados.")
+    else:
+        col1, col2 = st.columns(2)
+        data_encontro = col2.date_input("Data do Encontro", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
+        tema_encontrado = buscar_encontro_por_data(turma_selecionada, data_encontro)
+        tema_sugerido = tema_encontrado if tema_encontrado else ""
+        tema_dia = st.text_input("Tema do Encontro (Confirme ou altere):", value=tema_sugerido).upper()
+        lista_chamada = df_cat[(df_cat['etapa'] == turma_selecionada) & (df_cat['status'] == 'ATIVO')]
+        
+        if lista_chamada.empty:
+            st.info(f"Nenhum catequizando ativo na turma {turma_selecionada}.")
+        else:
+            st.subheader(f"Lista de Presença - {len(lista_chamada)} Catequizandos")
+            with st.form("form_chamada_v2"):
+                registros_presenca = []
+                for _, row in lista_chamada.iterrows():
+                    c1, c2, c3 = st.columns([3, 1, 2])
+                    c1.write(row['nome_completo'])
+                    presente = c2.checkbox("P", key=f"pres_{row['id_catequizando']}_{data_encontro}", value=True)
+                    if eh_aniversariante_da_semana(row['data_nascimento']): c3.success("🎂 NIVER!")
+                    registros_presenca.append([str(data_encontro), row['id_catequizando'], row['nome_completo'], turma_selecionada, "PRESENTE" if presente else "AUSENTE", tema_dia, st.session_state.usuario['nome']])
+                if st.form_submit_button("🚀 FINALIZAR CHAMADA E SALVAR"):
+                    if not tema_dia: st.error("⚠️ Informe o tema antes de salvar.")
+                    else:
+                        if salvar_presencas(registros_presenca): st.success(f"✅ Chamada salva!"); st.balloons()
+
+# --- PÁGINA: GESTÃO DE CATEQUISTAS ---
+elif menu == "👥 Gestão de Catequistas":
+    st.title("👥 Gestão de Catequistas e Formação")
+    df_formacoes = ler_aba("formacoes")
+    df_pres_form = ler_aba("presenca_formacao")
+    
+    tab_dash, tab_lista, tab_novo, tab_formacao = st.tabs(["📊 Dashboard de Equipe", "📋 Lista e Perfil", "➕ Novo Acesso", "🎓 Registro de Formação"])
+
+    with tab_dash:
+        if not equipe_tecnica.empty:
+            total_c = len(equipe_tecnica)
+            cont_ministros, cont_aptos, cont_caminhada = 0, 0, 0
+            for _, row in equipe_tecnica.iterrows():
+                status, _ = verificar_status_ministerial(str(row.get('data_inicio_catequese', '')), str(row.get('data_batismo', '')), str(row.get('data_eucaristia', '')), str(row.get('data_crisma', '')), str(row.get('data_ministerio', '')))
+                if status == "MINISTRO": cont_ministros += 1
+                elif status == "APTO": cont_aptos += 1
+                else: cont_caminhada += 1
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Catequistas", total_c)
+            m2.metric("Ministros", cont_ministros)
+            m3.metric("Aptos", cont_aptos)
+            m4.metric("Em Caminhada", cont_caminhada)
+
+    with tab_lista:
+        if not equipe_tecnica.empty:
+            busca_c = st.text_input("🔍 Buscar Catequista por nome:").upper()
+            df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].astype(str).str.contains(busca_c)] if busca_c else equipe_tecnica
+            st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True)
+            st.divider()
+            escolha_c = st.selectbox("Selecione um Catequista para EDITAR:", [""] + df_c_filtrado['nome'].tolist())
+            if escolha_c:
+                u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
+                forms_participadas = pd.DataFrame()
+                if not df_pres_form.empty and not df_formacoes.empty:
+                    minhas_forms = df_pres_form[df_pres_form['email_participante'] == u['email']]
+                    if not minhas_forms.empty:
+                        forms_participadas = minhas_forms.merge(df_formacoes, on='id_formacao', how='inner')
+                        st.table(forms_participadas[['data', 'tema', 'formador']])
+                if st.button(f"📄 Gerar Ficha de {escolha_c}"):
+                    st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), forms_participadas)
+                if "pdf_catequista" in st.session_state:
+                    st.download_button("📥 Download Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf", "application/pdf")
+                with st.form("edicao_catequista_final"):
+                    c1, c2, c3 = st.columns(3)
+                    ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+                    ed_email = c2.text_input("E-mail (Login)", value=str(u.get('email', '')), disabled=True)
+                    ed_senha = c3.text_input("Senha", value=str(u.get('senha', '')), type="password")
+                    ed_tel = st.text_input("Telefone", value=str(u.get('telefone', '')))
+                    lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                    ed_turmas = st.multiselect("Turmas Vinculadas", lista_t_nomes, default=[t for t in str(u.get('turma_vinculada', '')).split(", ") if t in lista_t_nomes])
+                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                        dados_up = [ed_nome, ed_email, ed_senha, str(u.get('papel', 'CATEQUISTA')), ", ".join(ed_turmas), ed_tel, str(u.get('data_nascimento', '')), str(u.get('data_inicio_catequese', '')), str(u.get('data_batismo', '')), str(u.get('data_eucaristia', '')), str(u.get('data_crisma', '')), str(u.get('data_ministerio', ''))]
+                        if atualizar_usuario(ed_email, dados_up): st.success("Atualizado!"); time.sleep(1); st.rerun()
+
+    with tab_novo:
+        st.subheader("➕ Criar Novo Acesso")
+        with st.form("form_novo_usuario_completo"):
+            c1, c2, c3 = st.columns(3)
+            n_nome = c1.text_input("Nome Completo").upper(); n_email = c2.text_input("E-mail (Login)"); n_senha = c3.text_input("Senha Inicial")
+            n_turmas = st.multiselect("Vincular às Turmas", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+            if st.form_submit_button("🚀 CRIAR ACESSO"):
+                if n_nome and n_email and n_senha:
+                    conectar_google_sheets().worksheet("usuarios").append_row([n_nome, n_email, n_senha, "CATEQUISTA", ", ".join(n_turmas), "", "", "", "", "", "", ""])
+                    st.success("Criado!"); st.rerun()
+
+    with tab_formacao:
+        st.subheader("🎓 Registro de Formação")
+        with st.form("nova_formacao_presenca"):
+            f_tema = st.text_input("Tema da Formação").upper(); f_data = st.date_input("Data", min_value=MIN_DATA, max_value=MAX_DATA)
+            dict_cat = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
+            participantes = st.multiselect("Selecione os presentes:", list(dict_cat.keys()))
+            if st.form_submit_button("💾 REGISTRAR FORMAÇÃO"):
+                if f_tema and participantes:
+                    id_f = f"FOR-{int(time.time())}"
+                    if salvar_formacao([id_f, f_tema, str(f_data), "", "", ""]):
+                        lista_p = [[id_f, dict_cat[nome]] for nome in participantes]
+                        if salvar_presenca_formacao(lista_p): st.success("Registrado!"); st.balloons(); st.rerun()
