@@ -519,7 +519,7 @@ elif menu == "📖 Diário de Encontros":
             else:
                 st.write("Nenhum tema planejado ainda.")
 
-# --- PÁGINA: CADASTRAR CATEQUIZANDO ---
+# --- INÍCIO DA SUBSTITUIÇÃO: MENU CADASTRAR CATEQUIZANDO (VERSÃO 29 COLUNAS) ---
 elif menu == "📝 Cadastrar Catequizando":
     st.title("📝 Cadastro de Catequizandos")
     tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
@@ -527,28 +527,26 @@ elif menu == "📝 Cadastrar Catequizando":
     with tab_manual:
         tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
         
-        if papel_usuario == "CATEQUISTA":
-            lista_turmas = [turma_do_catequista]
-        else:
-            lista_turmas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["SEM TURMAS CADASTRADAS"]
+        # Define lista de turmas
+        lista_turmas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["SEM TURMAS"]
 
-        with st.form("form_cadastro_detalhado", clear_on_submit=True):
-            st.subheader("📍 Informações Básicas")
+        with st.form("form_cadastro_29_colunas", clear_on_submit=True):
+            st.subheader("📍 1. Informações Básicas")
             c1, c2, c3 = st.columns([2, 1, 1])
             nome = c1.text_input("Nome Completo").upper()
             data_nasc = c2.date_input("Data de Nascimento", value=date(2015, 1, 1), min_value=MIN_DATA, max_value=MAX_DATA)
             etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
 
             c4, c5, c6 = st.columns(3)
-            contato = c4.text_input("Telefone/WhatsApp")
+            contato = c4.text_input("Telefone/WhatsApp Principal")
             batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
             docs_faltando = c6.text_input("Documentos em Falta").upper()
             endereco = st.text_input("Endereço Completo").upper()
 
-# --- SUBSTITUIR DENTRO DO FORM DE CADASTRO NO main.py ---
+            # --- CAMPOS ESPECÍFICOS ---
             if tipo_ficha == "Infantil/Juvenil":
                 st.divider()
-                st.subheader("👪 Filiação e Detalhes Familiares")
+                st.subheader("👪 2. Filiação e Vida Eclesial (Padrão Diocesano)")
                 f1, f2 = st.columns(2)
                 nome_mae = f1.text_input("Nome da Mãe").upper()
                 prof_mae = f2.text_input("Profissão da Mãe").upper()
@@ -560,34 +558,64 @@ elif menu == "📝 Cadastrar Catequizando":
                 
                 responsavel = f1.text_input("Responsável Legal (se não for os pais)").upper()
                 
-                st.divider()
-                st.subheader("⛪ Vida Eclesial da Família")
                 fe1, fe2 = st.columns(2)
                 est_civil_pais = fe1.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
                 sac_pais = fe2.multiselect("Sacramentos que os pais já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
                 
-                part_grupo = fe1.radio("Os pais ou o catequizando participam de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
-                qual_grupo = fe1.text_input("Se sim, qual?") if part_grupo == "SIM" else ""
+                part_grupo = fe1.radio("Participam de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
+                qual_grupo = fe1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
                 
-                tem_irmaos = fe2.radio("Tem irmãos na catequese paroquial?", ["NÃO", "SIM"], horizontal=True)
+                tem_irmaos = fe2.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
                 qtd_irmaos = fe2.number_input("Se sim, quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
 
                 st.divider()
-                st.subheader("🏥 Saúde e Desenvolvimento")
+                st.subheader("🏥 3. Saúde e Turno")
                 s1, s2 = st.columns(2)
-                medicamento = s1.text_input("Toma algum medicamento? (Se sim, qual?)").upper()
-                tgo = s2.selectbox("A criança tem algum Transtorno de Desenvolvimento (TGO)?", ["NÃO", "SIM"])
-                
-                # Campos extras para o PDF (Turno e Local)
+                medicamento = s1.text_input("Toma algum medicamento?").upper()
+                tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"])
                 turno = s1.selectbox("Turno de preferência", ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
-                local_enc = s2.text_input("Local do Encontro (Comunidade/Setor)").upper()
+                local_enc = s2.text_input("Local do Encontro").upper()
 
-                # Variáveis de compatibilidade para Adultos (vazias aqui)
+                # Valores padrão para colunas de Adulto
                 estado_civil, sacramentos, pastoral = "N/A", "N/A", "NÃO"
+
+            else:
+                # --- CAMPOS PARA ADULTOS ---
+                st.divider()
+                st.subheader("💍 2. Estado Civil e Caminhada (Adulto)")
+                a1, a2 = st.columns(2)
+                estado_civil = a1.selectbox("Seu Estado Civil", ["SOLTEIRO(A)", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"])
+                pastoral = a1.text_input("Participa de Pastoral? Qual?").upper()
+                s_bat = a2.checkbox("Batismo"); s_euc = a2.checkbox("Eucaristia"); s_cri = a2.checkbox("Crisma"); s_mat = a2.checkbox("Matrimônio")
+                sacramentos = ", ".join([s for s, m in zip(["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"], [s_bat, s_euc, s_cri, s_mat]) if m])
                 
-                # Montagem da string de dados extras para salvar na coluna 'sacramentos_ja_feitos' ou similar
-                # Para não quebrar o banco, vamos concatenar os dados novos em campos existentes ou sugerir novas colunas
-                info_familia = f"Mãe: {prof_mae}/{tel_mae} | Pai: {prof_pai}/{tel_pai} | Est.Civil Pais: {est_civil_pais} | Sac.Pais: {', '.join(sac_pais)} | Irmãos: {qtd_irmaos} | Turno: {turno} | Local: {local_enc}"
+                # Valores padrão para colunas de Infantil
+                nome_mae, nome_pai, responsavel, medicamento, tgo = "N/A", "N/A", "N/A", "NÃO", "NÃO"
+                prof_mae, tel_mae, prof_pai, tel_pai, est_civil_pais, sac_pais = "N/A", "N/A", "N/A", "N/A", "N/A", []
+                part_grupo, qual_grupo, tem_irmaos, qtd_irmaos, turno, local_enc = "NÃO", "N/A", "NÃO", 0, "N/A", "N/A"
+
+            # --- BOTÃO SALVAR ---
+            if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
+                if nome and contato and etapa_inscricao != "SEM TURMAS":
+                    novo_id = f"CAT-{int(time.time())}"
+                    
+                    # MONTAGEM DA LISTA COM EXATAMENTE 29 COLUNAS (A até AC)
+                    registro = [[
+                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco, # A-G
+                        nome_mae, nome_pai, responsavel, docs_faltando, pastoral, "ATIVO",           # H-M
+                        medicamento, tgo, estado_civil, sacramentos,                                # N-Q
+                        prof_mae, tel_mae, prof_pai, tel_pai, est_civil_pais, ", ".join(sac_pais),  # R-W
+                        part_grupo, qual_grupo, tem_irmaos, qtd_irmaos, turno, local_enc            # X-AC
+                    ]]
+                    
+                    if salvar_lote_catequizandos(registro):
+                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.warning("Nome, Contato e Turma são obrigatórios.")
+
 
     with tab_csv:
         st.subheader("📥 Importação em Massa")
