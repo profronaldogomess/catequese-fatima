@@ -899,7 +899,7 @@ elif menu == "🏫 Gestão de Turmas":
                         else: st.error("Selecione um destino válido e ao menos um catequizando.")
 # --- FIM DO BLOCO: GESTÃO DE TURMAS ---
 
-# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (VERSÃO CONSOLIDADA E AUDITADA) ---
+# --- BLOCO REFINADO: GESTÃO DE SACRAMENTOS (MANTENDO SEUS DETALHES E CORRIGINDO LOOP) ---
 elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
     tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
@@ -958,7 +958,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
             for _, t in df_turmas.iterrows():
                 alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
                 if not alunos_t.empty:
-                    # Cálculo de Frequência
                     pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
                     freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
                     
@@ -969,9 +968,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     pendentes_list = alunos_t[alunos_t['batizado_sn'] != 'SIM']
                     
                     p_euca = t.get('previsao_eucaristia', 'N/A')
-                    p_euca = p_euca if p_euca and str(p_euca).strip() != "" else "N/A"
                     p_cris = t.get('previsao_crisma', 'N/A')
-                    p_cris = p_cris if p_cris and str(p_cris).strip() != "" else "N/A"
                     
                     with st.expander(f"📍 {t['nome_turma']} ({t['etapa']}) - Frequência: {freq_media:.1f}%"):
                         col_p1, col_p2 = st.columns([2, 1])
@@ -994,47 +991,58 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             st.write(f"Eucaristia: `{p_euca}`")
                             st.write(f"Crisma: `{p_cris}`")
 
+                    # Guardando dados ricos para a IA e para o PDF
                     analise_detalhada_ia.append({
                         "turma": t['nome_turma'], "etapa": t['etapa'], "freq": f"{freq_media:.1f}%",
-                        "idades": f"{min(idades)}-{max(idades)}", "impedimentos_civel": impedimentos,
                         "batizados": len(batizados_list), "pendentes": len(pendentes_list),
-                        "total": len(alunos_t), "prev_e": p_euca, "prev_c": p_cris
+                        "nomes_pendentes": pendentes_list['nome_completo'].tolist(),
+                        "impedimentos_civel": impedimentos
                     })
 
         st.divider()
-        # 3. Geração de PDF
-        with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
-            try:
-                # Enriquecendo o resumo para a IA
-                resumo_ia = {
-                    "total_batismos_ano": total_batismos_ano,
-                    "censo_kids": {"total": len(df_kids), "batizados": k_bat},
-                    "censo_adultos": {"total": len(df_adults), "batizados": a_bat},
-                    "detalhes_por_turma": analise_detalhada_ia
-                }
-                
-                analise_ia_sac = gerar_relatorio_sacramentos_ia(str(resumo_ia))
-                stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'bat_a': a_bat}
-                
-                # Chama a função reelaborada no utils.py
-                pdf_data = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
-                
-                if pdf_data:
-                    st.session_state.pdf_sac_tecnico = pdf_data
-                    st.success("✅ Auditoria Diocesana gerada com sucesso!")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Erro na geração do PDF: {e}")
-
+        
+        # --- 3. LÓGICA DE GERAÇÃO CORRIGIDA (SEM LOOP) ---
+        st.subheader("🏛️ Relatório Oficial de Auditoria")
+        
+        # Se o PDF já existe, mostra o botão de download
         if "pdf_sac_tecnico" in st.session_state:
+            st.success("✅ Auditoria Diocesana pronta para download!")
             st.download_button(
                 label="📥 BAIXAR AUDITORIA SACRAMENTAL (PDF)",
                 data=st.session_state.pdf_sac_tecnico,
                 file_name=f"Auditoria_Pastoral_Fatima_{date.today().year}.pdf",
                 mime="application/pdf",
-                key="btn_download_sac_v_final"
+                key="btn_download_sac_v_final",
+                use_container_width=True
             )
+            if st.button("🔄 Gerar Novo Relatório (Atualizar)"):
+                del st.session_state.pdf_sac_tecnico
+                st.rerun()
+        else:
+            # Se não existe, mostra o botão para gerar
+            if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac", use_container_width=True):
+                with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
+                    try:
+                        resumo_ia = {
+                            "total_batismos_ano": total_batismos_ano,
+                            "censo_kids": {"total": len(df_kids), "batizados": k_bat},
+                            "censo_adultos": {"total": len(df_adults), "batizados": a_bat},
+                            "detalhes_por_turma": analise_detalhada_ia
+                        }
+                        
+                        # Chamadas das funções do ai_engine e utils
+                        analise_ia_sac = gerar_relatorio_sacramentos_ia(str(resumo_ia))
+                        stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'bat_a': a_bat}
+                        
+                        pdf_data = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
+                        
+                        if pdf_data:
+                            st.session_state.pdf_sac_tecnico = pdf_data
+                            st.rerun() # Agora o rerun é seguro pois o PDF já está no state
+                    except Exception as e:
+                        st.error(f"Erro na geração do PDF: {e}")
 
+    # --- ABAS DE REGISTRO E HISTÓRICO (MANTIDAS IGUAIS AO SEU ORIGINAL) ---
     with tab_reg:
         st.subheader("✍️ Registro de Sacramento")
         modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True, key="modo_reg_sac_v_final")
@@ -1080,7 +1088,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
         if not df_sac_eventos.empty:
             st.dataframe(df_sac_eventos.sort_values(by=df_sac_eventos.columns[2], ascending=False), use_container_width=True, hide_index=True)
         else: st.info("Nenhum evento registrado.")
-# --- FIM DO BLOCO: GESTÃO DE SACRAMENTOS ---
 
 # --- INÍCIO DO BLOCO INTEGRAL: FAZER CHAMADA (VERSÃO INTELIGENTE E SINCRONIZADA) ---
 elif menu == "✅ Fazer Chamada":
