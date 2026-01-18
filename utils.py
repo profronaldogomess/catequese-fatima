@@ -394,51 +394,57 @@ def gerar_relatorio_diocesano_pdf(dados_gerais, turmas_detalhes, sacramentos_sta
 
     return finalizar_pdf(pdf)
 
-def gerar_relatorio_sacramentos_tecnico_pdf(stats, criticos, alertas, projecoes, analise_ia):
+def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO TÉCNICO DE AUDITORIA SACRAMENTAL", etapa="SACRAMENTOS")
     
-    # 1. QUADRO GERAL
+    # 1. QUADRO GERAL SEGMENTADO
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, limpar_texto("  1. QUADRO GERAL DE SACRAMENTOS REALIZADOS"), ln=True, fill=True)
+    pdf.cell(0, 7, limpar_texto("  1. QUADRO GERAL DE SACRAMENTOS (POR PÚBLICO)"), ln=True, fill=True)
     pdf.ln(2)
+    
     y = pdf.get_y()
-    desenhar_campo_box(pdf, "Batismos:", str(stats['batismos']), 10, y, 60)
-    desenhar_campo_box(pdf, "Eucaristias:", str(stats['eucaristias']), 75, y, 60)
-    desenhar_campo_box(pdf, "Crismas:", str(stats['crismas']), 140, y, 55)
-    pdf.set_y(y + 18)
-
-    # 2. PENDÊNCIAS CRÍTICAS (NOMINAL)
-    pdf.set_fill_color(224, 61, 17) # Laranja para Crítico
+    # Linha Kids
+    desenhar_campo_box(pdf, "Infantil - Batismos:", str(stats['bat_k']), 10, y, 90)
+    desenhar_campo_box(pdf, "Infantil - Eucaristias:", str(stats['euca_k']), 105, y, 90)
+    y += 16
+    # Linha Adultos
+    desenhar_campo_box(pdf, "Adultos - Batismos:", str(stats['bat_a']), 10, y, 60)
+    desenhar_campo_box(pdf, "Adultos - Eucaristias:", str(stats['euca_a']), 75, y, 60)
+    desenhar_campo_box(pdf, "Adultos - Crismas:", str(stats['cris_a']), 140, y, 55)
+    
+    pdf.set_y(y + 20)
+    # 2. ANÁLISE POR TURMA
+    pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 7, limpar_texto("  2. PENDÊNCIAS CRÍTICAS (AÇÃO IMEDIATA)"), ln=True, fill=True)
+    pdf.cell(0, 7, limpar_texto("  2. AUDITORIA NOMINAL POR TURMA E PREVISÕES"), ln=True, fill=True)
     pdf.ln(2)
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(100, 6, "Nome do Catequizando", 1, 0, 'L')
-    pdf.cell(50, 6, "Turma/Etapa", 1, 0, 'L')
-    pdf.cell(35, 6, "Pendência", 1, 1, 'C')
+    
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0)
+    pdf.cell(60, 6, "Turma", 1, 0, 'L')
+    pdf.cell(30, 6, "Batizados", 1, 0, 'C')
+    pdf.cell(30, 6, "Pendentes", 1, 0, 'C')
+    pdf.cell(35, 6, "Prev. Eucaristia", 1, 0, 'C')
+    pdf.cell(35, 6, "Prev. Crisma", 1, 1, 'C')
     
     pdf.set_font("helvetica", "", 8)
-    if not criticos:
-        pdf.cell(0, 6, "Nenhuma pendência crítica detectada.", 1, 1, 'C')
-    for c in criticos:
-        pdf.cell(100, 6, limpar_texto(c['nome']), 1, 0, 'L')
-        pdf.cell(50, 6, limpar_texto(c['turma']), 1, 0, 'L')
-        pdf.cell(35, 6, limpar_texto(c['tipo']), 1, 1, 'C')
-    pdf.ln(4)
+    for t in analise_turmas:
+        pdf.cell(60, 6, limpar_texto(t['turma']), 1, 0, 'L')
+        pdf.cell(30, 6, str(t['batizados']), 1, 0, 'C')
+        pdf.cell(30, 6, str(t['pendentes']), 1, 0, 'C')
+        pdf.cell(35, 6, limpar_texto(t['prev_e']), 1, 0, 'C')
+        pdf.cell(35, 6, limpar_texto(t['prev_c']), 1, 1, 'C')
 
-    # 3. ANÁLISE DE PROJEÇÃO (IA)
-    pdf.set_fill_color(65, 123, 153)
+    pdf.ln(5)
+    # 3. ANÁLISE IA
+    pdf.set_fill_color(224, 61, 17)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 7, limpar_texto("  3. ANÁLISE DE PROJEÇÃO E DATAS FUTURAS"), ln=True, fill=True)
+    pdf.cell(0, 7, limpar_texto("  3. DIAGNÓSTICO PASTORAL E RECOMENDAÇÕES"), ln=True, fill=True)
     pdf.ln(2)
-    pdf.set_font("helvetica", "", 10)
-    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, limpar_texto(analise_ia))
 
     return finalizar_pdf(pdf)
