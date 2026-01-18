@@ -36,8 +36,17 @@ def ler_aba(nome_aba):
             if len(todos_os_valores) <= 1:
                 return pd.DataFrame()
             
-            df = pd.DataFrame(todos_os_valores[1:], columns=todos_os_valores[0])
-            df.columns = [str(c).strip().lower() for c in df.columns]
+            # Tratamento de cabeçalhos vazios para evitar erro de visualização
+            raw_headers = todos_os_valores[0]
+            headers = []
+            for i, h in enumerate(raw_headers):
+                nome = str(h).strip().lower()
+                if nome == "":
+                    headers.append(f"col_extra_{i}") # Nomeia colunas sem título
+                else:
+                    headers.append(nome)
+            
+            df = pd.DataFrame(todos_os_valores[1:], columns=headers)
             return df
         except Exception as e:
             st.error(f"Erro ao ler a aba {nome_aba}: {e}")
