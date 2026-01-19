@@ -1889,6 +1889,19 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     # --- SEÇÃO DE DOCUMENTOS (FICHA + TERMO DE SAÍDA) ---
                     st.divider()
                     st.markdown("#### 📄 Documentos para Impressão")
+                    
+                    # 1. Seleção de quem assina o termo
+                    opcoes_resp = ["Mãe", "Pai", "Outro (Digitar Nome)"]
+                    resp_selecionado = st.selectbox("Quem assina como responsável no Termo de Saída?", opcoes_resp, key="sel_resp_termo")
+                    
+                    nome_final_resp = ""
+                    if resp_selecionado == "Mãe":
+                        nome_final_resp = dados_f.get('nome_mae', '________________')
+                    elif resp_selecionado == "Pai":
+                        nome_final_resp = dados_f.get('nome_pai', '________________')
+                    else:
+                        nome_final_resp = st.text_input("Digite o nome do Responsável:", key="nome_manual_resp").upper()
+
                     col_doc_fam1, col_doc_fam2 = st.columns(2)
                     
                     with col_doc_fam1:
@@ -1902,15 +1915,16 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
 
                     with col_doc_fam2:
                         if st.button("📜 TERMO DE AUTORIZAÇÃO DE SAÍDA", use_container_width=True, key="btn_pdf_termo_saida"):
-                            with st.spinner("Gerando termo oficial..."):
-                                # Busca dados da turma para extrair os catequistas responsáveis
-                                info_t_termo = df_turmas[df_turmas['nome_turma'] == dados_f['etapa']].iloc[0].to_dict() if not df_turmas.empty else {}
-                                st.session_state.pdf_termo_saida = gerar_termo_saida_pdf(dados_f.to_dict(), info_t_termo)
+                            if not nome_final_resp or nome_final_resp == "________________":
+                                st.error("Por favor, identifique o nome do responsável.")
+                            else:
+                                with st.spinner("Gerando termo oficial..."):
+                                    info_t_termo = df_turmas[df_turmas['nome_turma'] == dados_f['etapa']].iloc[0].to_dict() if not df_turmas.empty else {}
+                                    # Passa o nome selecionado para a função
+                                    st.session_state.pdf_termo_saida = gerar_termo_saida_pdf(dados_f.to_dict(), info_t_termo, nome_final_resp)
                         
                         if "pdf_termo_saida" in st.session_state:
                             st.download_button("📥 BAIXAR TERMO (PDF)", st.session_state.pdf_termo_saida, f"Termo_Saida_{dados_f['nome_completo'].replace(' ', '_')}.pdf", use_container_width=True)
-                
-                else: st.warning("Nenhuma família localizada.")
 
         with tab_ia:
             if st.button("🚀 EXECUTAR DIAGNÓSTICO PASTORAL"):
