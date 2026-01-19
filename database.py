@@ -1,5 +1,5 @@
 # ARQUIVO: database.py
-# VERSÃO: 3.0.1 - INTEGRALIDADE TOTAL (SEGURANÇA + IVC + 30 COLUNAS)
+# VERSÃO: 3.0.2 - FINAL (RESOLVE PYLANCE + ERRO 429 + INTEGRIDADE)
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
@@ -23,6 +23,7 @@ def conectar_google_sheets():
         st.error(f"Erro de conexão: {e}")
         return None
 
+# --- MOTOR DE LEITURA (ESSENCIAL PARA O SISTEMA) ---
 @st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
     planilha = conectar_google_sheets()
@@ -49,11 +50,10 @@ def ler_aba(nome_aba):
             return pd.DataFrame()
     return pd.DataFrame()
 
-# --- NOVAS FUNÇÕES DE INFRAESTRUTURA (UUID / MANUTENÇÃO) ---
+# --- MOTOR DE INFRAESTRUTURA (OTIMIZADO PARA EVITAR ERRO 429) ---
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300) # Cache de 5 minutos para status de manutenção
 def verificar_status_sistema():
-    """Verifica se o sistema está em modo MANUTENCAO na aba config."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -65,7 +65,6 @@ def verificar_status_sistema():
     return "ONLINE"
 
 def atualizar_session_id(email, novo_id):
-    """Grava o UUID único na Coluna M (13) da aba usuarios."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -78,9 +77,9 @@ def atualizar_session_id(email, novo_id):
         except: pass
     return False
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=60) # Cache de 1 minuto para validação de sessão única
 def obter_session_id_db(email):
-    """Valida se o UUID da sessão atual coincide com o da planilha."""
+    if not email: return ""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -89,10 +88,10 @@ def obter_session_id_db(email):
             if celula:
                 val = aba.cell(celula.row, 13).value
                 return val if val else ""
-        except: pass
+        except: return ""
     return ""
 
-# --- FUNÇÕES DE PERSISTÊNCIA DE DADOS (RIGOR 30/10/12) ---
+# --- FUNÇÕES DE PERSISTÊNCIA (RIGOR 30/10/12) ---
 
 def salvar_lote_catequizandos(lista_de_listas):
     planilha = conectar_google_sheets()
