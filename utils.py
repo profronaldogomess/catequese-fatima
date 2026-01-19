@@ -723,17 +723,55 @@ def gerar_relatorio_local_turma_v2(nome_turma, metricas, listas, analise_ia):
 
     return finalizar_pdf(pdf)
 
+# --- ADICIONAR AO utils.py ---
+
 def gerar_fichas_paroquia_total(df_catequizandos):
-    """Gera um PDF único com as fichas de inscrição de TODOS os catequizandos da base."""
+    """Gera um PDF único com as fichas de inscrição de TODOS os catequizandos da paróquia."""
     if df_catequizandos.empty: return None
     pdf = FPDF()
-    # Ordena por turma e nome para facilitar a separação física após impressão
+    # Ordenação por Turma e Nome para facilitar a entrega física
     df_ordenado = df_catequizandos.sort_values(by=['etapa', 'nome_completo'])
-    
     for _, row in df_ordenado.iterrows():
         pdf.add_page()
         adicionar_cabecalho_diocesano(pdf)
         _desenhar_corpo_ficha(pdf, row.to_dict())
+    return finalizar_pdf(pdf)
+
+def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
+    """Gera um PDF único contendo a auditoria v2 de cada turma da paróquia."""
+    pdf = FPDF()
+    for _, t in df_turmas.iterrows():
+        t_nome = t['nome_turma']
+        alunos_t = df_cat[df_cat['etapa'] == t_nome]
+        if not alunos_t.empty:
+            # Cálculos de métricas para esta página específica
+            pres_t = df_pres[df_pres['id_turma'] == t_nome] if not df_pres.empty else pd.DataFrame()
+            freq_g = round(pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100, 1) if not pres_t.empty else 0
+            idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
+            id_med = round(sum(idades)/len(idades), 1) if idades else 0
+            
+            # Adiciona a página da turma ao PDF consolidado
+            pdf.add_page()
+            adicionar_cabecalho_diocesano(pdf, f"AUDITORIA: {t_nome}")
+            
+            # Reutiliza a lógica visual da v2 (Indicadores)
+            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+            pdf.cell(190, 8, limpar_texto("INDICADORES DA TURMA"), ln=True, fill=True, align='C')
+            pdf.set_text_color(0, 0, 0)
+            y = pdf.get_y() + 2
+            desenhar_campo_box(pdf, "Catequizandos", str(len(alunos_t)), 10, y, 60)
+            desenhar_campo_box(pdf, "Frequência", f"{freq_g}%", 75, y, 60)
+            desenhar_campo_box(pdf, "Idade Média", f"{id_med} anos", 140, y, 60)
+            pdf.ln(18)
+            
+            # Lista Nominal Simplificada para o Lote
+            pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(230, 230, 230)
+            pdf.cell(120, 7, "Nome do Catequizando", border=1, fill=True)
+            pdf.cell(70, 7, "Situação", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 8)
+            for _, r in alunos_t.iterrows():
+                pdf.cell(120, 6, limpar_texto(r['nome_completo']), border=1)
+                pdf.cell(70, 6, limpar_texto(r['status']), border=1, align='C'); pdf.ln()
     
     return finalizar_pdf(pdf)
 
