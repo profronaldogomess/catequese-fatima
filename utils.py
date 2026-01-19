@@ -372,60 +372,47 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
 # ==============================================================================
 
 def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
-    """Gera ficha para visitação domiciliar focada no núcleo familiar."""
+    """Gera ficha de visitação com o relato pastoral preenchido pelo sistema."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "FICHA DE VISITAÇÃO PASTORAL / FAMILIAR")
     
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 10)
+    # 1. NÚCLEO FAMILIAR
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("1. NÚCLEO FAMILIAR (PAIS E RESPONSÁVEIS)"), ln=True, fill=True)
-    
-    pdf.set_text_color(0, 0, 0)
-    y = pdf.get_y() + 2
-    
+    pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Mãe:", dados_familia.get('nome_mae', 'N/A'), 10, y, 110)
     desenhar_campo_box(pdf, "Profissão/Tel:", f"{dados_familia.get('profissao_mae','')} / {dados_familia.get('tel_mae','')}", 125, y, 75)
-    
     y += 14
     desenhar_campo_box(pdf, "Pai:", dados_familia.get('nome_pai', 'N/A'), 10, y, 110)
     desenhar_campo_box(pdf, "Profissão/Tel:", f"{dados_familia.get('profissao_pai','')} / {dados_familia.get('tel_pai','')}", 125, y, 75)
-    
     y += 14
     desenhar_campo_box(pdf, "Estado Civil dos Pais:", dados_familia.get('est_civil_pais', 'N/A'), 10, y, 90)
     desenhar_campo_box(pdf, "Sacramentos dos Pais:", dados_familia.get('sac_pais', 'N/A'), 105, y, 95)
     
-    pdf.set_y(y + 16)
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
+    # 2. FILHOS
+    pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 7, limpar_texto("2. FILHOS MATRICULADOS NA CATEQUESE"), ln=True, fill=True)
-    
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(80, 7, "Nome do Catequizando", border=1, fill=True)
-    pdf.cell(60, 7, "Turma / Etapa Atual", border=1, fill=True)
-    pdf.cell(50, 7, "Status", border=1, fill=True, align='C')
-    pdf.ln()
-    
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(80, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(60, 7, "Turma / Etapa Atual", border=1, fill=True); pdf.cell(50, 7, "Status", border=1, fill=True, align='C'); pdf.ln()
     pdf.set_font("helvetica", "", 9)
     for f in filhos_lista:
-        pdf.cell(80, 7, limpar_texto(f['nome']), border=1)
-        pdf.cell(60, 7, limpar_texto(f['etapa']), border=1)
-        pdf.cell(50, 7, limpar_texto(f['status']), border=1, align='C')
-        pdf.ln()
+        pdf.cell(80, 7, limpar_texto(f['nome']), border=1); pdf.cell(60, 7, limpar_texto(f['etapa']), border=1); pdf.cell(50, 7, limpar_texto(f['status']), border=1, align='C'); pdf.ln()
     
-    pdf.ln(10)
-    pdf.set_font("helvetica", "B", 10)
+    # 3. RELATO PASTORAL (Onde o texto entra)
+    pdf.ln(10); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, "Relato da Visita e Necessidades da Família:", ln=True)
-    pdf.set_fill_color(255, 255, 255)
-    pdf.rect(10, pdf.get_y(), 190, 50)
-    pdf.ln(55)
     
-    pdf.set_font("helvetica", "I", 8)
+    # Texto vindo do banco de dados
+    relato_texto = dados_familia.get('obs_pastoral_familia', 'Nenhum relato registrado até o momento.')
+    if relato_texto == "N/A" or not relato_texto: relato_texto = "Espaço reservado para anotações de visita."
+    
+    pdf.set_font("helvetica", "", 10); pdf.set_fill_color(248, 249, 240)
+    # Multi_cell para o texto quebrar linha automaticamente dentro do box
+    pdf.multi_cell(190, 6, limpar_texto(relato_texto), border=1, fill=True)
+    
+    pdf.ln(10); pdf.set_font("helvetica", "I", 8)
     pdf.multi_cell(0, 4, "Este documento contém dados sensíveis. O manuseio deve ser restrito à coordenação paroquial para fins de acompanhamento pastoral.")
-    
     return finalizar_pdf(pdf)
 
 # ==============================================================================
