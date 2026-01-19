@@ -1,6 +1,6 @@
 # ARQUIVO: utils.py
 # MISSÃO: Gestão de PDFs, Formatação e Lógicas de Censo (Versão Final Auditada)
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 import pandas as pd
 from fpdf import FPDF
 import os
@@ -29,7 +29,8 @@ def formatar_data_br(valor):
 
 def calcular_idade(data_nascimento):
     if not data_nascimento or str(data_nascimento).strip() in ["None", "", "N/A"]: return 0
-    hoje = date.today()
+    # Ajuste de fuso para cálculo de idade
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
     try:
         d_str = formatar_data_br(data_nascimento)
         dt = datetime.strptime(d_str, "%d/%m/%Y").date()
@@ -67,14 +68,18 @@ def marcar_opcao(pdf, texto, condicao, x, y):
 # ==========================================
 
 def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
+    """Desenha o topo oficial com ajuste de fuso horário (UTC-3)."""
     if os.path.exists("logo.png"):
         pdf.image("logo.png", 10, 15, 22)
+    
+    # Ajuste para garantir a data correta da paróquia (Bahia/Brasília)
+    data_local = (datetime.now(timezone.utc) + timedelta(hours=-3)).strftime('%d / %m / %Y')
     
     pdf.set_xy(38, 15)
     pdf.set_font("helvetica", "B", 11); pdf.set_text_color(65, 123, 153)
     pdf.cell(100, 5, limpar_texto("Pastoral da Catequese Diocese de Itabuna-BA."), ln=False)
     pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 5, limpar_texto(f"Data: {date.today().strftime('%d / %m / %Y')}"), ln=True, align='R')
+    pdf.cell(0, 5, limpar_texto(f"Data: {data_local}"), ln=True, align='R')
     
     pdf.set_x(38)
     pdf.set_font("helvetica", "B", 11); pdf.set_text_color(65, 123, 153)
@@ -108,7 +113,10 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.rect(10, y_base, 105, 20, 'F'); pdf.rect(10, y_base, 105, 20)
     pdf.set_xy(12, y_base + 4); pdf.set_font("helvetica", "B", 12); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(100, 6, limpar_texto("Ficha de Inscrição da Catequese com Inspiração Catecumenal"))
-    pdf.set_xy(115, y_base); pdf.cell(30, 20, limpar_texto(f"Ano: {date.today().year}"), border=1, align='C')
+    
+    ano_atual = (datetime.now(timezone.utc) + timedelta(hours=-3)).year
+    pdf.set_xy(115, y_base); pdf.cell(30, 20, limpar_texto(f"Ano: {ano_atual}"), border=1, align='C')
+    
     pdf.set_xy(145, y_base); pdf.set_font("helvetica", "B", 7)
     etapa_txt = str(dados.get('etapa', ''))
     pdf.multi_cell(55, 10, limpar_texto(f"Etapa: {etapa_txt}\nTurma: {etapa_txt}"), border=1, align='L')
@@ -193,12 +201,13 @@ def gerar_fichas_turma_completa(nome_turma, df_alunos):
     return finalizar_pdf(pdf)
 
 # ==========================================
-# 4. GERADOR DE FICHA DO CATEQUISTA (REELABORADO)
+# 4. GERADOR DE FICHA DO CATEQUISTA (CORRIGIDO)
 # ==========================================
 
 def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf = FPDF(); pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, titulo="PRONTUÁRIO E FICHA DO CATEQUISTA", etapa="EQUIPE")
+    # Título simplificado conforme solicitado
+    adicionar_cabecalho_diocesano(pdf, titulo="FICHA DO CATEQUISTA", etapa="EQUIPE")
     
     # --- SEÇÃO 1: IDENTIFICAÇÃO ---
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
@@ -314,7 +323,8 @@ def eh_aniversariante_da_semana(data_nasc_str):
         d_str = formatar_data_br(data_nasc_str)
         if d_str == "N/A": return False
         nasc = datetime.strptime(d_str, "%d/%m/%Y").date()
-        hoje = date.today(); nasc_este_ano = nasc.replace(year=hoje.year)
+        hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+        nasc_este_ano = nasc.replace(year=hoje.year)
         return 0 <= (nasc_este_ano - hoje).days <= 7
     except: return False
 
@@ -328,14 +338,16 @@ def converter_para_data(valor_str):
 def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_ministerio):
     if d_ministerio and str(d_ministerio).strip() not in ["None", "", "N/A"]: return "MINISTRO", 0 
     try:
-        hoje = date.today(); inicio = datetime.strptime(formatar_data_br(data_inicio), "%d/%m/%Y").date()
+        hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+        inicio = datetime.strptime(formatar_data_br(data_inicio), "%d/%m/%Y").date()
         anos = hoje.year - inicio.year
         tem_s = all([str(x).strip() not in ["None", "", "N/A"] for x in [d_batismo, d_euca, d_crisma]])
         return ("APTO", anos) if (anos >= 5 and tem_s) else ("EM_CAMINHADA", anos)
     except: return "EM_CAMINHADA", 0
 
 def obter_aniversariantes_hoje(df_cat, df_usuarios):
-    hoje = date.today(); niver = []
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    niver = []
     if not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
             d = formatar_data_br(r['data_nascimento'])
@@ -346,7 +358,8 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
     return niver
 
 def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
-    hoje = date.today(); lista = []
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    lista = []
     if not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
             d = formatar_data_br(r['data_nascimento'])
@@ -356,7 +369,8 @@ def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
 
 def obter_aniversariantes_mes(df_cat):
     if df_cat.empty: return pd.DataFrame()
-    hoje = date.today(); lista = []
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    lista = []
     for _, r in df_cat.iterrows():
         d = formatar_data_br(r['data_nascimento'])
         if d != "N/A" and datetime.strptime(d, "%d/%m/%Y").month == hoje.month:
