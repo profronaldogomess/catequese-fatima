@@ -23,7 +23,6 @@ def gerar_analise_pastoral(resumo_dados):
         return "Análise técnica indisponível."
 
 def gerar_relatorio_sacramentos_ia(resumo_sacramentos):
-    """Gera auditoria de sacramentos com foco em impedimentos canônicos e urgência pastoral."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         prompt = f"""
@@ -44,6 +43,23 @@ def gerar_relatorio_sacramentos_ia(resumo_sacramentos):
     except:
         return "Auditoria indisponível."
 
+def analisar_saude_familiar_ia(dados_familia):
+    """Analisa o perfil das famílias para sugerir ações da Pastoral Familiar."""
+    try:
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        prompt = f"""
+        Analise o perfil socioprofissional e religioso das famílias da catequese: {dados_familia}
+        Foque em:
+        1. Regularização Matrimonial (Casamentos comunitários).
+        2. Engajamento de pais afastados.
+        3. Necessidades de apoio social (baseado em profissões e situação familiar).
+        
+        REGRAS: Sem asteriscos, sem saudações, tom executivo eclesiástico.
+        """
+        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
+        return response.text
+    except: return "Análise de saúde familiar indisponível."
+
 def gerar_mensagem_whatsapp(tema, presentes, faltosos):
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
@@ -52,14 +68,6 @@ def gerar_mensagem_whatsapp(tema, presentes, faltosos):
         return response.text
     except:
         return "Olá! Deus abençoe a todos pelo encontro de hoje!"
-
-def analisar_turma_local(nome_turma, dados_resumo):
-    try:
-        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        prompt = f"Analise tecnicamente a turma {nome_turma}: {dados_resumo}. Sem saudações ou asteriscos."
-        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except: return "Análise indisponível."
 
 def analisar_turma_local(nome_turma, dados_resumo):
     try:
