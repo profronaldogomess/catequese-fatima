@@ -889,90 +889,92 @@ elif menu == "🏫 Gestão de Turmas":
         if not df_turmas.empty:
             t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v_final")
             
-            # --- FILTRAGEM DE DADOS ---
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
             info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
             pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
-            df_recebidos = ler_aba("sacramentos_recebidos") # Para pegar as datas reais
+            df_recebidos = ler_aba("sacramentos_recebidos")
             
             if not alunos_t.empty:
-                # 1. CÁLCULOS DE MÉTRICAS
-                qtd_catequistas = len(str(info_t['catequista_responsavel']).split(','))
-                qtd_cat = len(alunos_t)
+                # --- MÉTRICAS ---
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Catequistas", len(str(info_t['catequista_responsavel']).split(',')))
+                m2.metric("Catequizandos", len(alunos_t))
                 
-                # Frequência Global e Mensal
                 freq_global = 0.0
                 lista_freq_mensal = []
                 if not pres_t.empty:
                     pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
                     freq_global = round(pres_t['status_num'].mean() * 100, 1)
-                    
                     pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
                     pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
                     mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
                     for mes, taxa in mensal.items():
                         lista_freq_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
-
-                # 2. LISTAS NOMINAIS (EVASÃO E GERAL)
-                lista_geral_status = []
-                for _, r in alunos_t.iterrows():
-                    faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
-                    lista_geral_status.append({'nome': r['nome_completo'], 'faltas': faltas})
-
-                # 3. SACRAMENTOS COM DATA (CRUZAMENTO COM EVENTOS)
-                lista_sac_com_data = []
-                if not df_recebidos.empty:
-                    ids_turma = alunos_t['id_catequizando'].tolist()
-                    sac_turma = df_recebidos[df_recebidos['id_catequizando'].isin(ids_turma)]
-                    for _, s in sac_turma.iterrows():
-                        lista_sac_com_data.append({'nome': s['nome'], 'tipo': s['tipo'], 'data': s['data']})
-
-                # --- INTERFACE VISUAL ---
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Catequistas", qtd_catequistas)
-                m2.metric("Catequizandos", qtd_cat)
-                m3.metric("Frequência Global", f"{freq_global}%")
                 
+                m3.metric("Frequência Global", f"{freq_global}%")
                 idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
-                idade_media = round(sum(idades)/len(idades), 1) if idades else 0
-                m4.metric("Idade Média", f"{idade_media} anos")
+                m4.metric("Idade Média", f"{round(sum(idades)/len(idades), 1) if idades else 0} anos")
 
                 st.divider()
                 
-                # --- BOTÃO DE GERAÇÃO ---
-                if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True):
-                    with st.spinner("O Auditor IA está analisando a turma..."):
-                        # IA específica para a turma
-                        resumo_ia = f"Turma {t_alvo}: {qtd_cat} alunos. Freq: {freq_global}%. Sacramentos realizados: {len(lista_sac_com_data)}."
-                        parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
-                        
-                        metricas_pdf = {
-                            'qtd_catequistas': qtd_catequistas, 'qtd_cat': qtd_cat, 
-                            'freq_global': freq_global, 'idade_media': idade_media,
-                            'freq_mensal': lista_freq_mensal
-                        }
-                        listas_pdf = {
-                            'geral': lista_geral_status,
-                            'sac_recebidos': lista_sac_com_data
-                        }
-                        
-                        st.session_state[f"pdf_local_v2_{t_alvo}"] = gerar_relatorio_local_turma_v2(
-                            t_alvo, metricas_pdf, listas_pdf, parecer_ia
-                        )
-                        st.rerun()
+                # --- BLOCO DE DOCUMENTAÇÃO (DOIS BOTÕES) ---
+                st.markdown("#### 📄 Documentação e Auditoria")
+                col_doc1, col_doc2 = st.columns(2)
+                
+                with col_doc1:
+                    # BOTÃO 1: AUDITORIA PASTORAL (IA + MÉTRICAS)
+                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True):
+                        with st.spinner("Analisando itinerário..."):
+                            resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%."
+                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
+                            
+                            metricas_pdf = {
+                                'qtd_catequistas': len(str(info_t['catequista_responsavel']).split(',')), 
+                                'qtd_cat': len(alunos_t), 'freq_global': freq_global, 
+                                'idade_media': round(sum(idades)/len(idades), 1) if idades else 0,
+                                'freq_mensal': lista_freq_mensal
+                            }
+                            
+                            # Coleta de dados nominais para o PDF
+                            lista_geral = []
+                            for _, r in alunos_t.iterrows():
+                                f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                                lista_geral.append({'nome': r['nome_completo'], 'faltas': f})
+                            
+                            lista_sac = []
+                            if not df_recebidos.empty:
+                                sac_t = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())]
+                                for _, s in sac_t.iterrows():
+                                    lista_sac.append({'nome': s['nome'], 'tipo': s['tipo'], 'data': s['data']})
 
-                if f"pdf_local_v2_{t_alvo}" in st.session_state:
-                    st.download_button(
-                        label=f"📥 BAIXAR AUDITORIA COMPLETA: {t_alvo}",
-                        data=st.session_state[f"pdf_local_v2_{t_alvo}"],
-                        file_name=f"Auditoria_{t_alvo.replace(' ', '_')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
+                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v2(
+                                t_alvo, metricas_pdf, {'geral': lista_geral, 'sac_recebidos': lista_sac}, parecer_ia
+                            )
+                    
+                    if f"pdf_auditoria_{t_alvo}" in st.session_state:
+                        st.download_button("📥 BAIXAR AUDITORIA", st.session_state[f"pdf_auditoria_{t_alvo}"], f"Auditoria_{t_alvo}.pdf", use_container_width=True)
 
-                # --- EXIBIÇÃO NA TELA (PREVIEW) ---
-                st.markdown("### 📋 Preview Nominal")
-                st.dataframe(pd.DataFrame(lista_geral_status), use_container_width=True, hide_index=True)
+                with col_doc2:
+                    # BOTÃO 2: FICHAS DE INSCRIÇÃO (LOTE) - RESTAURADO
+                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True):
+                        with st.spinner("Gerando fichas individuais..."):
+                            pdf_fichas = gerar_fichas_turma_completa(t_alvo, alunos_t)
+                            st.session_state[f"pdf_fichas_{t_alvo}"] = pdf_fichas
+                    
+                    if f"pdf_fichas_{t_alvo}" in st.session_state:
+                        st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
+
+                st.divider()
+                
+                # --- PREVIEW NOMINAL ---
+                st.markdown("### 📋 Lista Nominal de Caminhada")
+                lista_preview = []
+                for _, r in alunos_t.iterrows():
+                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                    lista_preview.append({'Catequizando': r['nome_completo'], 'Faltas': f, 'Status': r['status']})
+                st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
+            else:
+                st.info("Selecione uma turma com catequizandos ativos.")
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
