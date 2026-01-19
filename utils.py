@@ -15,21 +15,35 @@ import re
 # ==============================================================================
 
 def formatar_data_br(valor):
-    """Converte diversos formatos de data para o padrão brasileiro DD/MM/AAAA."""
+    """
+    Garante que qualquer data (Excel, ISO ou BR) seja exibida como DD/MM/AAAA.
+    Blindagem total para o padrão paroquial brasileiro.
+    """
     if not valor or str(valor).strip() in ["None", "", "N/A"]:
         return "N/A"
-    s = str(valor).strip().split('.')[0]
-    # Caso esteja em formato AAAAMMDD
+    
+    s = str(valor).strip().split(' ')[0] # Remove horas se houver
+    
+    # 1. Se já estiver no formato DD/MM/AAAA, apenas retorna
+    if re.match(r"^\d{2}/\d{2}/\d{4}$", s):
+        return s
+        
+    # 2. Se estiver no formato AAAA-MM-DD (padrão de banco de dados)
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        partes = s.split('-')
+        return f"{partes[2]}/{partes[1]}/{partes[0]}"
+        
+    # 3. Se estiver no formato AAAAMMDD
     if len(s) == 8 and s.isdigit():
         return f"{s[6:8]}/{s[4:6]}/{s[0:4]}"
-    # Caso esteja em formato AAAA-MM-DD
-    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
-        return f"{s[8:10]}/{s[5:7]}/{s[0:4]}"
+        
+    # 4. Tentativa genérica via Pandas (Locale BR)
     try:
-        dt = pd.to_datetime(valor)
+        dt = pd.to_datetime(s, dayfirst=True)
         if pd.notnull(dt):
             return dt.strftime('%d/%m/%Y')
     except: pass
+    
     return s
 
 def calcular_idade(data_nascimento):
