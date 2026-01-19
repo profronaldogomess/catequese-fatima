@@ -112,7 +112,8 @@ from utils import (
     obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
     gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, gerar_pdf_perfil_turma,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_pastoral_interno_pdf,
-    gerar_relatorio_sacramentos_tecnico_pdf, formatar_data_br, gerar_pdf_perfil_turma
+    gerar_relatorio_sacramentos_tecnico_pdf, formatar_data_br, gerar_pdf_perfil_turma, gerar_relatorio_diocesano_v2, 
+    gerar_relatorio_pastoral_v2, gerar_relatorio_sacramentos_tecnico_pdf, formatar_data_br
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -232,20 +233,19 @@ else:
 
 # --- PÁGINA 1: DASHBOARD (COORDENADOR) ---
 if menu == "🏠 Início / Dashboard":
-    import plotly.express as px
     st.title("📊 Painel de Gestão Pastoral")
     
-    # --- ALERTA DE ANIVERSÁRIO DO DIA ---
+    # Alerta de Aniversário do Dia
     aniversariantes_agora = obter_aniversariantes_hoje(df_cat, df_usuarios)
     if aniversariantes_agora:
-        for msg in aniversariantes_agora:
+        for msg in aniversariantes_agora: 
             st.success(f"🎂 **HOJE É ANIVERSÁRIO!** {msg}")
             st.balloons()
 
     if df_cat.empty:
         st.info("👋 Bem-vindo! Comece cadastrando turmas e catequizandos.")
     else:
-        # --- SEÇÃO 1: MÉTRICAS PRINCIPAIS ---
+        # --- MÉTRICAS PRINCIPAIS ---
         m1, m2, m3, m4 = st.columns(4)
         total_cat = len(df_cat)
         ativos = len(df_cat[df_cat['status'] == 'ATIVO'])
@@ -259,105 +259,85 @@ if menu == "🏠 Início / Dashboard":
 
         st.divider()
 
-        # --- SEÇÃO 2: DESEMPENHO ---
-        st.subheader("📈 Desempenho e Frequência")
-        freq_global = 0.0
-        temas_vistos = []
-
-        if df_pres.empty:
-            st.info("Ainda não há registros de presença.")
-        else:
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                df_pres['status_num'] = df_pres['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
-                freq_turma = df_pres.groupby('id_turma')['status_num'].mean() * 100
-                freq_turma = freq_turma.reset_index().rename(columns={'status_num': 'Frequência %', 'id_turma': 'Turma'})
-                
-                fig = px.bar(freq_turma, x='Turma', y='Frequência %', color='Frequência %', color_continuous_scale=['#e03d11', '#ccd628', '#417b99'])
-                fig.update_layout(font=dict(color="#000000"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig, use_container_width=True)
-            with c2:
-                total_encontros = df_pres['data_encontro'].nunique()
-                freq_global = df_pres['status_num'].mean() * 100
-                temas_vistos = df_pres['tema_do_dia'].unique().tolist()
-                st.metric("Encontros Realizados", total_encontros)
-                st.write(f"**Frequência Global:** {freq_global:.1f}%")
-                st.progress(freq_global / 100)
-
-        st.divider()
-
-        # --- SEÇÃO 3: ALERTAS E ANIVERSARIANTES ---
-        col_niver, col_evasao = st.columns(2)
-        with col_niver:
-            st.subheader("🎂 Aniversariantes do Mês")
-            df_niver_unificado = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
-            if not df_niver_unificado.empty:
-                for _, niver in df_niver_unificado.iterrows():
-                    icone = "🛡️" if niver['tipo'] == 'CATEQUISTA' else "🎁"
-                    st.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']} ({niver['info']})")
-            else: st.write("Nenhum aniversariante este mês.")
-
-        with col_evasao:
-            st.subheader("🚨 Alerta de Evasão")
-            if not df_pres.empty:
-                faltas = df_pres[df_pres['status'] == 'AUSENTE'].groupby('nome_catequizando').size().reset_index(name='total_faltas')
-                evasao = faltas[faltas['total_faltas'] >= 2].sort_values(by='total_faltas', ascending=False)
-                if not evasao.empty:
-                    st.warning(f"Existem {len(evasao)} catequizandos com 2 ou mais faltas!")
-                    st.dataframe(evasao, use_container_width=True, hide_index=True)
-                else: st.success("Nenhum alerta de evasão no momento.")
-
         # --- SEÇÃO IA E RELATÓRIOS OFICIAIS ---
-        st.divider()
         st.subheader("🤖 Auditoria Pastoral e Documentação")
         c_ia, c_pdf = st.columns([2, 1])
         
         with c_ia:
             if st.button("✨ Gerar Auditoria Pastoral Inteligente"):
                 with st.spinner("O Auditor IA está analisando os dados..."):
-                    resumo_para_ia = f"Total: {total_cat}, Freq: {freq_global:.1f}%, Temas: {temas_vistos}"
+                    resumo_para_ia = f"Total: {total_cat}, Turmas: {total_t}, Equipe: {total_equipe}"
                     st.session_state.analise_dashboard = gerar_analise_pastoral(resumo_para_ia)
             if "analise_dashboard" in st.session_state:
-                st.info("Auditoria concluída! Utilize os botões ao lado para exportar o PDF oficial.")
+                st.info("Auditoria concluída! Utilize os botões ao lado para exportar os documentos oficiais.")
         
         with c_pdf:
             st.write("📄 **Exportar Documentos Oficiais**")
+            
+            # --- GERAÇÃO DO RELATÓRIO DIOCESANO V2 ---
             if st.button("🏛️ Gerar Relatório Diocesano"):
-                with st.spinner("Preparando Censo..."):
+                with st.spinner("Processando Censo e Sacramentos..."):
+                    # 1. Censo Segmentado
                     df_kids = df_cat[df_cat['estado_civil_pais_ou_proprio'] == 'N/A']
                     df_adults = df_cat[df_cat['estado_civil_pais_ou_proprio'] != 'N/A']
-                    dados_g = {'total_cat': total_cat, 'total_kids': len(df_kids), 'total_adults': len(df_adults), 'total_turmas': total_t, 'total_equipe': total_equipe}
+                    censo = {'total': total_cat, 'kids': len(df_kids), 'adults': len(df_adults)}
                     
-                    bat_sim = len(df_cat[df_cat['batizado_sn'] == 'SIM'])
-                    euca_sim = df_cat['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-                    cris_sim = df_cat['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
-                    sac_stats = {'batismos': bat_sim, 'eucaristias': euca_sim, 'crismas': cris_sim}
+                    # 2. Sacramentos do Ano Vigente
+                    ano_atual = date.today().year
+                    df_rec = ler_aba("sacramentos_recebidos")
+                    sac_stats = {'bat_k': 0, 'bat_a': 0, 'euca_k': 0, 'euca_a': 0, 'crisma_a': 0}
                     
-                    proj_list = []
-                    if not df_sac_eventos.empty:
-                        df_sac_eventos['data_dt'] = pd.to_datetime(df_sac_eventos['data'], errors='coerce').dt.date
-                        futuros = df_sac_eventos[df_sac_eventos['data_dt'] > date.today()]
-                        for _, f in futuros.iterrows(): proj_list.append(f"{f['tipo_sacramento']} agendado para {f['data']} (Turmas: {f['turmas_envolvidas']})")
-                    
-                    turmas_list = []
-                    for _, t in df_turmas.iterrows():
-                        qtd = len(df_cat[df_cat['etapa'] == t['nome_turma']])
-                        publico = "ADULTOS" if "ADULTO" in str(t['etapa']).upper() else "INFANTIL/JUVENIL"
-                        turmas_list.append({'nome': t['nome_turma'], 'publico': publico, 'dias': t.get('dias_semana', 'N/A'), 'qtd_alunos': qtd})
-                    
-                    resumo_censo = f"Censo: {dados_g}. Sacramentos: {sac_stats}. Projeções: {proj_list}"
-                    analise_tecnica = gerar_analise_pastoral(resumo_censo) 
-                    st.session_state.pdf_diocesano = gerar_relatorio_diocesano_pdf(dados_g, turmas_list, sac_stats, proj_list, analise_tecnica)
+                    if not df_rec.empty:
+                        df_rec['ano'] = pd.to_datetime(df_rec['data_recebimento'], errors='coerce').dt.year
+                        df_ano = df_rec[df_rec['ano'] == ano_atual]
+                        
+                        ids_k = df_kids['id_catequizando'].tolist()
+                        ids_a = df_adults['id_catequizando'].tolist()
+                        
+                        sac_stats['bat_k'] = len(df_ano[(df_ano['tipo_sacramento'] == 'BATISMO') & (df_ano['id_catequizando'].isin(ids_k))])
+                        sac_stats['bat_a'] = len(df_ano[(df_ano['tipo_sacramento'] == 'BATISMO') & (df_ano['id_catequizando'].isin(ids_a))])
+                        sac_stats['euca_k'] = len(df_ano[(df_ano['tipo_sacramento'] == 'EUCARISTIA') & (df_ano['id_catequizando'].isin(ids_k))])
+                        sac_stats['euca_a'] = len(df_ano[(df_ano['tipo_sacramento'] == 'EUCARISTIA') & (df_ano['id_catequizando'].isin(ids_a))])
+                        sac_stats['crisma_a'] = len(df_ano[(df_ano['tipo_sacramento'] == 'CRISMA') & (df_ano['id_catequizando'].isin(ids_a))])
+
+                    # 3. Status da Equipe
+                    equipe_stats = {'total': total_equipe, 'bat': 0, 'cris': 0, 'apto': 0, 'min': 0}
+                    for _, row in equipe_tecnica.iterrows():
+                        if str(row.get('data_batismo','')) not in ["None", "", "N/A"]: equipe_stats['bat'] += 1
+                        if str(row.get('data_crisma','')) not in ["None", "", "N/A"]: equipe_stats['cris'] += 1
+                        if str(row.get('data_ministerio','')) not in ["None", "", "N/A"]: equipe_stats['min'] += 1
+                        
+                        status, _ = verificar_status_ministerial(
+                            str(row.get('data_inicio_catequese','')), str(row.get('data_batismo','')),
+                            str(row.get('data_eucaristia','')), str(row.get('data_crisma','')),
+                            str(row.get('data_ministerio',''))
+                        )
+                        if status in ["APTO", "MINISTRO"]: equipe_stats['apto'] += 1
+
+                    analise_ia = st.session_state.get("analise_dashboard", "Análise técnica pendente.")
+                    st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v2(censo, sac_stats, equipe_stats, analise_ia)
             
             if "pdf_diocesano" in st.session_state:
                 st.download_button("📥 Baixar Relatório Diocesano", st.session_state.pdf_diocesano, "Relatorio_Diocesano.pdf", "application/pdf")
 
+            # --- GERAÇÃO DO RELATÓRIO PASTORAL V2 ---
             if st.button("📋 Gerar Relatório Pastoral"):
-                if "analise_dashboard" in st.session_state:
-                    with st.spinner("Preparando Relatório Pastoral..."):
-                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_interno_pdf({}, st.session_state.analise_dashboard)
-                else:
-                    st.warning("Gere a análise da IA primeiro.")
+                with st.spinner("Mapeando Logística das Turmas..."):
+                    turmas_list = []
+                    for _, t in df_turmas.iterrows():
+                        alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']]
+                        turmas_list.append({
+                            'nome': t['nome_turma'],
+                            'catequistas': t['catequista_responsavel'],
+                            'local': t.get('local', 'N/A'),
+                            'dia': t.get('dias_semana', 'N/A'),
+                            'total': len(alunos_t),
+                            'batizados': len(alunos_t[alunos_t['batizado_sn'] == 'SIM']),
+                            'eucaristia': alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
+                        })
+                    
+                    analise_ia = st.session_state.get("analise_dashboard", "Análise pastoral pendente.")
+                    st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v2(turmas_list, analise_ia)
             
             if "pdf_pastoral" in st.session_state:
                 st.download_button("📥 Baixar Relatório Pastoral", st.session_state.pdf_pastoral, "Relatorio_Pastoral_Interno.pdf", "application/pdf")
