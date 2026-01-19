@@ -1,5 +1,5 @@
 # ARQUIVO: utils.py
-# VERSÃO: Corrigida (Restauração de gerar_pdf_perfil_turma + Lote + LGPD)
+# VERSÃO: Corrigida (Fim da sobreposição no cabeçalho + Restauração Total)
 from datetime import date, datetime
 import pandas as pd
 from fpdf import FPDF
@@ -65,7 +65,8 @@ def marcar_opcao(pdf, texto, condicao, x, y):
 # 2. CABEÇALHO OFICIAL DIOCESANO
 # ==========================================
 
-def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
+def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
+    """Desenha o topo oficial. A caixa de título só aparece se 'titulo' for informado."""
     if os.path.exists("logo.png"):
         pdf.image("logo.png", 10, 15, 22)
     
@@ -79,44 +80,52 @@ def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
     pdf.set_font("helvetica", "B", 11); pdf.set_text_color(65, 123, 153)
     pdf.cell(100, 5, limpar_texto("Paróquia: Nossa Senhora de Fátima"), ln=True)
     
-    pdf.ln(12) 
-    y_topo = pdf.get_y()
-    pdf.set_fill_color(245, 245, 245)
-    pdf.rect(10, y_topo, 190, 15, 'F')
-    pdf.rect(10, y_topo, 190, 15)
-    pdf.set_xy(10, y_topo + 4)
-    pdf.set_font("helvetica", "B", 12); pdf.set_text_color(65, 123, 153)
-    pdf.cell(190, 7, limpar_texto(titulo), align='C')
-    pdf.ln(15)
+    pdf.ln(10)
+    
+    # Só desenha a caixa de título se houver um título (Evita sobreposição na Ficha)
+    if titulo:
+        y_topo = pdf.get_y()
+        pdf.set_fill_color(245, 245, 245)
+        pdf.rect(10, y_topo, 190, 15, 'F')
+        pdf.rect(10, y_topo, 190, 15)
+        pdf.set_xy(10, y_topo + 4)
+        pdf.set_font("helvetica", "B", 12); pdf.set_text_color(65, 123, 153)
+        pdf.cell(190, 7, limpar_texto(titulo), align='C')
+        pdf.ln(18)
+    else:
+        pdf.ln(5)
 
 # ==========================================
 # 3. GERADOR DE FICHAS (INDIVIDUAL E LOTE)
 # ==========================================
 
 def _desenhar_corpo_ficha(pdf, dados):
-    """Lógica central de desenho da ficha, usada para individual e lote."""
+    """Lógica central de desenho da ficha com coordenadas dinâmicas."""
+    y_base = pdf.get_y() # Pega a posição atual após o cabeçalho
+    
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_menor = idade_real < 18
     est_civil_raw = str(dados.get('estado_civil_pais_ou_proprio', 'N/A')).upper()
     is_adulto_cadastro = est_civil_raw != "N/A"
     
-    # Cabeçalho específico da ficha de inscrição
+    # Bloco de Etapa/Turma
     pdf.set_fill_color(245, 245, 245)
-    pdf.rect(10, 42, 105, 20, 'F')
-    pdf.rect(10, 42, 105, 20)
-    pdf.set_xy(12, 46)
+    pdf.rect(10, y_base, 105, 20, 'F')
+    pdf.rect(10, y_base, 105, 20)
+    pdf.set_xy(12, y_base + 4)
     pdf.set_font("helvetica", "B", 12); pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(100, 6, limpar_texto("Ficha de Inscrição da Catequese com Inspiração Catecumenal"))
     
-    pdf.set_xy(115, 42)
+    pdf.set_xy(115, y_base)
     pdf.cell(30, 20, limpar_texto(f"Ano: {date.today().year}"), border=1, align='C')
     
-    pdf.set_xy(145, 42)
+    pdf.set_xy(145, y_base)
     pdf.set_font("helvetica", "B", 7)
     etapa_txt = str(dados.get('etapa', ''))
     pdf.multi_cell(55, 10, limpar_texto(f"Etapa: {etapa_txt}\nTurma: {etapa_txt}"), border=1, align='L')
     
-    pdf.set_xy(10, 65)
+    y_next = y_base + 23
+    pdf.set_xy(10, y_next)
     pdf.set_font("helvetica", "B", 10)
     turno = str(dados.get('turno', '')).upper()
     mark_m = "X" if "MANHÃ" in turno or "M" == turno else " "
@@ -202,13 +211,18 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_xy(110, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
 
 def gerar_ficha_cadastral_catequizando(dados):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "FICHA DE INSCRIÇÃO"); _desenhar_corpo_ficha(pdf, dados); return finalizar_pdf(pdf)
+    pdf = FPDF(); pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, titulo="") # Título vazio para evitar sobreposição
+    _desenhar_corpo_ficha(pdf, dados)
+    return finalizar_pdf(pdf)
 
 def gerar_fichas_turma_completa(nome_turma, df_alunos):
     if df_alunos.empty: return None
     pdf = FPDF()
     for _, row in df_alunos.iterrows():
-        pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "FICHA DE INSCRIÇÃO"); _desenhar_corpo_ficha(pdf, row.to_dict())
+        pdf.add_page()
+        adicionar_cabecalho_diocesano(pdf, titulo="") # Título vazio para evitar sobreposição
+        _desenhar_corpo_ficha(pdf, row.to_dict())
     return finalizar_pdf(pdf)
 
 # ==========================================
@@ -254,7 +268,8 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
     return finalizar_pdf(pdf)
 
 def gerar_ficha_catequista_pdf(dados, df_formacoes):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "FICHA DO CATEQUISTA", etapa="EQUIPE")
+    pdf = FPDF(); pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "FICHA DO CATEQUISTA", etapa="EQUIPE")
     y = pdf.get_y() + 5
     desenhar_campo_box(pdf, "Nome:", dados.get('nome', ''), 10, y, 135)
     desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 150, y, 45)
@@ -264,19 +279,25 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     return finalizar_pdf(pdf)
 
 def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, f"PERFIL DA TURMA: {nome_turma}", etapa=nome_turma)
+    pdf = FPDF(); pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, f"PERFIL DA TURMA: {nome_turma}", etapa=nome_turma)
     pdf.ln(10); pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 6, limpar_texto(analise_ia)); return finalizar_pdf(pdf)
+    pdf.multi_cell(0, 6, limpar_texto(analise_ia))
+    return finalizar_pdf(pdf)
 
 def gerar_relatorio_diocesano_pdf(dados_g, turmas_list, sac_stats, proj_list, analise_tecnica):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO DIOCESANO", etapa="DIOCESANO")
+    pdf = FPDF(); pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO DIOCESANO", etapa="DIOCESANO")
     pdf.ln(10); pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 6, limpar_texto(analise_tecnica)); return finalizar_pdf(pdf)
+    pdf.multi_cell(0, 6, limpar_texto(analise_tecnica))
+    return finalizar_pdf(pdf)
 
 def gerar_relatorio_pastoral_interno_pdf(dados, analise_ia):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL INTERNO", etapa="PASTORAL")
+    pdf = FPDF(); pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL INTERNO", etapa="PASTORAL")
     pdf.ln(10); pdf.set_font("helvetica", "", 11); pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 7, limpar_texto(analise_ia)); return finalizar_pdf(pdf)
+    pdf.multi_cell(0, 7, limpar_texto(analise_ia))
+    return finalizar_pdf(pdf)
 
 # ==========================================
 # 5. FUNÇÕES DE CENSO E UTILITÁRIOS
