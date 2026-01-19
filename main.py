@@ -106,7 +106,7 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo
 )
-f# --- NO main.py: SUBSTITUA O BLOCO DE IMPORTAÇÃO DO UTILS ---
+# --- NO main.py: SUBSTITUA O BLOCO DE IMPORTAÇÃO DO UTILS ---
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
     obter_aniversariantes_mes, converter_para_data, verificar_status_ministerial, 
