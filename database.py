@@ -231,3 +231,13 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
                 return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
+
+def salvar_encontro(dados_encontro):
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("encontros")
+            aba.append_row(dados_encontro)
+            st.cache_data.clear(); return True
+        except Exception as e: st.error(f"Erro: {e}")
+    return False
