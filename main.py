@@ -124,7 +124,7 @@ from utils import (
     gerar_relatorio_sacramentos_tecnico_pdf, 
     formatar_data_br,
     gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_pdf
+    gerar_relatorio_local_turma_v2
 )
 from ai_engine import (
     gerar_analise_pastoral, 
@@ -887,12 +887,13 @@ elif menu == "🏫 Gestão de Turmas":
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
         if not df_turmas.empty:
-            t_alvo = st.selectbox("Selecione a turma para análise profunda:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v6")
+            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v_final")
             
             # --- FILTRAGEM DE DADOS ---
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
             info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
             pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
+            df_recebidos = ler_aba("sacramentos_recebidos") # Para pegar as datas reais
             
             if not alunos_t.empty:
                 # 1. CÁLCULOS DE MÉTRICAS
@@ -901,18 +902,32 @@ elif menu == "🏫 Gestão de Turmas":
                 
                 # Frequência Global e Mensal
                 freq_global = 0.0
-                df_freq_mensal = pd.DataFrame()
+                lista_freq_mensal = []
                 if not pres_t.empty:
                     pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
                     freq_global = round(pres_t['status_num'].mean() * 100, 1)
                     
-                    # Taxa de presença por mês
-                    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True)
-                    pres_t['mes'] = pres_t['data_dt'].dt.strftime('%m/%Y')
-                    df_freq_mensal = (pres_t.groupby('mes')['status_num'].mean() * 100).reset_index()
-                    df_freq_mensal.columns = ['Mês', 'Presença %']
+                    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
+                    pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
+                    mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
+                    for mes, taxa in mensal.items():
+                        lista_freq_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
 
-                # 2. EXIBIÇÃO DE MÉTRICAS (CARDS)
+                # 2. LISTAS NOMINAIS (EVASÃO E GERAL)
+                lista_geral_status = []
+                for _, r in alunos_t.iterrows():
+                    faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                    lista_geral_status.append({'nome': r['nome_completo'], 'faltas': faltas})
+
+                # 3. SACRAMENTOS COM DATA (CRUZAMENTO COM EVENTOS)
+                lista_sac_com_data = []
+                if not df_recebidos.empty:
+                    ids_turma = alunos_t['id_catequizando'].tolist()
+                    sac_turma = df_recebidos[df_recebidos['id_catequizando'].isin(ids_turma)]
+                    for _, s in sac_turma.iterrows():
+                        lista_sac_com_data.append({'nome': s['nome'], 'tipo': s['tipo'], 'data': s['data']})
+
+                # --- INTERFACE VISUAL ---
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Catequistas", qtd_catequistas)
                 m2.metric("Catequizandos", qtd_cat)
@@ -923,81 +938,41 @@ elif menu == "🏫 Gestão de Turmas":
                 m4.metric("Idade Média", f"{idade_media} anos")
 
                 st.divider()
-
-                # 3. ANÁLISE DE FREQUÊNCIA E EVASÃO
-                c_freq, c_evasao = st.columns([2, 1])
-                with c_freq:
-                    st.markdown("**📈 Evolução da Presença por Mês**")
-                    if not df_freq_mensal.empty:
-                        st.line_chart(df_freq_mensal.set_index('Mês'))
-                    else: st.info("Dados insuficientes para gráfico mensal.")
-
-                with c_evasao:
-                    st.markdown("**🚨 Alerta de Evasão (2+ Faltas)**")
-                    lista_evasao = []
-                    if not pres_t.empty:
-                        faltas = pres_t[pres_t['status'] == 'AUSENTE'].groupby('nome_catequizando').size().reset_index(name='total')
-                        evasao_t = faltas[faltas['total'] >= 2]
-                        if not evasao_t.empty:
-                            st.dataframe(evasao_t, hide_index=True, use_container_width=True)
-                            for _, ev in evasao_t.iterrows():
-                                lista_evasao.append({'nome': ev['nome_catequizando'], 'faltas': ev['total']})
-                        else: st.success("Nenhum alerta crítico.")
-
-                st.divider()
-
-                # 4. LISTAS NOMINAIS SACRAMENTAIS
-                st.markdown("### 🕊️ Situação Sacramental Nominal")
-                col_bat, col_euca, col_cris = st.columns(3)
                 
-                with col_bat:
-                    st.markdown("**💧 Batizados**")
-                    batizados = alunos_t[alunos_t['batizado_sn'] == 'SIM']
-                    st.dataframe(batizados[['nome_completo']], hide_index=True, use_container_width=True)
-                
-                with col_euca:
-                    st.markdown("**🍞 Eucaristia**")
-                    euca = alunos_t[alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False)]
-                    st.dataframe(euca[['nome_completo']], hide_index=True, use_container_width=True)
+                # --- BOTÃO DE GERAÇÃO ---
+                if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True):
+                    with st.spinner("O Auditor IA está analisando a turma..."):
+                        # IA específica para a turma
+                        resumo_ia = f"Turma {t_alvo}: {qtd_cat} alunos. Freq: {freq_global}%. Sacramentos realizados: {len(lista_sac_com_data)}."
+                        parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
+                        
+                        metricas_pdf = {
+                            'qtd_catequistas': qtd_catequistas, 'qtd_cat': qtd_cat, 
+                            'freq_global': freq_global, 'idade_media': idade_media,
+                            'freq_mensal': lista_freq_mensal
+                        }
+                        listas_pdf = {
+                            'geral': lista_geral_status,
+                            'sac_recebidos': lista_sac_com_data
+                        }
+                        
+                        st.session_state[f"pdf_local_v2_{t_alvo}"] = gerar_relatorio_local_turma_v2(
+                            t_alvo, metricas_pdf, listas_pdf, parecer_ia
+                        )
+                        st.rerun()
 
-                with col_cris:
-                    st.markdown("**🔥 Crisma**")
-                    crisma = alunos_t[alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False)]
-                    st.dataframe(crisma[['nome_completo']], hide_index=True, use_container_width=True)
-
-                # 5. BOTÕES DE RELATÓRIO E IA
-                st.divider()
-                col_btn1, col_btn2 = st.columns(2)
-                
-                with col_btn1:
-                    if st.button("📄 GERAR RELATÓRIO PASTORAL DA TURMA", use_container_width=True):
-                        with st.spinner("Compilando dados..."):
-                            # Preparar listas para o PDF
-                            listas_pdf = {
-                                'sacramentos': [{'nome': r['nome_completo'], 'info': r['sacramentos_ja_feitos']} for _, r in alunos_t.iterrows()],
-                                'evasao': lista_evasao
-                            }
-                            metricas_pdf = {
-                                'qtd_catequistas': qtd_catequistas, 'qtd_cat': qtd_cat, 
-                                'freq_global': freq_global, 'idade_media': idade_media
-                            }
-                            # IA para o parecer do PDF
-                            resumo_ia = f"Turma {t_alvo}: {qtd_cat} alunos, {freq_global}% freq. Batizados: {len(batizados)}."
-                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
-                            
-                            st.session_state[f"pdf_local_{t_alvo}"] = gerar_relatorio_local_turma_pdf(t_alvo, metricas_pdf, listas_pdf, parecer_ia)
-                            st.rerun()
-
-                if f"pdf_local_{t_alvo}" in st.session_state:
+                if f"pdf_local_v2_{t_alvo}" in st.session_state:
                     st.download_button(
-                        label=f"📥 BAIXAR RELATÓRIO: {t_alvo}",
-                        data=st.session_state[f"pdf_local_{t_alvo}"],
-                        file_name=f"Relatorio_Pastoral_{t_alvo.replace(' ', '_')}.pdf",
+                        label=f"📥 BAIXAR AUDITORIA COMPLETA: {t_alvo}",
+                        data=st.session_state[f"pdf_local_v2_{t_alvo}"],
+                        file_name=f"Auditoria_{t_alvo.replace(' ', '_')}.pdf",
                         mime="application/pdf",
                         use_container_width=True
                     )
-            else:
-                st.info("Selecione uma turma com catequizandos ativos.")
+
+                # --- EXIBIÇÃO NA TELA (PREVIEW) ---
+                st.markdown("### 📋 Preview Nominal")
+                st.dataframe(pd.DataFrame(lista_geral_status), use_container_width=True, hide_index=True)
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
