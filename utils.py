@@ -9,6 +9,7 @@ import pandas as pd
 from fpdf import FPDF
 import os
 import re
+import streamlit as st
 
 # ==============================================================================
 # 1. FUNÇÕES DE APOIO, FORMATAÇÃO E TRATAMENTO DE DADOS
@@ -372,12 +373,12 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
 # ==============================================================================
 
 def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
-    """Gera ficha de visitação com o relato pastoral preenchido pelo sistema."""
+    """Gera ficha de visitação com o relato pastoral preenchido."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "FICHA DE VISITAÇÃO PASTORAL / FAMILIAR")
     
-    # 1. NÚCLEO FAMILIAR
+    # 1. DADOS DOS PAIS (Mesma lógica anterior)
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("1. NÚCLEO FAMILIAR (PAIS E RESPONSÁVEIS)"), ln=True, fill=True)
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
@@ -387,32 +388,33 @@ def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
     desenhar_campo_box(pdf, "Pai:", dados_familia.get('nome_pai', 'N/A'), 10, y, 110)
     desenhar_campo_box(pdf, "Profissão/Tel:", f"{dados_familia.get('profissao_pai','')} / {dados_familia.get('tel_pai','')}", 125, y, 75)
     y += 14
-    desenhar_campo_box(pdf, "Estado Civil dos Pais:", dados_familia.get('est_civil_pais', 'N/A'), 10, y, 90)
-    desenhar_campo_box(pdf, "Sacramentos dos Pais:", dados_familia.get('sac_pais', 'N/A'), 105, y, 95)
+    desenhar_campo_box(pdf, "Estado Civil:", dados_familia.get('est_civil_pais', 'N/A'), 10, y, 90)
+    desenhar_campo_box(pdf, "Sacramentos:", dados_familia.get('sac_pais', 'N/A'), 105, y, 95)
     
-    # 2. FILHOS
+    # 2. FILHOS (Mesma lógica anterior)
     pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 7, limpar_texto("2. FILHOS MATRICULADOS NA CATEQUESE"), ln=True, fill=True)
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
-    pdf.cell(80, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(60, 7, "Turma / Etapa Atual", border=1, fill=True); pdf.cell(50, 7, "Status", border=1, fill=True, align='C'); pdf.ln()
+    pdf.cell(80, 7, "Nome", border=1, fill=True); pdf.cell(60, 7, "Turma", border=1, fill=True); pdf.cell(50, 7, "Status", border=1, fill=True, align='C'); pdf.ln()
     pdf.set_font("helvetica", "", 9)
     for f in filhos_lista:
         pdf.cell(80, 7, limpar_texto(f['nome']), border=1); pdf.cell(60, 7, limpar_texto(f['etapa']), border=1); pdf.cell(50, 7, limpar_texto(f['status']), border=1, align='C'); pdf.ln()
     
-    # 3. RELATO PASTORAL (Onde o texto entra)
+    # 3. RELATO PASTORAL (Onde o seu texto aparece!)
     pdf.ln(10); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, "Relato da Visita e Necessidades da Família:", ln=True)
     
-    # Texto vindo do banco de dados
-    relato_texto = dados_familia.get('obs_pastoral_familia', 'Nenhum relato registrado até o momento.')
-    if relato_texto == "N/A" or not relato_texto: relato_texto = "Espaço reservado para anotações de visita."
-    
+    # Pega o texto que você digitou na tela
+    relato_texto = dados_familia.get('obs_pastoral_familia', 'Nenhum relato registrado.')
+    if not relato_texto or relato_texto == "N/A": 
+        relato_texto = "Espaço reservado para anotações de visita domiciliar."
+
     pdf.set_font("helvetica", "", 10); pdf.set_fill_color(248, 249, 240)
-    # Multi_cell para o texto quebrar linha automaticamente dentro do box
+    # O multi_cell faz o texto quebrar linha sozinho dentro do box
     pdf.multi_cell(190, 6, limpar_texto(relato_texto), border=1, fill=True)
     
     pdf.ln(10); pdf.set_font("helvetica", "I", 8)
-    pdf.multi_cell(0, 4, "Este documento contém dados sensíveis. O manuseio deve ser restrito à coordenação paroquial para fins de acompanhamento pastoral.")
+    pdf.multi_cell(0, 4, "Documento de uso interno paroquial. Protegido pela LGPD.")
     return finalizar_pdf(pdf)
 
 # ==============================================================================
@@ -956,6 +958,26 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, "Assinatura Coordenador", align='C')
 
     return finalizar_pdf(pdf)
+
+def exibir_tela_manutencao():
+    """Interface estilizada para bloqueio de manutenção."""
+    st.markdown("""
+        <style>
+        .main { background-color: #f8f9f0; }
+        </style>
+        <div style='text-align: center; padding: 50px; font-family: "Helvetica", sans-serif;'>
+            <h1 style='color: #417b99; font-size: 80px;'>✝️</h1>
+            <h2 style='color: #e03d11;'>Ajustes Pastorais em Andamento</h2>
+            <p style='color: #333; font-size: 18px;'>
+                O sistema <b>Catequese Fátima</b> está passando por uma atualização técnica 
+                para melhor servir à nossa comunidade.<br><br>
+                <i>"Tudo o que fizerdes, fazei-o de bom coração, como para o Senhor." (Col 3,23)</i>
+            </p>
+            <div style='margin-top: 30px; padding: 20px; border: 1px solid #417b99; border-radius: 10px; display: inline-block;'>
+                <span style='color: #417b99; font-weight: bold;'>Previsão de Retorno:</span> Breve
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
 # ==============================================================================
 # 8. ALIASES DE COMPATIBILIDADE (NÃO REMOVER)
