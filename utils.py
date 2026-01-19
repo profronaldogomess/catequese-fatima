@@ -838,6 +838,59 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
             
     return finalizar_pdf(pdf)
 
+def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
+    """Gera um PDF único com as fichas de todos os catequistas, incluindo histórico de formações."""
+    if df_equipe.empty: return None
+    pdf = FPDF()
+    for _, u in df_equipe.iterrows():
+        # Busca histórico de formações específico deste catequista
+        forms_participadas = pd.DataFrame()
+        if not df_pres_form.empty and not df_formacoes.empty:
+            minhas_forms = df_pres_form[df_pres_form['email_participante'] == u['email']]
+            if not minhas_forms.empty:
+                forms_participadas = minhas_forms.merge(df_formacoes, on='id_formacao', how='inner')
+        
+        pdf.add_page()
+        adicionar_cabecalho_diocesano(pdf, titulo="FICHA DO CATEQUISTA", etapa="EQUIPE")
+        
+        # --- SEÇÃO 1: DADOS PESSOAIS ---
+        pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+        pdf.cell(0, 7, limpar_texto("1. DADOS PESSOAIS E CONTATO"), ln=True, fill=True, align='C')
+        pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
+        desenhar_campo_box(pdf, "Nome Completo:", u.get('nome', ''), 10, y, 135)
+        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', '')), 150, y, 45)
+        y += 14
+        desenhar_campo_box(pdf, "E-mail:", u.get('email', ''), 10, y, 110)
+        desenhar_campo_box(pdf, "Telefone:", u.get('telefone', ''), 125, y, 75)
+        
+        # --- SEÇÃO 2: VIDA MINISTERIAL ---
+        pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 7, limpar_texto("2. VIDA MINISTERIAL E SACRAMENTAL"), ln=True, fill=True, align='C')
+        pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
+        desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(u.get('data_inicio_catequese', '')), 10, y, 45)
+        desenhar_campo_box(pdf, "Batismo:", formatar_data_br(u.get('data_batismo', '')), 58, y, 45)
+        desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(u.get('data_eucaristia', '')), 106, y, 45)
+        desenhar_campo_box(pdf, "Crisma:", formatar_data_br(u.get('data_crisma', '')), 154, y, 46)
+        
+        # --- SEÇÃO 3: HISTÓRICO DE FORMAÇÕES ---
+        pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 7, limpar_texto("3. HISTÓRICO DE FORMAÇÃO CONTINUADA"), ln=True, fill=True, align='C')
+        pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+        pdf.cell(30, 7, "Data", border=1, fill=True, align='C'); pdf.cell(100, 7, "Tema", border=1, fill=True); pdf.cell(60, 7, "Formador", border=1, fill=True); pdf.ln()
+        pdf.set_font("helvetica", "", 8)
+        if not forms_participadas.empty:
+            for _, f in forms_participadas.iterrows():
+                pdf.cell(30, 6, formatar_data_br(f['data']), border=1, align='C')
+                pdf.cell(100, 6, limpar_texto(f['tema']), border=1)
+                pdf.cell(60, 6, limpar_texto(f['formador']), border=1); pdf.ln()
+        else:
+            pdf.cell(190, 6, "Nenhuma formação registrada.", border=1, align='C', ln=True)
+            
+        pdf.ln(10); y_ass = pdf.get_y(); pdf.line(15, y_ass, 95, y_ass); pdf.line(115, y_ass, 195, y_ass)
+        pdf.set_xy(15, y_ass + 1); pdf.set_font("helvetica", "B", 8); pdf.cell(80, 5, "Assinatura Catequista", align='C')
+        pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, "Assinatura Coordenador", align='C')
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 8. ALIASES DE COMPATIBILIDADE (NÃO REMOVER)
 # ==============================================================================
