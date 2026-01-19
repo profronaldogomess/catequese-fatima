@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 3.7.0 - MASTER ABSOLUTO (INTEGRIDADE TOTAL)
+# VERSÃO: 3.8.0 - MASTER ABSOLUTO (INTEGRIDADE TOTAL + TERMO DE SAÍDA)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
@@ -577,6 +577,99 @@ def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
     pdf.multi_cell(0, 4, "Este documento contém dados sensíveis. O manuseio deve ser restrito à coordenação paroquial para fins de acompanhamento pastoral.")
     return finalizar_pdf(pdf)
 
+# --- NOVO MOTOR: TERMO DE AUTORIZAÇÃO DE SAÍDA (LAYOUT PADRONIZADO) ---
+def gerar_termo_saida_pdf(dados_cat, dados_turma):
+    """Gera o Termo de Autorização de Saída conforme modelo paroquial."""
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "TERMO DE AUTORIZAÇÃO PARA SAÍDA")
+    
+    # Fundo Creme para o corpo do termo
+    pdf.set_fill_color(248, 249, 240)
+    pdf.rect(10, 45, 190, 230, 'F')
+    
+    pdf.set_xy(10, 50)
+    pdf.set_font("helvetica", "B", 12)
+    pdf.set_text_color(65, 123, 153) # Azul Paroquial
+    pdf.cell(190, 10, limpar_texto("AUTORIZAÇÃO PARA SAÍDA SEM O RESPONSÁVEL"), ln=True, align='C')
+    
+    pdf.ln(5)
+    pdf.set_font("helvetica", "", 11)
+    pdf.set_text_color(0, 0, 0)
+    
+    # Texto do Termo com preenchimento automático
+    nome_resp = dados_cat.get('nome_mae', '') if dados_cat.get('nome_mae') else dados_cat.get('nome_pai', '__________________________')
+    nome_cat = dados_cat.get('nome_completo', '__________________________')
+    etapa = dados_cat.get('etapa', '__________')
+    catequistas = dados_turma.get('catequista_responsavel', '__________________________')
+    endereco = dados_cat.get('endereco_completo', '__________________________')
+    
+    texto_corpo = (
+        f"Eu, {nome_resp}, na condição de responsável legal pelo(a) "
+        f"catequizando(a) {nome_cat}, inscrita(o) na {etapa}, com os/as "
+        f"catequistas {catequistas}, autorizo a sua saída sozinho(a), no horário de encerramento "
+        f"do encontro. Ciente que, assumo quaisquer riscos que possam ocorrer do trajeto "
+        f"da Paróquia até a residência em: {endereco}."
+    )
+    
+    pdf.set_x(15)
+    pdf.multi_cell(180, 8, limpar_texto(texto_corpo), align='J')
+    
+    pdf.ln(10)
+    data_hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).strftime('%d de %B de %Y')
+    # Tradução simples de mês para PT-BR (opcional, mas recomendado)
+    pdf.set_x(15)
+    pdf.cell(0, 10, limpar_texto(f"Itabuna (BA), {data_hoje}."), ln=True)
+    
+    # Assinatura 1
+    pdf.ln(15)
+    y_ass = pdf.get_y()
+    pdf.line(55, y_ass, 155, y_ass)
+    pdf.set_xy(55, y_ass + 1)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(100, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
+    
+    # Box de Observação (Destaque em Vermelho)
+    pdf.ln(10)
+    pdf.set_x(15)
+    pdf.set_fill_color(255, 240, 240) # Fundo levemente avermelhado
+    pdf.set_draw_color(224, 61, 17) # Borda Vermelha
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_text_color(224, 61, 17)
+    obs_texto = (
+        "Obs.: Lembramos que o (a) catequizando (a) que não tiver o termo de autorização de saída preenchido "
+        "só poderá sair do local da catequese com o responsável. Caso haja extravio da autorização, em último caso, "
+        "poderá ser enviada pelo WhatsApp do catequista. Não será aceito pela catequese autorização realizada por telefone."
+    )
+    pdf.multi_cell(180, 5, limpar_texto(obs_texto), border=1, fill=True, align='L')
+    
+    # Informativo Complementar
+    pdf.ln(10)
+    pdf.set_draw_color(65, 123, 153) # Volta para Azul
+    pdf.set_text_color(65, 123, 153)
+    pdf.set_font("helvetica", "B", 11)
+    pdf.cell(0, 10, limpar_texto("INFORMATIVO COMPLEMENTAR"), ln=True, align='C')
+    
+    pdf.set_font("helvetica", "", 10)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_x(15)
+    pdf.cell(0, 8, limpar_texto(f"No vínculo familiar do catequizando (a) {nome_cat}"), ln=True)
+    pdf.set_x(15)
+    pdf.cell(0, 8, limpar_texto("existe alguma restrição a quem não pode pegá-lo (a)?"), ln=True)
+    pdf.ln(2)
+    pdf.set_x(15)
+    pdf.cell(0, 8, limpar_texto("Se sim, informe o nome: __________________________________ e o vínculo: _________________"), ln=True)
+    
+    # Assinatura 2
+    pdf.ln(15)
+    y_ass2 = pdf.get_y()
+    pdf.line(55, y_ass2, 155, y_ass2)
+    pdf.set_xy(55, y_ass2 + 1)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(100, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
+    
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL)
 # ==============================================================================
@@ -974,99 +1067,6 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
                         pdf.cell(60, 6, formatar_data_br(s.get('data', 'N/A')), border=1, align='C'); pdf.ln()
                 else: pdf.cell(190, 6, "Nenhum sacramento registrado.", border=1, align='C', ln=True)
             
-    return finalizar_pdf(pdf)
-
-# --- NOVO MOTOR: TERMO DE AUTORIZAÇÃO DE SAÍDA (LAYOUT PADRONIZADO) ---
-def gerar_termo_saida_pdf(dados_cat, dados_turma):
-    """Gera o Termo de Autorização de Saída conforme modelo paroquial."""
-    pdf = FPDF()
-    pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, "TERMO DE AUTORIZAÇÃO PARA SAÍDA")
-    
-    # Fundo Creme para o corpo do termo
-    pdf.set_fill_color(248, 249, 240)
-    pdf.rect(10, 45, 190, 230, 'F')
-    
-    pdf.set_xy(10, 50)
-    pdf.set_font("helvetica", "B", 12)
-    pdf.set_text_color(65, 123, 153) # Azul Paroquial
-    pdf.cell(190, 10, limpar_texto("AUTORIZAÇÃO PARA SAÍDA SEM O RESPONSÁVEL"), ln=True, align='C')
-    
-    pdf.ln(5)
-    pdf.set_font("helvetica", "", 11)
-    pdf.set_text_color(0, 0, 0)
-    
-    # Texto do Termo com preenchimento automático
-    nome_resp = dados_cat.get('nome_mae', '') if dados_cat.get('nome_mae') else dados_cat.get('nome_pai', '__________________________')
-    nome_cat = dados_cat.get('nome_completo', '__________________________')
-    etapa = dados_cat.get('etapa', '__________')
-    catequistas = dados_turma.get('catequista_responsavel', '__________________________')
-    endereco = dados_cat.get('endereco_completo', '__________________________')
-    
-    texto_corpo = (
-        f"Eu, {nome_resp}, na condição de responsável legal pelo(a) "
-        f"catequizando(a) {nome_cat}, inscrita(o) na {etapa}, com os/as "
-        f"catequistas {catequistas}, autorizo a sua saída sozinho(a), no horário de encerramento "
-        f"do encontro. Ciente que, assumo quaisquer riscos que possam ocorrer do trajeto "
-        f"da Paróquia até a residência em: {endereco}."
-    )
-    
-    pdf.set_x(15)
-    pdf.multi_cell(180, 8, limpar_texto(texto_corpo), align='J')
-    
-    pdf.ln(10)
-    data_hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).strftime('%d de %B de %Y')
-    # Tradução simples de mês para PT-BR (opcional, mas recomendado)
-    pdf.set_x(15)
-    pdf.cell(0, 10, limpar_texto(f"Itabuna (BA), {data_hoje}."), ln=True)
-    
-    # Assinatura 1
-    pdf.ln(15)
-    y_ass = pdf.get_y()
-    pdf.line(55, y_ass, 155, y_ass)
-    pdf.set_xy(55, y_ass + 1)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(100, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
-    
-    # Box de Observação (Destaque em Vermelho)
-    pdf.ln(10)
-    pdf.set_x(15)
-    pdf.set_fill_color(255, 240, 240) # Fundo levemente avermelhado
-    pdf.set_draw_color(224, 61, 17) # Borda Vermelha
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(224, 61, 17)
-    obs_texto = (
-        "Obs.: Lembramos que o (a) catequizando (a) que não tiver o termo de autorização de saída preenchido "
-        "só poderá sair do local da catequese com o responsável. Caso haja extravio da autorização, em último caso, "
-        "poderá ser enviada pelo WhatsApp do catequista. Não será aceito pela catequese autorização realizada por telefone."
-    )
-    pdf.multi_cell(180, 5, limpar_texto(obs_texto), border=1, fill=True, align='L')
-    
-    # Informativo Complementar
-    pdf.ln(10)
-    pdf.set_draw_color(65, 123, 153) # Volta para Azul
-    pdf.set_text_color(65, 123, 153)
-    pdf.set_font("helvetica", "B", 11)
-    pdf.cell(0, 10, limpar_texto("INFORMATIVO COMPLEMENTAR"), ln=True, align='C')
-    
-    pdf.set_font("helvetica", "", 10)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_x(15)
-    pdf.cell(0, 8, limpar_texto(f"No vínculo familiar do catequizando (a) {nome_cat}"), ln=True)
-    pdf.set_x(15)
-    pdf.cell(0, 8, limpar_texto("existe alguma restrição a quem não pode pegá-lo (a)?"), ln=True)
-    pdf.ln(2)
-    pdf.set_x(15)
-    pdf.cell(0, 8, limpar_texto("Se sim, informe o nome: __________________________________ e o vínculo: _________________"), ln=True)
-    
-    # Assinatura 2
-    pdf.ln(15)
-    y_ass2 = pdf.get_y()
-    pdf.line(55, y_ass2, 155, y_ass2)
-    pdf.set_xy(55, y_ass2 + 1)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(100, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
-    
     return finalizar_pdf(pdf)
 
 # ==============================================================================
