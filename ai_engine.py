@@ -83,10 +83,19 @@ def gerar_mensagem_whatsapp(tema, presentes, faltosos):
         return "Olá! Deus abençoe a todos pelo encontro de hoje!"
 
 def analisar_turma_local(nome_turma, dados_resumo):
-    """Análise específica para o Dashboard de uma turma."""
+    """Análise específica para o Dashboard de uma turma com rigor de IVC."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        prompt = f"Analise tecnicamente a turma {nome_turma}: {dados_resumo}. Sem saudações ou asteriscos."
+        prompt = f"""
+        Você é um Coordenador de Catequese (IVC). Analise a turma {nome_turma}: {dados_resumo}.
+        
+        REGRAS CRÍTICAS DE LINGUAGEM:
+        1. JAMAIS use termos como 'aula', 'prova', 'curso', 'aluno' ou 'professor'.
+        2. USE: 'encontro', 'itinerário', 'experiência de fé', 'catequizando' e 'catequista'.
+        3. FOQUE na caminhada comunitária e na vivência dos sacramentos como marcos da Iniciação.
+        4. NÃO use asteriscos (**) para negrito.
+        5. Seja direto e técnico-pastoral.
+        """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
         return response.text
-    except: return "Análise indisponível."
+    except: return "Análise pastoral indisponível."
