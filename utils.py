@@ -738,41 +738,95 @@ def gerar_fichas_paroquia_total(df_catequizandos):
     return finalizar_pdf(pdf)
 
 def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
-    """Gera um PDF único contendo a auditoria v2 de cada turma da paróquia."""
+    """
+    Gera um Dossiê Paroquial contendo a auditoria completa de cada turma.
+    Inclui: Indicadores, Frequência Mensal, Evasão e Sacramentos com Data.
+    """
     pdf = FPDF()
+    
     for _, t in df_turmas.iterrows():
         t_nome = t['nome_turma']
         alunos_t = df_cat[df_cat['etapa'] == t_nome]
+        
         if not alunos_t.empty:
-            # Cálculos de métricas para esta página específica
+            pdf.add_page()
+            adicionar_cabecalho_diocesano(pdf, f"AUDITORIA INTEGRAL: {t_nome}")
+            
+            # --- 1. INDICADORES ESTRUTURAIS ---
             pres_t = df_pres[df_pres['id_turma'] == t_nome] if not df_pres.empty else pd.DataFrame()
-            freq_g = round(pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100, 1) if not pres_t.empty else 0
+            freq_g = 0.0
+            lista_mensal = []
+            
+            if not pres_t.empty:
+                pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
+                freq_g = round(pres_t['status_num'].mean() * 100, 1)
+                
+                # Cálculo de Frequência Mensal
+                try:
+                    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
+                    pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
+                    mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
+                    for mes, taxa in mensal.items():
+                        lista_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
+                except: pass
+
             idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
             id_med = round(sum(idades)/len(idades), 1) if idades else 0
-            
-            # Adiciona a página da turma ao PDF consolidado
-            pdf.add_page()
-            adicionar_cabecalho_diocesano(pdf, f"AUDITORIA: {t_nome}")
-            
-            # Reutiliza a lógica visual da v2 (Indicadores)
+            qtd_catequistas = len(str(t['catequista_responsavel']).split(','))
+
             pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-            pdf.cell(190, 8, limpar_texto("INDICADORES DA TURMA"), ln=True, fill=True, align='C')
-            pdf.set_text_color(0, 0, 0)
-            y = pdf.get_y() + 2
-            desenhar_campo_box(pdf, "Catequizandos", str(len(alunos_t)), 10, y, 60)
-            desenhar_campo_box(pdf, "Frequência", f"{freq_g}%", 75, y, 60)
-            desenhar_campo_box(pdf, "Idade Média", f"{id_med} anos", 140, y, 60)
+            pdf.cell(190, 8, limpar_texto("1. INDICADORES ESTRUTURAIS"), ln=True, fill=True, align='C')
+            pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
+            desenhar_campo_box(pdf, "Catequistas", str(qtd_catequistas), 10, y, 45)
+            desenhar_campo_box(pdf, "Catequizandos", str(len(alunos_t)), 58, y, 45)
+            desenhar_campo_box(pdf, "Frequência Global", f"{freq_g}%", 106, y, 45)
+            desenhar_campo_box(pdf, "Idade Média", f"{id_med} anos", 154, y, 46)
             pdf.ln(18)
-            
-            # Lista Nominal Simplificada para o Lote
-            pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(230, 230, 230)
-            pdf.cell(120, 7, "Nome do Catequizando", border=1, fill=True)
-            pdf.cell(70, 7, "Situação", border=1, fill=True, align='C'); pdf.ln()
+
+            # --- 2. EVOLUÇÃO DA PRESENÇA POR MÊS ---
+            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+            pdf.cell(190, 8, limpar_texto("2. EVOLUÇÃO DA PRESENÇA POR MÊS"), ln=True, fill=True, align='C')
+            pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+            pdf.cell(95, 7, "Mês / Ano", border=1, fill=True, align='C'); pdf.cell(95, 7, "Taxa de Presença", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 9)
+            if lista_mensal:
+                for m in lista_mensal:
+                    pdf.cell(95, 6, limpar_texto(m['mes']), border=1, align='C')
+                    pdf.cell(95, 6, f"{m['taxa']}%", border=1, align='C'); pdf.ln()
+            else: pdf.cell(190, 6, "Sem dados históricos de presença.", border=1, align='C', ln=True)
+            pdf.ln(5)
+
+            # --- 3. LISTA NOMINAL E ALERTA DE EVASÃO ---
+            pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255)
+            pdf.cell(190, 8, limpar_texto("3. LISTA NOMINAL E ALERTA DE EVASÃO"), ln=True, fill=True, align='C')
+            pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+            pdf.cell(120, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(70, 7, "Status / Faltas", border=1, fill=True, align='C'); pdf.ln()
             pdf.set_font("helvetica", "", 8)
             for _, r in alunos_t.iterrows():
+                faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
+                if faltas >= 2: pdf.set_text_color(224, 61, 17)
+                else: pdf.set_text_color(0, 0, 0)
+                info = f"ATIVO ({faltas} faltas)" if faltas > 0 else "ATIVO (100% Freq.)"
                 pdf.cell(120, 6, limpar_texto(r['nome_completo']), border=1)
-                pdf.cell(70, 6, limpar_texto(r['status']), border=1, align='C'); pdf.ln()
-    
+                pdf.cell(70, 6, limpar_texto(info), border=1, align='C'); pdf.ln()
+            pdf.set_text_color(0, 0, 0); pdf.ln(5)
+
+            # --- 4. SACRAMENTOS RECEBIDOS (REGISTRO PAROQUIAL) ---
+            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+            pdf.cell(190, 8, limpar_texto("4. SACRAMENTOS RECEBIDOS (REGISTRO PAROQUIAL)"), ln=True, fill=True, align='C')
+            pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+            pdf.cell(80, 7, "Nome", border=1, fill=True); pdf.cell(50, 7, "Sacramento", border=1, fill=True, align='C'); pdf.cell(60, 7, "Data do Registro", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 8)
+            
+            sac_turma = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())] if not df_recebidos.empty else pd.DataFrame()
+            if not sac_turma.empty:
+                for _, s in sac_turma.iterrows():
+                    pdf.cell(80, 6, limpar_texto(s['nome']), border=1)
+                    pdf.cell(50, 6, limpar_texto(s['tipo']), border=1, align='C')
+                    pdf.cell(60, 6, formatar_data_br(s['data']), border=1, align='C'); pdf.ln()
+            else:
+                pdf.cell(190, 6, "Nenhum sacramento registrado para esta turma.", border=1, align='C', ln=True)
+            
     return finalizar_pdf(pdf)
 
 # ==============================================================================
