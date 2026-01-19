@@ -1012,23 +1012,67 @@ elif menu == "🏫 Gestão de Turmas":
     with t3:
         st.subheader("✏️ Detalhes e Edição")
         if not df_turmas.empty:
-            sel_t = st.selectbox("Selecione a turma:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_t_v5")
+            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_t_v6_final")
+            
             if sel_t:
+                # Localiza os dados atuais da turma
                 d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
-                c1, c2 = st.columns(2)
-                en = c1.text_input("Nome", value=d['nome_turma'], key="en_edit_v5").upper()
-                ee = c1.selectbox("Etapa", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="ee_edit_v5")
-                ea = c2.number_input("Ano", value=int(d['ano']), key="ea_edit_v5")
-                c3, c4 = st.columns(2)
-                et = c3.selectbox("Turno", ["MANHÃ", "TARDE", "NOITE"], index=["MANHÃ", "TARDE", "NOITE"].index(d.get('turno', 'MANHÃ')) if d.get('turno') in ["MANHÃ", "TARDE", "NOITE"] else 0, key="et_edit_v5")
-                el = c4.text_input("Local", value=d.get('local', ''), key="el_edit_v5").upper()
-                pe = c1.text_input("Prev. Euca", value=d.get('previsao_eucaristia', ''), key="pe_edit_v5")
-                pc = c2.text_input("Prev. Crisma", value=d.get('previsao_crisma', ''), key="pc_edit_v5")
                 
-                if st.button("💾 SALVAR ALTERAÇÕES", key="btn_edit_t_v5", use_container_width=True):
-                    lista_up = [str(d['id_turma']), en, ee, ea, d['catequista_responsavel'], d['dias_semana'], pe, pc, et, el]
-                    if atualizar_turma(d['id_turma'], lista_up):
-                        st.success("Dados da turma atualizados com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                c1, c2 = st.columns(2)
+                en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="en_edit_v6").upper()
+                ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="ea_edit_v6")
+                
+                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="ee_edit_v6")
+                
+                # --- NOVO: ASSOCIAÇÃO DE CATEQUISTAS ---
+                # 1. Prepara a lista de todos os catequistas disponíveis
+                lista_todos_catequistas = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
+                
+                # 2. Identifica quem já está na turma hoje (converte string da planilha em lista)
+                cats_atuais = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
+                
+                # 3. Campo de seleção múltipla
+                ed_cats = st.multiselect(
+                    "Catequistas Responsáveis (Associe ou remova):", 
+                    options=lista_todos_catequistas,
+                    default=[c for c in cats_atuais if c in lista_todos_catequistas],
+                    key="ed_cats_v6"
+                )
+                
+                st.markdown("---")
+                c3, c4 = st.columns(2)
+                et = c3.selectbox("Turno", ["MANHÃ", "TARDE", "NOITE"], index=["MANHÃ", "TARDE", "NOITE"].index(d.get('turno', 'MANHÃ')) if d.get('turno') in ["MANHÃ", "TARDE", "NOITE"] else 0, key="et_edit_v6")
+                el = c4.text_input("Local / Sala", value=d.get('local', ''), key="el_edit_v6").upper()
+                
+                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="pe_edit_v6")
+                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="pc_edit_v6")
+                
+                st.divider()
+                
+                if st.button("💾 SALVAR ALTERAÇÕES DA TURMA", key="btn_edit_t_v6_exec", use_container_width=True):
+                    if not ed_cats:
+                        st.error("⚠️ A turma não pode ficar sem catequista responsável.")
+                    else:
+                        # Montagem da lista de 10 colunas (A até J) para o database.py
+                        # Ordem: ID, Nome, Etapa, Ano, Catequistas, Dias, Euca, Crisma, Turno, Local
+                        lista_up = [
+                            str(d['id_turma']), 
+                            en, 
+                            ee, 
+                            int(ea), 
+                            ", ".join(ed_cats), # Salva os novos catequistas associados
+                            d['dias_semana'], 
+                            pe, 
+                            pc, 
+                            et, 
+                            el
+                        ]
+                        
+                        if atualizar_turma(d['id_turma'], lista_up):
+                            st.success(f"✅ Turma '{en}' atualizada com sucesso!")
+                            st.cache_data.clear()
+                            time.sleep(1.5)
+                            st.rerun()
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
