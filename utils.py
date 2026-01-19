@@ -723,6 +723,20 @@ def gerar_relatorio_local_turma_v2(nome_turma, metricas, listas, analise_ia):
 
     return finalizar_pdf(pdf)
 
+def gerar_fichas_paroquia_total(df_catequizandos):
+    """Gera um PDF único com as fichas de inscrição de TODOS os catequizandos da base."""
+    if df_catequizandos.empty: return None
+    pdf = FPDF()
+    # Ordena por turma e nome para facilitar a separação física após impressão
+    df_ordenado = df_catequizandos.sort_values(by=['etapa', 'nome_completo'])
+    
+    for _, row in df_ordenado.iterrows():
+        pdf.add_page()
+        adicionar_cabecalho_diocesano(pdf)
+        _desenhar_corpo_ficha(pdf, row.to_dict())
+    
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 8. ALIASES DE COMPATIBILIDADE (NÃO REMOVER)
 # ==============================================================================
