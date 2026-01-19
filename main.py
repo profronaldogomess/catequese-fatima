@@ -320,26 +320,32 @@ if menu == "🏠 Início / Dashboard":
         with col_niver:
             st.subheader("🎂 Aniversariantes do Mês")
             df_niver_unificado = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
+            
             if not df_niver_unificado.empty:
+                # --- NOVO: BOTÃO COLETIVO (TEMPLATE 4) ---
+                if st.button("🖼️ GERAR CARD COLETIVO DO MÊS", use_container_width=True, key="btn_coletivo_mes"):
+                    # Prepara a lista no formato: PAPEL - NOME
+                    lista_nomes = [f"{row['tipo']} - {row['nome']}" for _, row in df_niver_unificado.iterrows()]
+                    card_coletivo = gerar_card_aniversario(lista_nomes, tipo="MES")
+                    if card_coletivo:
+                        st.image(card_coletivo, caption="Card Coletivo do Mês")
+                        st.download_button("📥 Baixar Card Coletivo", card_coletivo, "Aniversariantes_do_Mes.png", "image/png")
+                
+                st.divider()
+
+                # --- LISTA INDIVIDUAL (TEMPLATES 1-3) ---
                 for i, niver in df_niver_unificado.iterrows():
                     icone = "🛡️" if niver['tipo'] == 'CATEQUISTA' else "🎁"
-                    
-                    # Layout de linha: Nome + Botão de Card Mensal
                     c_txt, c_btn = st.columns([3, 1])
-                    c_txt.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']} ({niver['info']})")
+                    c_txt.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']}")
                     
-                    # Botão para gerar o Card Mensal (Template 4)
-                    if c_btn.button("🖼️ Card", key=f"btn_mes_{i}"):
-                        card_mes = gerar_card_aniversario(niver['nome'], tipo="MES")
-                        if card_mes:
-                            st.image(card_mes, caption=f"Card Mensal: {niver['nome']}", width=300)
-                            st.download_button(
-                                label="📥 Baixar Card Mensal",
-                                data=card_mes,
-                                file_name=f"Niver_Mes_{niver['nome']}.png",
-                                mime="image/png",
-                                key=f"dl_mes_{i}"
-                            )
+                    # Botão Individual (Variação Aleatória)
+                    if c_btn.button("🖼️ Card", key=f"btn_indiv_{i}"):
+                        texto_card = f"{niver['tipo']} - {niver['nome']}"
+                        card_indiv = gerar_card_aniversario(texto_card, tipo="DIA")
+                        if card_indiv:
+                            st.image(card_indiv, caption=f"Card de {niver['nome']}")
+                            st.download_button("📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png")
             else: 
                 st.write("Nenhum aniversariante este mês.")
 
