@@ -311,10 +311,71 @@ def gerar_relatorio_diocesano_v4(dados_censo, equipe_stats, sac_ano, sac_censo, 
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
 
-def gerar_relatorio_pastoral_v2(turmas_data, analise_ia):
-    """Relatório Pastoral Analítico."""
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL ANALÍTICO")
+def gerar_relatorio_pastoral_v3(turmas_detalhadas, totais_gerais, analise_ia):
+    """
+    Relatório Pastoral Analítico v3.
+    Detalhamento por turma (Catequista, Dia, Sacramentos, Frequência) e Fechamento Geral.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL ANALÍTICO")
+
+    # --- SEÇÃO 1: DETALHAMENTO POR TURMA ---
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("1. DIAGNÓSTICO POR TURMA (DADOS NOMINAIS)"), ln=True, fill=True, align='C')
+    
+    # Cabeçalho da Tabela
+    pdf.set_font("helvetica", "B", 7); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(45, 7, "Turma / Catequista", border=1, fill=True)
+    pdf.cell(25, 7, "Dia / Local", border=1, fill=True)
+    pdf.cell(20, 7, "Batiz.", border=1, fill=True, align='C')
+    pdf.cell(20, 7, "Euca.", border=1, fill=True, align='C')
+    pdf.cell(20, 7, "Crisma", border=1, fill=True, align='C')
+    pdf.cell(20, 7, "Freq.", border=1, fill=True, align='C')
+    pdf.cell(20, 7, "Total", border=1, fill=True, align='C'); pdf.ln()
+
+    pdf.set_font("helvetica", "", 7)
+    for t in turmas_detalhadas:
+        # Verificação de quebra de página
+        if pdf.get_y() > 260:
+            pdf.add_page()
+            pdf.ln(10)
+        
+        # Altura dinâmica para o nome da turma/catequista
+        y_antes = pdf.get_y()
+        pdf.multi_cell(45, 3.5, limpar_texto(f"{t['nome']}\n{t['catequista']}"), border=1)
+        y_depois = pdf.get_y()
+        h_linha = y_depois - y_antes
+        
+        pdf.set_xy(55, y_antes)
+        pdf.multi_cell(25, h_linha/2 if h_linha > 7 else h_linha, limpar_texto(f"{t['dia']}\n{t['local']}"), border=1)
+        
+        pdf.set_xy(80, y_antes)
+        pdf.cell(20, h_linha, str(t['batizados']), border=1, align='C')
+        pdf.cell(20, h_linha, str(t['eucaristia']), border=1, align='C')
+        pdf.cell(20, h_linha, str(t['crisma']), border=1, align='C')
+        pdf.cell(20, h_linha, f"{t['frequencia']}%", border=1, align='C')
+        pdf.cell(20, h_linha, str(t['total']), border=1, align='C'); pdf.ln()
+
+    pdf.ln(5)
+
+    # --- SEÇÃO 2: FECHAMENTO ESTATÍSTICO (QUADRO RESUMO) ---
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("2. FECHAMENTO ESTATÍSTICO DA PARÓQUIA"), ln=True, fill=True, align='C')
+    
+    pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
+    desenhar_campo_box(pdf, "Total de Turmas", str(totais_gerais['total_turmas']), 10, y, 45)
+    desenhar_campo_box(pdf, "Turmas Infantil/Juv.", str(totais_gerais['t_infantil']), 58, y, 45)
+    desenhar_campo_box(pdf, "Turmas Jovens/Adultos", str(totais_gerais['t_adultos']), 106, y, 45)
+    desenhar_campo_box(pdf, "Freq. Média Paroquial", f"{totais_gerais['freq_geral']}%", 154, y, 46)
+    pdf.ln(18)
+
+    # --- SEÇÃO 3: ANÁLISE PASTORAL (IA) ---
+    pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("3. PARECER ANALÍTICO E TENDÊNCIAS"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
     pdf.multi_cell(190, 6, limpar_texto(analise_ia))
+    
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
@@ -400,6 +461,6 @@ def obter_aniversariantes_mes(df_cat):
 # 7. COMPATIBILIDADE (ALIASES) - RESOLUÇÃO DE ERROS PYLANCE
 # ==============================================================================
 gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v4
-gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v2
+gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v3
 # Alias para manter compatibilidade com chamadas diretas
 gerar_pdf_perfil_turma = gerar_pdf_perfil_turma
