@@ -1,9 +1,11 @@
 # ARQUIVO: database.py
+# VERSÃO: 3.0.1 - INTEGRALIDADE TOTAL (SEGURANÇA + IVC + 30 COLUNAS)
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
 import time
+import uuid
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
@@ -47,6 +49,51 @@ def ler_aba(nome_aba):
             return pd.DataFrame()
     return pd.DataFrame()
 
+# --- NOVAS FUNÇÕES DE INFRAESTRUTURA (UUID / MANUTENÇÃO) ---
+
+@st.cache_data(ttl=60)
+def verificar_status_sistema():
+    """Verifica se o sistema está em modo MANUTENCAO na aba config."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("config")
+            status = aba.acell('B2').value
+            return status.upper() if status else "ONLINE"
+        except:
+            return "ONLINE"
+    return "ONLINE"
+
+def atualizar_session_id(email, novo_id):
+    """Grava o UUID único na Coluna M (13) da aba usuarios."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("usuarios")
+            celula = aba.find(str(email))
+            if celula:
+                aba.update_cell(celula.row, 13, str(novo_id))
+                st.cache_data.clear()
+                return True
+        except: pass
+    return False
+
+@st.cache_data(ttl=10)
+def obter_session_id_db(email):
+    """Valida se o UUID da sessão atual coincide com o da planilha."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("usuarios")
+            celula = aba.find(str(email))
+            if celula:
+                val = aba.cell(celula.row, 13).value
+                return val if val else ""
+        except: pass
+    return ""
+
+# --- FUNÇÕES DE PERSISTÊNCIA DE DADOS (RIGOR 30/10/12) ---
+
 def salvar_lote_catequizandos(lista_de_listas):
     planilha = conectar_google_sheets()
     if planilha:
@@ -84,7 +131,7 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
             aba = planilha.worksheet("catequizandos")
             celula = aba.find(str(id_catequizando))
             if celula:
-                # Atualizado para AD (30 colunas)
+                # Rigor 30 colunas (A até AD)
                 aba.update(f"A{celula.row}:AD{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
@@ -151,6 +198,7 @@ def atualizar_turma(id_turma, novos_dados_lista):
             aba = planilha.worksheet("turmas")
             celula = aba.find(str(id_turma))
             if celula:
+                # Rigor 10 colunas (A até J)
                 aba.update(f"A{celula.row}:J{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
@@ -163,6 +211,7 @@ def atualizar_usuario(email_original, novos_dados_lista):
             aba = planilha.worksheet("usuarios")
             celula = aba.find(str(email_original))
             if celula:
+                # Rigor 12 colunas (A até L)
                 aba.update(f"A{celula.row}:L{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
