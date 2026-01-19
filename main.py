@@ -1033,7 +1033,8 @@ elif menu == "🏫 Gestão de Turmas":
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
         if not df_turmas.empty:
-            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v_final")
+            # Usamos uma chave v6 para garantir um estado limpo no navegador
+            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v6_final")
             
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
             info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
@@ -1048,14 +1049,20 @@ elif menu == "🏫 Gestão de Turmas":
                 
                 freq_global = 0.0
                 lista_freq_mensal = []
+                
+                # BLINDAGEM: Verifica se a coluna de ID existe na tabela de presenças
+                tem_coluna_id = not pres_t.empty and 'id_catequizando' in pres_t.columns
+                
                 if not pres_t.empty:
                     pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
                     freq_global = round(pres_t['status_num'].mean() * 100, 1)
-                    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
-                    pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
-                    mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
-                    for mes, taxa in mensal.items():
-                        lista_freq_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
+                    try:
+                        pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
+                        pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
+                        mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
+                        for mes, taxa in mensal.items():
+                            lista_freq_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
+                    except: pass
                 
                 m3.metric("Frequência Global", f"{freq_global}%")
                 idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
@@ -1063,46 +1070,43 @@ elif menu == "🏫 Gestão de Turmas":
 
                 st.divider()
                 
-                # --- BLOCO DE DOCUMENTAÇÃO (DOIS BOTÕES) ---
+                # --- BLOCO DE DOCUMENTAÇÃO ---
                 st.markdown("#### 📄 Documentação e Auditoria")
                 col_doc1, col_doc2 = st.columns(2)
                 
                 with col_doc1:
-                    # BOTÃO 1: AUDITORIA PASTORAL (IA + MÉTRICAS)
-                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True):
+                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_v6"):
                         with st.spinner("Analisando itinerário..."):
                             resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%."
                             parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
                             
-                            metricas_pdf = {
-                                'qtd_catequistas': len(str(info_t['catequista_responsavel']).split(',')), 
-                                'qtd_cat': len(alunos_t), 'freq_global': freq_global, 
-                                'idade_media': round(sum(idades)/len(idades), 1) if idades else 0,
-                                'freq_mensal': lista_freq_mensal
-                            }
-                            
-                            # Coleta de dados nominais para o PDF
+                            # Coleta de dados nominais BLINDADA contra KeyError
                             lista_geral = []
                             for _, r in alunos_t.iterrows():
-                                f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                                f = 0
+                                if tem_coluna_id:
+                                    # Só tenta filtrar se a coluna existir
+                                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
                                 lista_geral.append({'nome': r['nome_completo'], 'faltas': f})
                             
                             lista_sac = []
-                            if not df_recebidos.empty:
+                            if not df_recebidos.empty and 'id_catequizando' in df_recebidos.columns:
                                 sac_t = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())]
                                 for _, s in sac_t.iterrows():
                                     lista_sac.append({'nome': s['nome'], 'tipo': s['tipo'], 'data': s['data']})
 
                             st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v2(
-                                t_alvo, metricas_pdf, {'geral': lista_geral, 'sac_recebidos': lista_sac}, parecer_ia
+                                t_alvo, 
+                                {'qtd_catequistas': 1, 'qtd_cat': len(alunos_t), 'freq_global': freq_global, 'idade_media': 0, 'freq_mensal': lista_freq_mensal}, 
+                                {'geral': lista_geral, 'sac_recebidos': lista_sac}, 
+                                parecer_ia
                             )
                     
                     if f"pdf_auditoria_{t_alvo}" in st.session_state:
                         st.download_button("📥 BAIXAR AUDITORIA", st.session_state[f"pdf_auditoria_{t_alvo}"], f"Auditoria_{t_alvo}.pdf", use_container_width=True)
 
                 with col_doc2:
-                    # BOTÃO 2: FICHAS DE INSCRIÇÃO (LOTE) - RESTAURADO
-                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True):
+                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_v6"):
                         with st.spinner("Gerando fichas individuais..."):
                             pdf_fichas = gerar_fichas_turma_completa(t_alvo, alunos_t)
                             st.session_state[f"pdf_fichas_{t_alvo}"] = pdf_fichas
@@ -1116,7 +1120,9 @@ elif menu == "🏫 Gestão de Turmas":
                 st.markdown("### 📋 Lista Nominal de Caminhada")
                 lista_preview = []
                 for _, r in alunos_t.iterrows():
-                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                    f = 0
+                    if tem_coluna_id:
+                        f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
                     lista_preview.append({'Catequizando': r['nome_completo'], 'Faltas': f, 'Status': r['status']})
                 st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
             else:
@@ -1127,34 +1133,32 @@ elif menu == "🏫 Gestão de Turmas":
         if not df_turmas.empty and not df_cat.empty:
             c1, c2 = st.columns(2)
             opcoes_origem = ["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
-            t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_v5")
-            t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_v5")
+            t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_v6")
+            t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_v6")
             
             if t_origem:
                 alunos_mov = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
                 if not alunos_mov.empty:
-                    # --- LÓGICA DE SINCRONIZAÇÃO DO SELECIONAR TODOS ---
-                    def toggle_all_v5():
+                    # Lógica de sincronização v6
+                    def toggle_all_v6():
                         for _, al in alunos_mov.iterrows():
-                            st.session_state[f"mov_al_v5_{al['id_catequizando']}"] = st.session_state.chk_mov_todos_v5
+                            st.session_state[f"mov_al_v6_{al['id_catequizando']}"] = st.session_state.chk_mov_todos_v6
 
-                    st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos_v5", on_change=toggle_all_v5)
+                    st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos_v6", on_change=toggle_all_v6)
                     
                     lista_ids_selecionados = []
                     cols = st.columns(2)
                     for i, (_, al) in enumerate(alunos_mov.iterrows()):
                         with cols[i % 2]:
-                            # O checkbox individual agora é controlado pelo session_state
-                            if st.checkbox(f"{al['nome_completo']}", key=f"mov_al_v5_{al['id_catequizando']}"):
+                            if st.checkbox(f"{al['nome_completo']}", key=f"mov_al_v6_{al['id_catequizando']}"):
                                 lista_ids_selecionados.append(al['id_catequizando'])
                     
                     st.divider()
-                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS", key="btn_exec_mov_v5"):
+                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS", key="btn_exec_mov_v6", use_container_width=True):
                         if t_destino and t_origem != t_destino and lista_ids_selecionados:
                             if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
-                                st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos."); st.cache_data.clear(); time.sleep(2); st.rerun()
+                                st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
                         else: st.error("Selecione um destino válido e ao menos um catequizando.")
-# --- FIM DO BLOCO: GESTÃO DE TURMAS ---
 
 # --- BLOCO REFINADO: GESTÃO DE SACRAMENTOS (MANTENDO SEUS DETALHES E CORRIGINDO LOOP) ---
 elif menu == "🕊️ Gestão de Sacramentos":
