@@ -1,5 +1,7 @@
 # ARQUIVO: database.py
-# VERSÃO: 3.0.2 - FINAL (RESOLVE PYLANCE + ERRO 429 + INTEGRIDADE)
+# VERSÃO: 3.0.4 - INTEGRALIDADE TOTAL E DEFESA DE COTA (ANTI-429)
+# MISSÃO: Motor de Dados Eclesiástico com Segurança de Sessão Única e Cookies.
+
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
@@ -20,12 +22,14 @@ def conectar_google_sheets():
         planilha = client.open("BD_Catequese")
         return planilha
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        # Silencioso para não quebrar a UI em caso de instabilidade momentânea
         return None
 
-# --- MOTOR DE LEITURA (ESSENCIAL PARA O SISTEMA) ---
+# --- 1. MOTOR DE LEITURA COM CACHE INTELIGENTE (DEFESA CONTRA ERRO 429) ---
+
 @st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
+    """Lê qualquer aba e retorna um DataFrame. Cache de 60s para evitar excesso de requisições."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -45,15 +49,15 @@ def ler_aba(nome_aba):
                 data_ajustada.append(row_fixed[:num_cols])
             df = pd.DataFrame(data_ajustada, columns=headers)
             return df
-        except Exception as e:
-            st.error(f"Erro ao ler a aba {nome_aba}: {e}")
+        except Exception:
             return pd.DataFrame()
     return pd.DataFrame()
 
-# --- MOTOR DE INFRAESTRUTURA (OTIMIZADO PARA EVITAR ERRO 429) ---
+# --- 2. NOVAS FUNÇÕES DE INFRAESTRUTURA E SEGURANÇA ---
 
-@st.cache_data(ttl=300) # Cache de 5 minutos para status de manutenção
+@st.cache_data(ttl=300) # Cache de 5 minutos para o status de manutenção
 def verificar_status_sistema():
+    """Consulta a aba 'config' para travar o sistema se necessário."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -65,6 +69,7 @@ def verificar_status_sistema():
     return "ONLINE"
 
 def atualizar_session_id(email, novo_id):
+    """Grava o UUID da sessão na Coluna M (13) da aba usuarios."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
@@ -72,26 +77,28 @@ def atualizar_session_id(email, novo_id):
             celula = aba.find(str(email))
             if celula:
                 aba.update_cell(celula.row, 13, str(novo_id))
-                st.cache_data.clear()
+                st.cache_data.clear() # Limpa cache para validar a nova sessão
                 return True
         except: pass
     return False
 
-@st.cache_data(ttl=60) # Cache de 1 minuto para validação de sessão única
+@st.cache_data(ttl=30) # Validação rápida (30s) para evitar erro 429 em navegação
 def obter_session_id_db(email):
+    """Busca o UUID gravado na planilha. Usa ler_aba para aproveitar o cache."""
     if not email: return ""
-    planilha = conectar_google_sheets()
-    if planilha:
-        try:
-            aba = planilha.worksheet("usuarios")
-            celula = aba.find(str(email))
-            if celula:
-                val = aba.cell(celula.row, 13).value
-                return val if val else ""
-        except: return ""
+    df_usuarios = ler_aba("usuarios")
+    if not df_usuarios.empty and 'email' in df_usuarios.columns:
+        usuario = df_usuarios[df_usuarios['email'] == email]
+        if not usuario.empty:
+            # Tenta pegar a coluna 'session_id' ou a 13ª coluna (índice 12)
+            try:
+                if 'session_id' in usuario.columns:
+                    return str(usuario.iloc[0]['session_id'])
+                return str(usuario.iloc[0].iloc[12]) # Coluna M
+            except: return ""
     return ""
 
-# --- FUNÇÕES DE PERSISTÊNCIA (RIGOR 30/10/12) ---
+# --- 3. FUNÇÕES PASTORAIS E DE GESTÃO (INTEGRIDADE TOTAL) ---
 
 def salvar_lote_catequizandos(lista_de_listas):
     planilha = conectar_google_sheets()
@@ -130,7 +137,7 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
             aba = planilha.worksheet("catequizandos")
             celula = aba.find(str(id_catequizando))
             if celula:
-                # Rigor 30 colunas (A até AD)
+                # RIGOR 30 COLUNAS: Atualiza de A até AD
                 aba.update(f"A{celula.row}:AD{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
@@ -197,7 +204,7 @@ def atualizar_turma(id_turma, novos_dados_lista):
             aba = planilha.worksheet("turmas")
             celula = aba.find(str(id_turma))
             if celula:
-                # Rigor 10 colunas (A até J)
+                # RIGOR 10 COLUNAS: Atualiza de A até J
                 aba.update(f"A{celula.row}:J{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
@@ -210,7 +217,7 @@ def atualizar_usuario(email_original, novos_dados_lista):
             aba = planilha.worksheet("usuarios")
             celula = aba.find(str(email_original))
             if celula:
-                # Rigor 12 colunas (A até L)
+                # RIGOR 12 COLUNAS: Atualiza de A até L (M é reservada ao UUID)
                 aba.update(f"A{celula.row}:L{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
