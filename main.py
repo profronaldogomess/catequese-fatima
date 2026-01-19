@@ -327,37 +327,35 @@ if menu == "🏠 Início / Dashboard":
                     st.dataframe(evasao, use_container_width=True, hide_index=True)
                 else: st.success("Nenhum alerta de evasão no momento.")
 
-        # --- SEÇÃO 4: DOCUMENTAÇÃO E AUDITORIA (SISTEMA DE DOIS BOTÕES) ---
+# --- SEÇÃO 4: DOCUMENTAÇÃO E AUDITORIA (SISTEMA DE QUATRO BOTÕES - VERSÃO INTEGRAL) ---
         st.divider()
         st.subheader("🏛️ Documentação e Auditoria Oficial")
         
-        col_btn_1, col_btn_2 = st.columns(2)
+        col_paroquial, col_lote = st.columns(2)
         
-        with col_btn_1:
+        with col_paroquial:
+            st.markdown("##### 📋 Relatórios de Gestão Paroquial")
+            
             # --- BOTÃO 1: RELATÓRIO DIOCESANO ---
-            if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True):
+            if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_final"):
                 with st.spinner("Processando Auditoria Diocesana v4..."):
-                    # 1. Segmentação de Turmas
                     etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
                     turmas_inf = df_turmas[df_turmas['etapa'].isin(etapas_infantis)] if not df_turmas.empty else pd.DataFrame()
                     turmas_adu = df_turmas[~df_turmas['etapa'].isin(etapas_infantis)] if not df_turmas.empty else pd.DataFrame()
                     
-                    # 2. Stats Equipe (Qualificação)
                     equipe_stats = {'bat': 0, 'euca': 0, 'crisma': 0, 'ministros': 0, 'aptos': 0}
-                    for _, row in equipe_real.iterrows():
+                    for _, row in equipe_tecnica.iterrows():
                         if str(row.get('data_batismo', '')).strip() not in ["", "N/A", "None"]: equipe_stats['bat'] += 1
                         if str(row.get('data_eucaristia', '')).strip() not in ["", "N/A", "None"]: equipe_stats['euca'] += 1
                         if str(row.get('data_crisma', '')).strip() not in ["", "N/A", "None"]: equipe_stats['crisma'] += 1
                         if str(row.get('data_ministerio', '')).strip() not in ["", "N/A", "None"]: equipe_stats['ministros'] += 1
 
-                    # 3. Logística
                     logistica_lista = []
                     if not df_turmas.empty:
                         log_grp = df_turmas.groupby(['dias_semana', 'local'])['nome_turma'].apply(lambda x: ", ".join(x)).reset_index()
                         for _, row in log_grp.iterrows():
                             logistica_lista.append({'dia': row['dias_semana'], 'local': row['local'], 'turmas': row['nome_turma']})
 
-                    # 4. IA e Geração
                     resumo_ia = f"Censo: {total_cat} catequizandos. Equipe: {total_equipe}. Turmas: {total_t}."
                     analise_tecnica = gerar_analise_pastoral(resumo_ia) 
                     
@@ -367,19 +365,11 @@ if menu == "🏠 Início / Dashboard":
                     )
                     st.rerun()
 
-            # Botão de Download Diocesano (Fora do IF para persistência)
             if "pdf_diocesano" in st.session_state:
-                st.download_button(
-                    label="📥 BAIXAR RELATÓRIO DIOCESANO",
-                    data=st.session_state.pdf_diocesano,
-                    file_name=f"Relatorio_Diocesano_{date.today().year}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                st.download_button("📥 BAIXAR RELATÓRIO DIOCESANO", st.session_state.pdf_diocesano, f"Relatorio_Diocesano_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
-        with col_btn_2:
             # --- BOTÃO 2: RELATÓRIO PASTORAL ---
-            if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True):
+            if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
                 with st.spinner("Processando Relatório Pastoral v3..."):
                     turmas_detalhadas = []
                     etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
@@ -390,11 +380,9 @@ if menu == "🏠 Início / Dashboard":
                         bat = len(alunos_t[alunos_t['batizado_sn'] == 'SIM']) if not alunos_t.empty else 0
                         euc = alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not alunos_t.empty else 0
                         cri = alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not alunos_t.empty else 0
-                        
                         pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
                         freq = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
                         soma_freq += freq
-                        
                         if t['etapa'] in etapas_infantis: t_inf += 1
                         else: t_adu += 1
                         
@@ -404,24 +392,38 @@ if menu == "🏠 Início / Dashboard":
                             'batizados': bat, 'eucaristia': euc, 'crisma': cri, 'frequencia': round(freq, 1), 'total': len(alunos_t)
                         })
                     
-                    totais_gerais = {
-                        'total_turmas': total_t, 't_infantil': t_inf, 't_adultos': t_adu,
-                        'freq_geral': round(soma_freq / total_t, 1) if total_t > 0 else 0
-                    }
-                    
+                    totais_gerais = {'total_turmas': total_t, 't_infantil': t_inf, 't_adultos': t_adu, 'freq_geral': round(soma_freq / total_t, 1) if total_t > 0 else 0}
                     analise_ia = gerar_analise_pastoral(f"Relatório Pastoral: {totais_gerais}")
                     st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(turmas_detalhadas, totais_gerais, analise_ia)
                     st.rerun()
 
-            # Botão de Download Pastoral (Fora do IF para persistência)
             if "pdf_pastoral" in st.session_state:
-                st.download_button(
-                    label="📥 BAIXAR RELATÓRIO PASTORAL",
-                    data=st.session_state.pdf_pastoral,
-                    file_name=f"Relatorio_Pastoral_{date.today().year}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                st.download_button("📥 BAIXAR RELATÓRIO PASTORAL", st.session_state.pdf_pastoral, f"Relatorio_Pastoral_{date.today().year}.pdf", "application/pdf", use_container_width=True)
+
+        with col_lote:
+            st.markdown("##### 📦 Processamento em Lote (Toda a Paróquia)")
+            
+            # --- BOTÃO 3: TODAS AS FICHAS EM LOTE ---
+            if st.button("🗂️ GERAR TODAS AS FICHAS (LOTE GERAL)", use_container_width=True, key="btn_lote_fichas_geral"):
+                with st.spinner("Consolidando fichas de todos os catequizandos..."):
+                    from utils import gerar_fichas_paroquia_total
+                    pdf_lote_f = gerar_fichas_paroquia_total(df_cat)
+                    st.session_state.pdf_lote_fichas_geral = pdf_lote_f
+                    st.toast("Lote de fichas gerado!", icon="✅")
+
+            if "pdf_lote_fichas_geral" in st.session_state:
+                st.download_button("📥 BAIXAR TODAS AS FICHAS (PDF ÚNICO)", st.session_state.pdf_lote_fichas_geral, f"Fichas_Gerais_Fatima_{date.today().year}.pdf", "application/pdf", use_container_width=True)
+
+            # --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE ---
+            if st.button("📊 GERAR TODAS AS AUDITORIAS DE TURMA", use_container_width=True, key="btn_lote_auditoria_geral"):
+                with st.spinner("Analisando cada itinerário de turma..."):
+                    from utils import gerar_auditoria_lote_completa
+                    pdf_lote_a = gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_sac_eventos)
+                    st.session_state.pdf_lote_auditoria_geral = pdf_lote_a
+                    st.toast("Dossiê de auditorias concluído!", icon="✅")
+
+            if "pdf_lote_auditoria_geral" in st.session_state:
+                st.download_button("📥 BAIXAR TODAS AS AUDITORIAS (DOSSIÊ)", st.session_state.pdf_lote_auditoria_geral, f"Dossie_Auditoria_Turmas_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
 # --- PÁGINA: MINHA TURMA ---
 elif menu == "🏠 Minha Turma":
