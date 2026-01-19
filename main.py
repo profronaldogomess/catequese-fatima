@@ -660,7 +660,7 @@ elif menu == "📝 Cadastrar Catequizando":
         tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
         lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
 
-        with st.form("form_cadastro_30_colunas_v4", clear_on_submit=True):
+        with st.form("form_cadastro_30_colunas_v5", clear_on_submit=True):
             st.subheader("📍 1. Identificação")
             c1, c2, c3 = st.columns([2, 1, 1])
             nome = c1.text_input("Nome Completo").upper()
@@ -692,11 +692,11 @@ elif menu == "📝 Cadastrar Catequizando":
             # NOVO ESPAÇO EXTRA: RESPONSÁVEL LEGAL / CUIDADOR (Acolhimento de novas realidades familiares)
             st.markdown("---")
             st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
-            st.caption("Preencha caso a criança seja cuidada por Avós, Tios, Primos ou Tutores.")
+            st.caption("Preencha caso a criança seja cuidada por Avós, Tios, Primos ou Tutores. Isso NÃO apaga os nomes dos pais acima.")
             
             cr1, cr2, cr3 = st.columns([2, 1, 1])
             responsavel_nome = cr1.text_input("Nome do Cuidador/Responsável").upper()
-            vinculo_resp = cr2.selectbox("Vínculo", ["PAIS", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
+            vinculo_resp = cr2.selectbox("Vínculo", ["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
             tel_responsavel = cr3.text_input("Telefone do Cuidador")
 
             st.divider()
@@ -745,36 +745,36 @@ elif menu == "📝 Cadastrar Catequizando":
 
                     # MONTAGEM RIGOROSA DAS 30 COLUNAS (A até AD)
                     registro = [[
-                        novo_id,          # A
-                        etapa_inscricao,  # B
-                        nome,             # C
-                        str(data_nasc),   # D
-                        batizado,         # E
-                        contato,          # F
-                        endereco,         # G
-                        nome_mae,         # H
-                        nome_pai,         # I
-                        resp_final,       # J (Responsável Principal)
-                        docs_faltando,    # K
-                        qual_grupo,       # L
-                        "ATIVO",          # M
-                        medicamento,      # N
-                        tgo,              # O
-                        estado_civil,     # P
-                        sacramentos,      # Q
-                        prof_mae,         # R
-                        tel_mae,          # S
-                        prof_pai,         # T
-                        tel_pai,          # U
-                        est_civil_pais,   # V
-                        sac_pais,         # W
-                        part_grupo,       # X
-                        qual_grupo,       # Y
-                        tem_irmaos,       # Z
-                        qtd_irmaos,       # AA
-                        turno,            # AB
-                        local_enc,        # AC
-                        obs_familia       # AD (30ª Coluna - Observação Pastoral)
+                        novo_id,          # A: id_catequizando
+                        etapa_inscricao,  # B: etapa
+                        nome,             # C: nome_completo
+                        str(data_nasc),   # D: data_nascimento
+                        batizado,         # E: batizado_sn
+                        contato,          # F: contato_principal
+                        endereco,         # G: endereco_completo
+                        nome_mae,         # H: nome_mae
+                        nome_pai,         # I: nome_pai
+                        resp_final,       # J: nome_responsavel (Cuidador ou Pais)
+                        docs_faltando,    # K: doc_em_falta
+                        qual_grupo,       # L: engajado_grupo
+                        "ATIVO",          # M: status
+                        medicamento,      # N: toma_medicamento_sn
+                        tgo,              # O: tgo_sn
+                        estado_civil,     # P: estado_civil_pais_ou_proprio
+                        sacramentos,      # Q: sacramentos_ja_feitos
+                        prof_mae,         # R: profissao_mae
+                        tel_mae,          # S: tel_mae
+                        prof_pai,         # T: profissao_pai
+                        tel_pai,          # U: tel_pai
+                        est_civil_pais,   # V: est_civil_pais
+                        sac_pais,         # W: sac_pais
+                        part_grupo,       # X: participa_grupo
+                        qual_grupo,       # Y: qual_grupo
+                        tem_irmaos,       # Z: tem_irmaos
+                        qtd_irmaos,       # AA: qtd_irmaos
+                        turno,            # AB: turno
+                        local_enc,        # AC: local_encontro
+                        obs_familia       # AD: obs_pastoral_familia (30ª Coluna)
                     ]]
                     
                     if salvar_lote_catequizandos(registro):
