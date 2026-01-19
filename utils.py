@@ -1,7 +1,8 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 1.1.5 - AUDITORIA EXECUTIVA E ESTABILIDADE ABSOLUTA
+# VERSÃO: 1.2.0 - ESTABILIDADE ABSOLUTA E AUDITORIA EXECUTIVA
 # MISSÃO: Gestão de PDFs, Lógicas de Censo, Fuso Horário e Documentação Oficial.
+# ESTE ARQUIVO É PARTE INTEGRANTE DO SISTEMA CATEQUESE FÁTIMA.
 # ==============================================================================
 
 from datetime import date, datetime, timedelta, timezone
@@ -24,7 +25,7 @@ def formatar_data_br(valor):
     
     s = str(valor).strip().split('.')[0]
     
-    # Trata formato numérico YYYYMMDD
+    # Trata formato numérico YYYYMMDD (comum em exportações de planilhas)
     if len(s) == 8 and s.isdigit():
         return f"{s[6:8]}/{s[4:6]}/{s[0:4]}"
     
@@ -43,12 +44,12 @@ def formatar_data_br(valor):
 def calcular_idade(data_nascimento):
     """
     Calcula a idade exata baseada no fuso horário da paróquia (UTC-3).
-    Retorna 0 se a data for inválida.
+    Retorna 0 se a data for inválida ou não informada.
     """
     if not data_nascimento or str(data_nascimento).strip() in ["None", "", "N/A"]:
         return 0
     
-    # Ajuste rigoroso de fuso horário para a Bahia/Brasília
+    # Ajuste rigoroso de fuso horário para a Bahia/Brasília (UTC-3)
     hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
     
     try:
@@ -67,7 +68,7 @@ def limpar_texto(texto):
         return ""
     # Limpeza de negritos e listas de Markdown gerados pela IA
     texto_limpo = str(texto).replace("**", "").replace("* ", " - ")
-    # Substituição de caracteres não suportados pelo Latin-1 padrão
+    # Substituição de caracteres não suportados pelo Latin-1 padrão (ISO-8859-1)
     return texto_limpo.encode('latin-1', 'replace').decode('latin-1')
 
 def finalizar_pdf(pdf):
@@ -75,13 +76,13 @@ def finalizar_pdf(pdf):
     try:
         return pdf.output(dest='S').encode('latin-1')
     except Exception as e:
-        print(f"Erro ao finalizar PDF: {e}")
+        print(f"Erro crítico ao finalizar PDF: {e}")
         return b""
 
 def desenhar_campo_box(pdf, label, valor, x, y, w, h=8):
     """
     Desenha uma caixa de texto padronizada com rótulo superior.
-    Fundo: Creme (#f8f9f0) | Borda: 1pt.
+    Fundo: Creme (#f8f9f0) | Borda: 1pt | Fonte: Helvetica.
     """
     pdf.set_xy(x, y)
     pdf.set_font("helvetica", "B", 8)
@@ -113,7 +114,7 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
         # Logo posicionado conforme Leis de Ouro (10, 15, 22)
         pdf.image("logo.png", 10, 15, 22)
     
-    # Data local ajustada para evitar virada de dia precoce
+    # Data local ajustada para evitar virada de dia precoce no servidor
     data_local = (datetime.now(timezone.utc) + timedelta(hours=-3)).strftime('%d / %m / %Y')
     
     pdf.set_xy(38, 15)
@@ -132,7 +133,7 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
     
     pdf.ln(10)
     
-    # A caixa de título superior só aparece se o título for informado
+    # A caixa de título superior só aparece se o título for informado explicitamente
     if titulo:
         y_topo = pdf.get_y()
         pdf.set_fill_color(245, 245, 245)
@@ -411,13 +412,16 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
 # 5. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL)
 # ==============================================================================
 
-def gerar_relatorio_diocesano_v2(censo, sacramentos, equipe, analise_ia):
-    """Relatório de alta densidade para a Diocese com tabelas de censo e equipe."""
+def gerar_relatorio_diocesano_pdf(censo, turmas_list, sacramentos, proj_list, analise_ia):
+    """
+    Relatório de alta densidade para a Diocese.
+    Mantém a assinatura original para compatibilidade com o main.py.
+    """
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO DIOCESANO")
     
-    # 1. Censo
+    # 1. Censo Populacional
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
@@ -425,9 +429,9 @@ def gerar_relatorio_diocesano_v2(censo, sacramentos, equipe, analise_ia):
     
     pdf.set_text_color(0, 0, 0)
     y = pdf.get_y() + 2
-    desenhar_campo_box(pdf, "Total Geral", str(censo['total']), 10, y, 60)
-    desenhar_campo_box(pdf, "Infantil / Juvenil", str(censo['kids']), 75, y, 60)
-    desenhar_campo_box(pdf, "Jovens / Adultos", str(censo['adults']), 140, y, 60)
+    desenhar_campo_box(pdf, "Total Geral", str(censo.get('total', '0')), 10, y, 60)
+    desenhar_campo_box(pdf, "Infantil / Juvenil", str(censo.get('kids', '0')), 75, y, 60)
+    desenhar_campo_box(pdf, "Jovens / Adultos", str(censo.get('adults', '0')), 140, y, 60)
     pdf.ln(18)
 
     # 2. Sacramentos do Ano
@@ -444,10 +448,11 @@ def gerar_relatorio_diocesano_v2(censo, sacramentos, equipe, analise_ia):
     pdf.ln()
     
     pdf.set_font("helvetica", "", 9)
+    # Mapeia os dados do dicionário sacramentos
     sac_list = [
-        ("BATISMO", sacramentos['bat_k'], sacramentos['bat_a']),
-        ("EUCARISTIA", sacramentos['euca_k'], sacramentos['euca_a']),
-        ("CRISMA", "N/A", sacramentos['crisma_a'])
+        ("BATISMO", sacramentos.get('bat_k', '0'), sacramentos.get('bat_a', '0')),
+        ("EUCARISTIA", sacramentos.get('euca_k', '0'), sacramentos.get('euca_a', '0')),
+        ("CRISMA", "N/A", sacramentos.get('crisma_a', '0'))
     ]
     for nome, k, a in sac_list:
         pdf.cell(70, 7, nome, border=1)
@@ -456,35 +461,11 @@ def gerar_relatorio_diocesano_v2(censo, sacramentos, equipe, analise_ia):
         pdf.ln()
     pdf.ln(5)
 
-    # 3. Perfil da Equipe
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("3. PERFIL DA EQUIPE (CATEQUISTAS)"), ln=True, fill=True, align='C')
-    
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(38, 7, "Total Equipe", border=1, fill=True, align='C')
-    pdf.cell(38, 7, "Batizados", border=1, fill=True, align='C')
-    pdf.cell(38, 7, "Crismados", border=1, fill=True, align='C')
-    pdf.cell(38, 7, "Aptos", border=1, fill=True, align='C')
-    pdf.cell(38, 7, "Ministros", border=1, fill=True, align='C')
-    pdf.ln()
-    
-    pdf.set_font("helvetica", "", 9)
-    pdf.cell(38, 7, str(equipe['total']), border=1, align='C')
-    pdf.cell(38, 7, str(equipe['bat']), border=1, align='C')
-    pdf.cell(38, 7, str(equipe['cris']), border=1, align='C')
-    pdf.cell(38, 7, str(equipe['apto']), border=1, align='C')
-    pdf.cell(38, 7, str(equipe['min']), border=1, align='C')
-    pdf.ln(12)
-
-    # 4. Análise IA
+    # 3. Análise IA e Diretrizes
     pdf.set_fill_color(224, 61, 17)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("4. ANÁLISE TÉCNICA E DIRETRIZES"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("3. ANÁLISE TÉCNICA E DIRETRIZES"), ln=True, fill=True, align='C')
     pdf.ln(2)
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("helvetica", "", 10)
@@ -492,8 +473,11 @@ def gerar_relatorio_diocesano_v2(censo, sacramentos, equipe, analise_ia):
     
     return finalizar_pdf(pdf)
 
-def gerar_relatorio_pastoral_v2(turmas_data, analise_ia):
-    """Relatório analítico por turma com detalhes de logística e sacramentos."""
+def gerar_relatorio_pastoral_interno_pdf(turmas_data, analise_ia):
+    """
+    Relatório analítico por turma com detalhes de logística e sacramentos.
+    Mantém a assinatura original para compatibilidade com o main.py.
+    """
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL ANALÍTICO")
@@ -515,17 +499,19 @@ def gerar_relatorio_pastoral_v2(turmas_data, analise_ia):
     pdf.ln()
     
     pdf.set_font("helvetica", "", 7)
-    for t in turmas_data:
-        if pdf.get_y() > 260:
-            pdf.add_page()
-            pdf.ln(10)
-        pdf.cell(45, 6, limpar_texto(t['nome']), border=1)
-        pdf.cell(40, 6, limpar_texto(t['catequistas']), border=1)
-        pdf.cell(35, 6, limpar_texto(f"{t['local']} / {t['dia']}"), border=1)
-        pdf.cell(20, 6, str(t['total']), border=1, align='C')
-        pdf.cell(25, 6, str(t['batizados']), border=1, align='C')
-        pdf.cell(25, 6, str(t['eucaristia']), border=1, align='C')
-        pdf.ln()
+    # turmas_data deve ser uma lista de dicionários
+    if isinstance(turmas_data, list):
+        for t in turmas_data:
+            if pdf.get_y() > 260:
+                pdf.add_page()
+                pdf.ln(10)
+            pdf.cell(45, 6, limpar_texto(t.get('nome', 'N/A')), border=1)
+            pdf.cell(40, 6, limpar_texto(t.get('catequistas', 'N/A')), border=1)
+            pdf.cell(35, 6, limpar_texto(f"{t.get('local', 'N/A')} / {t.get('dia', 'N/A')}"), border=1)
+            pdf.cell(20, 6, str(t.get('total', '0')), border=1, align='C')
+            pdf.cell(25, 6, str(t.get('batizados', '0')), border=1, align='C')
+            pdf.cell(25, 6, str(t.get('eucaristia', '0')), border=1, align='C')
+            pdf.ln()
     
     pdf.ln(10)
     pdf.set_fill_color(224, 61, 17)
@@ -552,9 +538,9 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
     
     pdf.set_text_color(0, 0, 0)
     y = pdf.get_y() + 2
-    desenhar_campo_box(pdf, "Batismos (Ano)", str(stats['bat_ano']), 10, y, 60)
-    desenhar_campo_box(pdf, "Batizados (Kids)", str(stats['bat_k']), 75, y, 60)
-    desenhar_campo_box(pdf, "Batizados (Adultos)", str(stats['bat_a']), 140, y, 60)
+    desenhar_campo_box(pdf, "Batismos (Ano)", str(stats.get('bat_ano', '0')), 10, y, 60)
+    desenhar_campo_box(pdf, "Batizados (Kids)", str(stats.get('bat_k', '0')), 75, y, 60)
+    desenhar_campo_box(pdf, "Batizados (Adultos)", str(stats.get('bat_a', '0')), 140, y, 60)
     pdf.ln(18)
     
     pdf.set_fill_color(65, 123, 153)
@@ -575,11 +561,11 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
         if pdf.get_y() > 250:
             pdf.add_page()
             pdf.ln(10)
-        pdf.cell(50, 6, limpar_texto(t['turma']), border=1)
-        pdf.cell(20, 6, t['freq'], border=1, align='C')
-        pdf.cell(20, 6, str(t['batizados']), border=1, align='C')
-        nomes = ", ".join(t['nomes_pendentes']) if t['nomes_pendentes'] else "NENHUM"
-        if t['pendentes'] > 0:
+        pdf.cell(50, 6, limpar_texto(t.get('turma', 'N/A')), border=1)
+        pdf.cell(20, 6, t.get('freq', '0%'), border=1, align='C')
+        pdf.cell(20, 6, str(t.get('batizados', '0')), border=1, align='C')
+        nomes = ", ".join(t.get('nomes_pendentes', [])) if t.get('nomes_pendentes') else "NENHUM"
+        if t.get('pendentes', 0) > 0:
             pdf.set_text_color(224, 61, 17)
         pdf.cell(100, 6, limpar_texto(nomes), border=1)
         pdf.set_text_color(0, 0, 0)
@@ -700,10 +686,3 @@ def obter_aniversariantes_mes(df_cat):
                 'etapa': r['etapa']
             })
     return pd.DataFrame(lista).sort_values(by='dia') if lista else pd.DataFrame()
-
-# ==============================================================================
-# 7. COMPATIBILIDADE (ALIASES)
-# ==============================================================================
-# Garante que o main.py funcione mesmo se chamar os nomes antigos das funções.
-gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v2
-gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v2
