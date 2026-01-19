@@ -106,18 +106,23 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo
 )
+f# --- NO main.py: SUBSTITUA O BLOCO DE IMPORTAÇÃO DO UTILS ---
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
     obter_aniversariantes_mes, converter_para_data, verificar_status_ministerial, 
     obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
     gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, 
-    gerar_relatorio_diocesano_v4,           # Função base v4
-    gerar_relatorio_diocesano_pdf,          # Apelido para v4
-    gerar_relatorio_pastoral_v2,            # Função base Pastoral
-    gerar_relatorio_pastoral_interno_pdf,   # Apelido para Pastoral (Resolve seu erro)
-    gerar_pdf_perfil_turma,                 # Função Perfil de Turma
+    gerar_fichas_turma_completa,
+    gerar_relatorio_diocesano_v4,
+    gerar_relatorio_diocesano_pdf,
+    gerar_relatorio_diocesano_v2,
+    gerar_relatorio_pastoral_v3,
+    gerar_relatorio_pastoral_v2,
+    gerar_relatorio_pastoral_interno_pdf,
+    gerar_pdf_perfil_turma,
+    gerar_relatorio_sacramentos_tecnico_v2,
     gerar_relatorio_sacramentos_tecnico_pdf, 
-    formatar_data_br, gerar_relatorio_pastoral_v3, gerar_relatorio_sacramentos_tecnico_v2
+    formatar_data_br
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -1434,3 +1439,4 @@ elif menu == "👥 Gestão de Catequistas":
                 else:
                     st.warning("Informe o tema e selecione ao menos um participante.")
 # --- FIM DO BLOCO: GESTÃO DE CATEQUISTAS ---
+
