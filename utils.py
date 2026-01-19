@@ -10,6 +10,10 @@ from fpdf import FPDF
 import os
 import re
 import streamlit as st
+import random
+from PIL import Image, ImageDraw, ImageFont
+import io
+import os
 
 # ==============================================================================
 # 1. FUNÇÕES DE APOIO, FORMATAÇÃO E TRATAMENTO DE DADOS
@@ -978,6 +982,66 @@ def exibir_tela_manutencao():
             </div>
         </div>
     """, unsafe_allow_html=True)
+
+def gerar_card_aniversario(nome_catequizando, tipo="DIA"):
+    """
+    Gera card de aniversário.
+    DIA: Sorteia entre templates 1, 2 e 3 (Coords originais).
+    MES: Usa template 4 (Coords: X 92-990, Y 393-971).
+    """
+    try:
+        # 1. Definição de Template e Coordenadas
+        if tipo == "MES":
+            template_path = "template_niver_4.png"
+            x_min, x_max = 92, 990
+            y_min, y_max = 393, 971
+            font_size = 110 # Fonte maior, pois a caixa é maior
+        else:
+            numero = random.randint(1, 3)
+            template_path = f"template_niver_{numero}.png"
+            x_min, x_max = 108, 972
+            y_min, y_max = 549, 759
+            font_size = 85
+
+        if not os.path.exists(template_path):
+            return None
+            
+        img = Image.open(template_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        
+        # 2. Cálculo dos Centros
+        centro_x = (x_min + x_max) / 2
+        centro_y = (y_min + y_max) / 2
+
+        # 3. Configuração da Fonte
+        font_path = "fonte_card.ttf"
+        if os.path.exists(font_path):
+            font = ImageFont.truetype(font_path, font_size)
+        else:
+            font = ImageFont.load_default()
+
+        # 4. Cor e Estilização
+        cor_texto = (26, 74, 94) # Azul Escuro Paroquial
+        nome_upper = nome_catequizando.upper()
+        
+        # 5. Centralização Precisa
+        bbox = draw.textbbox((0, 0), nome_upper, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        
+        pos_x = centro_x - (w / 2)
+        pos_y = centro_y - (h / 2) - 10
+
+        # 6. Carimbo do Nome
+        draw.text((pos_x, pos_y), nome_upper, font=font, fill=cor_texto)
+        
+        # 7. Conversão para Streamlit
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception as e:
+        st.error(f"Erro ao gerar card: {e}")
+        return None
 
 # ==============================================================================
 # 8. ALIASES DE COMPATIBILIDADE (NÃO REMOVER)
