@@ -740,9 +740,12 @@ def gerar_fichas_paroquia_total(df_catequizandos):
 def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
     """
     Gera um Dossiê Paroquial contendo a auditoria completa de cada turma.
-    Inclui: Indicadores, Frequência Mensal, Evasão e Sacramentos com Data.
+    Blindagem contra KeyError e inconsistência de colunas.
     """
     pdf = FPDF()
+    
+    # Normalização de colunas para busca resiliente
+    col_id_cat = 'id_catequizando'
     
     for _, t in df_turmas.iterrows():
         t_nome = t['nome_turma']
@@ -761,7 +764,6 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
                 pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
                 freq_g = round(pres_t['status_num'].mean() * 100, 1)
                 
-                # Cálculo de Frequência Mensal
                 try:
                     pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
                     pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
@@ -803,7 +805,10 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
             pdf.cell(120, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(70, 7, "Status / Faltas", border=1, fill=True, align='C'); pdf.ln()
             pdf.set_font("helvetica", "", 8)
             for _, r in alunos_t.iterrows():
-                faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
+                faltas = 0
+                if not pres_t.empty and 'id_catequizando' in pres_t.columns:
+                    faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                
                 if faltas >= 2: pdf.set_text_color(224, 61, 17)
                 else: pdf.set_text_color(0, 0, 0)
                 info = f"ATIVO ({faltas} faltas)" if faltas > 0 else "ATIVO (100% Freq.)"
@@ -818,14 +823,18 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
             pdf.cell(80, 7, "Nome", border=1, fill=True); pdf.cell(50, 7, "Sacramento", border=1, fill=True, align='C'); pdf.cell(60, 7, "Data do Registro", border=1, fill=True, align='C'); pdf.ln()
             pdf.set_font("helvetica", "", 8)
             
-            sac_turma = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())] if not df_recebidos.empty else pd.DataFrame()
-            if not sac_turma.empty:
-                for _, s in sac_turma.iterrows():
-                    pdf.cell(80, 6, limpar_texto(s['nome']), border=1)
-                    pdf.cell(50, 6, limpar_texto(s['tipo']), border=1, align='C')
-                    pdf.cell(60, 6, formatar_data_br(s['data']), border=1, align='C'); pdf.ln()
+            # BLINDAGEM CONTRA KEYERROR: Verifica se a coluna existe antes de filtrar
+            if not df_recebidos.empty and col_id_cat in df_recebidos.columns:
+                sac_turma = df_recebidos[df_recebidos[col_id_cat].isin(alunos_t['id_catequizando'].tolist())]
+                if not sac_turma.empty:
+                    for _, s in sac_turma.iterrows():
+                        pdf.cell(80, 6, limpar_texto(s.get('nome', 'N/A')), border=1)
+                        pdf.cell(50, 6, limpar_texto(s.get('tipo', 'N/A')), border=1, align='C')
+                        pdf.cell(60, 6, formatar_data_br(s.get('data', 'N/A')), border=1, align='C'); pdf.ln()
+                else:
+                    pdf.cell(190, 6, "Nenhum sacramento registrado para esta turma.", border=1, align='C', ln=True)
             else:
-                pdf.cell(190, 6, "Nenhum sacramento registrado para esta turma.", border=1, align='C', ln=True)
+                pdf.cell(190, 6, "Dados de sacramentos nominais indisponíveis ou coluna incorreta.", border=1, align='C', ln=True)
             
     return finalizar_pdf(pdf)
 
