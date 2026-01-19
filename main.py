@@ -315,50 +315,39 @@ if menu == "🏠 Início / Dashboard":
 
         st.divider()
 
-        # --- SEÇÃO 3: ALERTAS E ANIVERSARIANTES ---
+# --- SEÇÃO 3: ALERTAS E ANIVERSARIANTES ---
         col_niver, col_evasao = st.columns(2)
         with col_niver:
             st.subheader("🎂 Aniversariantes do Mês")
             df_niver_unificado = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
             
             if not df_niver_unificado.empty:
-                # --- NOVO: BOTÃO COLETIVO (TEMPLATE 4) ---
+                # --- BOTÃO COLETIVO (TEMPLATE 4) ---
                 if st.button("🖼️ GERAR CARD COLETIVO DO MÊS", use_container_width=True, key="btn_coletivo_mes"):
-                    # Prepara a lista no formato: PAPEL - NOME
-                    lista_nomes = [f"{row['tipo']} - {row['nome']}" for _, row in df_niver_unificado.iterrows()]
-                    card_coletivo = gerar_card_aniversario(lista_nomes, tipo="MES")
+                    # Enviamos no formato "DIA | PAPEL | NOME" para o utils processar
+                    lista_para_card = [f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_unificado.iterrows()]
+                    card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
                     if card_coletivo:
                         st.image(card_coletivo, caption="Card Coletivo do Mês")
                         st.download_button("📥 Baixar Card Coletivo", card_coletivo, "Aniversariantes_do_Mes.png", "image/png")
                 
                 st.divider()
 
-                # --- LISTA INDIVIDUAL (TEMPLATES 1-3) ---
+                # --- LISTA INDIVIDUAL ---
                 for i, niver in df_niver_unificado.iterrows():
                     icone = "🛡️" if niver['tipo'] == 'CATEQUISTA' else "🎁"
                     c_txt, c_btn = st.columns([3, 1])
                     c_txt.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']}")
                     
-                    # Botão Individual (Variação Aleatória)
                     if c_btn.button("🖼️ Card", key=f"btn_indiv_{i}"):
-                        texto_card = f"{niver['tipo']} - {niver['nome']}"
-                        card_indiv = gerar_card_aniversario(texto_card, tipo="DIA")
+                        # Enviamos no formato "DIA | PAPEL | NOME"
+                        dados_envio = f"{int(niver['dia'])} | {niver['tipo']} | {niver['nome']}"
+                        card_indiv = gerar_card_aniversario(dados_envio, tipo="DIA")
                         if card_indiv:
                             st.image(card_indiv, caption=f"Card de {niver['nome']}")
                             st.download_button("📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png")
             else: 
                 st.write("Nenhum aniversariante este mês.")
-
-        with col_evasao:
-            st.subheader("🚨 Alerta de Evasão")
-            if not df_pres.empty:
-                faltas = df_pres[df_pres['status'] == 'AUSENTE'].groupby('nome_catequizando').size().reset_index(name='total_faltas')
-                evasao = faltas[faltas['total_faltas'] >= 2].sort_values(by='total_faltas', ascending=False)
-                if not evasao.empty:
-                    st.warning(f"Existem {len(evasao)} catequizandos com 2 ou mais faltas!")
-                    st.dataframe(evasao, use_container_width=True, hide_index=True)
-                else: 
-                    st.success("Nenhum alerta de evasão no momento.")
 
 # --- SEÇÃO 4: DOCUMENTAÇÃO E AUDITORIA (SISTEMA DE QUATRO BOTÕES - VERSÃO INTEGRAL) ---
         st.divider()
