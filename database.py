@@ -30,13 +30,9 @@ def ler_aba(nome_aba):
             todos_os_valores = aba.get_all_values()
             if not todos_os_valores or len(todos_os_valores) < 1:
                 return pd.DataFrame()
-            
-            # Limpeza de cabeçalhos
             headers = [str(h).strip().lower() for h in todos_os_valores[0]]
             headers = [h if h != "" else f"col_{i}" for i, h in enumerate(headers)]
-            
             data = todos_os_valores[1:]
-            # Garante que todas as linhas tenham o mesmo número de colunas do cabeçalho
             num_cols = len(headers)
             data_ajustada = []
             for row in data:
@@ -44,7 +40,6 @@ def ler_aba(nome_aba):
                 if len(row_fixed) < num_cols:
                     row_fixed.extend([""] * (num_cols - len(row_fixed)))
                 data_ajustada.append(row_fixed[:num_cols])
-                
             df = pd.DataFrame(data_ajustada, columns=headers)
             return df
         except Exception as e:
@@ -89,7 +84,8 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
             aba = planilha.worksheet("catequizandos")
             celula = aba.find(str(id_catequizando))
             if celula:
-                aba.update(f"A{celula.row}:Q{celula.row}", [novos_dados_lista])
+                # Rigor: 29 colunas (A-AC)
+                aba.update(f"A{celula.row}:AC{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
@@ -155,7 +151,6 @@ def atualizar_turma(id_turma, novos_dados_lista):
             aba = planilha.worksheet("turmas")
             celula = aba.find(str(id_turma))
             if celula:
-                # Atualizado para J (10 colunas: ID, Nome, Etapa, Ano, Catequistas, Dias, Euca, Crisma, Turno, Local)
                 aba.update(f"A{celula.row}:J{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
@@ -216,28 +211,3 @@ def registrar_evento_sacramento_completo(dados_evento, lista_participantes, tipo
         st.cache_data.clear(); return True
     except Exception as e:
         st.error(f"Erro crítico: {e}"); return False
-
-# --- SUBSTITUIR NO database.py ---
-def atualizar_catequizando(id_catequizando, novos_dados_lista):
-    planilha = conectar_google_sheets()
-    if planilha:
-        try:
-            aba = planilha.worksheet("catequizandos")
-            celula = aba.find(str(id_catequizando))
-            if celula:
-                # Atualizado para AC (29 colunas)
-                aba.update(f"A{celula.row}:AC{celula.row}", [novos_dados_lista])
-                st.cache_data.clear()
-                return True
-        except Exception as e: st.error(f"Erro: {e}")
-    return False
-
-def salvar_encontro(dados_encontro):
-    planilha = conectar_google_sheets()
-    if planilha:
-        try:
-            aba = planilha.worksheet("encontros")
-            aba.append_row(dados_encontro)
-            st.cache_data.clear(); return True
-        except Exception as e: st.error(f"Erro: {e}")
-    return False
