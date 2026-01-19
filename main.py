@@ -414,16 +414,35 @@ if menu == "🏠 Início / Dashboard":
             if "pdf_lote_fichas_geral" in st.session_state:
                 st.download_button("📥 BAIXAR TODAS AS FICHAS (PDF ÚNICO)", st.session_state.pdf_lote_fichas_geral, f"Fichas_Gerais_Fatima_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
-            # --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE ---
-            if st.button("📊 GERAR TODAS AS AUDITORIAS DE TURMA", use_container_width=True, key="btn_lote_auditoria_geral"):
+            # --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE (CORRIGIDO) ---
+            if st.button("📊 GERAR TODAS AS AUDITORIAS DE TURMA", use_container_width=True, key="btn_lote_auditoria_geral_v7"):
                 with st.spinner("Analisando cada itinerário de turma..."):
                     from utils import gerar_auditoria_lote_completa
-                    pdf_lote_a = gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_sac_eventos)
-                    st.session_state.pdf_lote_auditoria_geral = pdf_lote_a
-                    st.toast("Dossiê de auditorias concluído!", icon="✅")
+                    
+                    # CORREÇÃO CRÍTICA: Carregar a aba NOMINAL (recebidos) e não a de eventos gerais
+                    df_sac_nominais = ler_aba("sacramentos_recebidos")
+                    
+                    if not df_sac_nominais.empty:
+                        pdf_lote_a = gerar_auditoria_lote_completa(
+                            df_turmas, 
+                            df_cat, 
+                            df_pres, 
+                            df_sac_nominais # Passando a variável correta
+                        )
+                        st.session_state.pdf_lote_auditoria_geral = pdf_lote_a
+                        st.toast("Dossiê de auditorias concluído!", icon="✅")
+                        st.rerun()
+                    else:
+                        st.error("A aba 'sacramentos_recebidos' está vazia ou não foi encontrada.")
 
             if "pdf_lote_auditoria_geral" in st.session_state:
-                st.download_button("📥 BAIXAR TODAS AS AUDITORIAS (DOSSIÊ)", st.session_state.pdf_lote_auditoria_geral, f"Dossie_Auditoria_Turmas_{date.today().year}.pdf", "application/pdf", use_container_width=True)
+                st.download_button(
+                    label="📥 BAIXAR TODAS AS AUDITORIAS (DOSSIÊ)", 
+                    data=st.session_state.pdf_lote_auditoria_geral, 
+                    file_name=f"Dossie_Auditoria_Turmas_{date.today().year}.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
 
 # --- PÁGINA: MINHA TURMA ---
 elif menu == "🏠 Minha Turma":
