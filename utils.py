@@ -162,8 +162,8 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
         centro_x = (x_min + x_max) / 2
         centro_y = (y_min + y_max) / 2
         
-        # 2. Configuração da Fonte (Aumentada para 35)
-        font_size = 35 
+        # 2. Configuração da Fonte (Aumentada para 50)
+        font_size = 50 
         font_path = "fonte_card.ttf"
         font = ImageFont.truetype(font_path, font_size) if os.path.exists(font_path) else ImageFont.load_default()
         cor_texto = (26, 74, 94) # Azul Escuro
