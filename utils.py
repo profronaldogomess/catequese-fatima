@@ -127,64 +127,57 @@ def exibir_tela_manutencao():
 # 3. MOTOR DE CARDS DE ANIVERSÁRIO (IDENTIDADE VISUAL)
 # ==============================================================================
 
-def gerar_card_aniversario(nome_catequizando, tipo="DIA"):
+def gerar_card_aniversario(dados_niver, tipo="DIA"):
     """
-    Gera card de aniversário carimbando o nome nos templates do Canva.
-    DIA: Sorteia entre templates 1, 2 e 3 (X: 108-972 | Y: 549-759).
-    MES: Usa template 4 (X: 92-990 | Y: 393-971).
+    dados_niver: Pode ser uma string (nome único) ou uma lista de strings (para o mês).
+    tipo: "DIA" (Templates 1-3) ou "MES" (Template 4 Coletivo).
     """
     try:
-        # 1. Definição de Template e Coordenadas (Rigor de Pixels fornecido)
         if tipo == "MES":
             template_path = "template_niver_4.png"
             x_min, x_max = 92, 990
             y_min, y_max = 393, 971
-            font_size = 110 
+            font_size = 60 # Fonte menor para caber a lista
         else:
             numero = random.randint(1, 3)
             template_path = f"template_niver_{numero}.png"
             x_min, x_max = 108, 972
             y_min, y_max = 549, 759
-            font_size = 85
+            font_size = 75
 
-        if not os.path.exists(template_path):
-            return None
+        if not os.path.exists(template_path): return None
             
         img = Image.open(template_path).convert("RGB")
         draw = ImageDraw.Draw(img)
-        
-        # 2. Cálculo dos Centros Geométricos
         centro_x = (x_min + x_max) / 2
-        centro_y = (y_min + y_max) / 2
-
-        # 3. Configuração da Fonte (Requer fonte_card.ttf na raiz)
+        
         font_path = "fonte_card.ttf"
-        if os.path.exists(font_path):
-            font = ImageFont.truetype(font_path, font_size)
-        else:
-            font = ImageFont.load_default()
-
-        # 4. Estilização (Azul Escuro Paroquial para contraste)
+        font = ImageFont.truetype(font_path, font_size) if os.path.exists(font_path) else ImageFont.load_default()
         cor_texto = (26, 74, 94) 
-        nome_upper = nome_catequizando.upper()
-        
-        # 5. Centralização Precisa do Texto
-        bbox = draw.textbbox((0, 0), nome_upper, font=font)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-        
-        pos_x = centro_x - (w / 2)
-        pos_y = centro_y - (h / 2) - 10 # Ajuste fino de linha de base
 
-        # 6. Carimbo do Nome
-        draw.text((pos_x, pos_y), nome_upper, font=font, fill=cor_texto)
+        # LÓGICA PARA CARD COLETIVO (LISTA)
+        if tipo == "MES" and isinstance(dados_niver, list):
+            texto_completo = "\n".join(dados_niver)
+            # Centralização de bloco de texto
+            bbox = draw.multiline_textbbox((0, 0), texto_completo, font=font, align="center")
+            h_bloco = bbox[3] - bbox[1]
+            pos_y = ((y_min + y_max) / 2) - (h_bloco / 2)
+            
+            draw.multiline_text((centro_x, pos_y), texto_completo, font=font, fill=cor_texto, align="center", anchor="mm")
         
-        # 7. Conversão para Buffer de Imagem
+        # LÓGICA PARA CARD INDIVIDUAL
+        else:
+            nome_texto = dados_niver.upper() if isinstance(dados_niver, str) else str(dados_niver).upper()
+            bbox = draw.textbbox((0, 0), nome_texto, font=font)
+            w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            pos_y = ((y_min + y_max) / 2) - (h / 2)
+            draw.text((centro_x, pos_y), nome_texto, font=font, fill=cor_texto, anchor="mm")
+
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         return buf.getvalue()
     except Exception as e:
-        print(f"Erro no Motor de Cards: {e}")
+        st.error(f"Erro no Motor de Cards: {e}")
         return None
 
 # ==============================================================================
