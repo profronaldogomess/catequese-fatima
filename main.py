@@ -112,7 +112,7 @@ from utils import (
     obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
     gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, gerar_pdf_perfil_turma,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_pastoral_interno_pdf,
-    gerar_relatorio_sacramentos_tecnico_pdf, formatar_data_br
+    gerar_relatorio_sacramentos_tecnico_pdf, formatar_data_br, gerar_pdf_perfil_turma
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
