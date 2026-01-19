@@ -129,55 +129,75 @@ def exibir_tela_manutencao():
 
 def gerar_card_aniversario(dados_niver, tipo="DIA"):
     """
-    dados_niver: Pode ser uma string (nome único) ou uma lista de strings (para o mês).
-    tipo: "DIA" (Templates 1-3) ou "MES" (Template 4 Coletivo).
+    Gera card de aniversário com fonte 30 e centralização total.
+    DIA: Templates 1-3 | MES: Template 4 Coletivo.
     """
     try:
+        # 1. Definição de Template e Coordenadas de Pixels
         if tipo == "MES":
             template_path = "template_niver_4.png"
             x_min, x_max = 92, 990
             y_min, y_max = 393, 971
-            font_size = 60 # Fonte menor para caber a lista
         else:
             numero = random.randint(1, 3)
             template_path = f"template_niver_{numero}.png"
             x_min, x_max = 108, 972
             y_min, y_max = 549, 759
-            font_size = 75
 
         if not os.path.exists(template_path): return None
             
         img = Image.open(template_path).convert("RGB")
         draw = ImageDraw.Draw(img)
+        
+        # 2. Cálculo do Ponto Central Exato da Caixa
         centro_x = (x_min + x_max) / 2
+        centro_y = (y_min + y_max) / 2
         
+        # 3. Configuração da Fonte (Fixada em 30 conforme solicitado)
+        font_size = 30 
         font_path = "fonte_card.ttf"
-        font = ImageFont.truetype(font_path, font_size) if os.path.exists(font_path) else ImageFont.load_default()
-        cor_texto = (26, 74, 94) 
+        if os.path.exists(font_path):
+            font = ImageFont.truetype(font_path, font_size)
+        else:
+            font = ImageFont.load_default()
 
-        # LÓGICA PARA CARD COLETIVO (LISTA)
+        cor_texto = (26, 74, 94) # Azul Escuro Paroquial
+
+        # 4. LÓGICA PARA CARD COLETIVO (LISTA DE NOMES)
         if tipo == "MES" and isinstance(dados_niver, list):
-            texto_completo = "\n".join(dados_niver)
-            # Centralização de bloco de texto
-            bbox = draw.multiline_textbbox((0, 0), texto_completo, font=font, align="center")
-            h_bloco = bbox[3] - bbox[1]
-            pos_y = ((y_min + y_max) / 2) - (h_bloco / 2)
+            # Transforma a lista em texto com quebras de linha
+            texto_completo = "\n".join(dados_niver).upper()
             
-            draw.multiline_text((centro_x, pos_y), texto_completo, font=font, fill=cor_texto, align="center", anchor="mm")
+            # anchor="mm" garante que o centro do BLOCO de texto fique no centro da caixa
+            draw.multiline_text(
+                (centro_x, centro_y), 
+                texto_completo, 
+                font=font, 
+                fill=cor_texto, 
+                align="center", 
+                anchor="mm", 
+                spacing=12 # Espaçamento entre as linhas
+            )
         
-        # LÓGICA PARA CARD INDIVIDUAL
+        # 5. LÓGICA PARA CARD INDIVIDUAL
         else:
             nome_texto = dados_niver.upper() if isinstance(dados_niver, str) else str(dados_niver).upper()
-            bbox = draw.textbbox((0, 0), nome_texto, font=font)
-            w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-            pos_y = ((y_min + y_max) / 2) - (h / 2)
-            draw.text((centro_x, pos_y), nome_texto, font=font, fill=cor_texto, anchor="mm")
+            
+            # anchor="mm" garante que o centro da LINHA fique no centro da caixa
+            draw.text(
+                (centro_x, centro_y), 
+                nome_texto, 
+                font=font, 
+                fill=cor_texto, 
+                anchor="mm"
+            )
 
+        # 6. Conversão para Buffer
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         return buf.getvalue()
     except Exception as e:
-        st.error(f"Erro no Motor de Cards: {e}")
+        print(f"Erro no Motor de Cards: {e}")
         return None
 
 # ==============================================================================
