@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 2.3.0 - RIGOR DOCUMENTAL MÁXIMO (LGPD E VERACIDADE INTEGRAIS)
+# VERSÃO: 2.4.0 - AUDITORIA SACRAMENTAL AVANÇADA E INTEGRIDADE TOTAL
 # MISSÃO: Gestão de PDFs, Lógicas de Censo, Fuso Horário e Documentação Oficial.
 # ==============================================================================
 
@@ -157,8 +157,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0); nome_cat = dados.get('nome_completo', '________________')
     
     if is_menor:
-        mae = str(dados.get('nome_mae', '')).strip()
-        pai = str(dados.get('nome_pai', '')).strip()
+        mae = str(dados.get('nome_mae', '')).strip(); pai = str(dados.get('nome_pai', '')).strip()
         mae = "" if mae.upper() in ["N/A", "NONE", ""] else mae
         pai = "" if pai.upper() in ["N/A", "NONE", ""] else pai
         if mae and pai: resp = f"{mae} e {pai}"
@@ -200,24 +199,18 @@ def gerar_fichas_turma_completa(nome_turma, df_alunos):
 def gerar_ficha_catequista_pdf(dados, df_formacoes):
     """Gera o prontuário ministerial completo do catequista com histórico e DECLARAÇÃO DE VERACIDADE."""
     pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, titulo="FICHA DO CATEQUISTA", etapa="EQUIPE")
-    
-    # Seção 1: Identificação
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("1. DADOS PESSOAIS E CONTATO"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome', ''), 10, y, 135)
     desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 150, y, 45)
     y += 14; desenhar_campo_box(pdf, "E-mail:", dados.get('email', ''), 10, y, 110); desenhar_campo_box(pdf, "Telefone:", dados.get('telefone', ''), 125, y, 75)
-    
-    # Seção 2: Vida Ministerial
     pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(0, 7, limpar_texto("2. VIDA MINISTERIAL E SACRAMENTAL"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(dados.get('data_inicio_catequese', '')), 10, y, 45)
     desenhar_campo_box(pdf, "Batismo:", formatar_data_br(dados.get('data_batismo', '')), 58, y, 45)
     desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(dados.get('data_eucaristia', '')), 106, y, 45)
     desenhar_campo_box(pdf, "Crisma:", formatar_data_br(dados.get('data_crisma', '')), 154, y, 46)
-    
-    # Seção 3: Histórico de Formação
     pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(0, 7, limpar_texto("3. HISTÓRICO DE FORMAÇÃO"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
     pdf.cell(30, 7, "Data", border=1, fill=True, align='C'); pdf.cell(100, 7, "Tema", border=1, fill=True); pdf.cell(60, 7, "Formador", border=1, fill=True); pdf.ln()
@@ -226,23 +219,18 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
         for _, f in df_formacoes.iterrows():
             pdf.cell(30, 6, formatar_data_br(f['data']), border=1, align='C'); pdf.cell(100, 6, limpar_texto(f['tema']), border=1); pdf.cell(60, 6, limpar_texto(f['formador']), border=1); pdf.ln()
     else: pdf.cell(190, 6, "Nenhuma formação registrada.", border=1, align='C', ln=True)
-    
-    # --- SEÇÃO 4: DECLARAÇÃO DE VERACIDADE E RESPONSABILIDADE ---
     pdf.ln(5); pdf.set_font("helvetica", "B", 9); pdf.set_text_color(224, 61, 17); pdf.cell(0, 6, limpar_texto("Declaração de Responsabilidade"), ln=True)
     pdf.set_font("helvetica", "", 9); pdf.set_text_color(0, 0, 0)
     declara = (f"Eu, {dados.get('nome', '')}, declaro para os devidos fins que as informações acima prestadas são verdadeiras e assumo o compromisso "
                f"de zelar pela sã doutrina e pelas diretrizes da Pastoral da Catequese da Paróquia Nossa Senhora de Fátima, "
                f"atuando com fidelidade ao Evangelho e ao Magistério da Igreja.")
     pdf.multi_cell(0, 5, limpar_texto(declara))
-    
-    # Assinaturas
     pdf.ln(12); y_ass = pdf.get_y(); pdf.line(15, y_ass, 95, y_ass); pdf.line(115, y_ass, 195, y_ass)
-    pdf.set_xy(15, y_ass + 1); pdf.set_font("helvetica", "B", 8); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
-    pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Coordenador"), align='C')
+    pdf.set_xy(15, y_ass + 1); pdf.set_font("helvetica", "B", 8); pdf.cell(80, 5, limpar_texto("Assinatura Catequista"), align='C'); pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura Coordenador"), align='C')
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 5. RELATÓRIOS EXECUTIVOS (DIOCESANO V4 E PASTORAL V3)
+# 5. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL V2)
 # ==============================================================================
 
 def gerar_relatorio_diocesano_v4(dados_censo, equipe_stats, sac_ano, sac_censo, logistica_lista, formacoes_lista, analise_ia):
@@ -255,7 +243,6 @@ def gerar_relatorio_diocesano_v4(dados_censo, equipe_stats, sac_ano, sac_censo, 
     desenhar_campo_box(pdf, "Turmas Infantil/Juv.", str(dados_censo.get('t_infantil', '0')), 58, y, 45)
     desenhar_campo_box(pdf, "Turmas Jovens/Adultos", str(dados_censo.get('t_adultos', '0')), 106, y, 45)
     desenhar_campo_box(pdf, "Equipe (Exceto Admin)", str(dados_censo.get('total_equipe', '0')), 154, y, 46); pdf.ln(18)
-    
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("2. DADOS SACRAMENTAIS DA EQUIPE"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
     pdf.cell(100, 7, "Indicador", border=1, fill=True); pdf.cell(45, 7, "Qtd", border=1, fill=True, align='C'); pdf.cell(45, 7, "%", border=1, fill=True, align='C'); pdf.ln()
@@ -263,12 +250,10 @@ def gerar_relatorio_diocesano_v4(dados_censo, equipe_stats, sac_ano, sac_censo, 
     for desc, qtd in [("Batismo", equipe_stats.get('bat', 0)), ("Eucaristia", equipe_stats.get('euca', 0)), ("Crisma", equipe_stats.get('crisma', 0)), ("Ministros", equipe_stats.get('ministros', 0)), ("Aptos", equipe_stats.get('aptos', 0))]:
         perc = (int(qtd)/total_e)*100 if total_e > 0 else 0
         pdf.cell(100, 7, limpar_texto(f" {desc}"), border=1); pdf.cell(45, 7, str(qtd), border=1, align='C'); pdf.cell(45, 7, f"{perc:.1f}%", border=1, align='C'); pdf.ln()
-    
     pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("3. LOGÍSTICA E DISTRIBUIÇÃO"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
     pdf.cell(40, 7, "Dia", border=1, fill=True); pdf.cell(50, 7, "Local", border=1, fill=True); pdf.cell(100, 7, "Turmas", border=1, fill=True); pdf.ln()
     for item in logistica_lista: pdf.cell(40, 6, limpar_texto(item['dia']), border=1); pdf.cell(50, 6, limpar_texto(item['local']), border=1); pdf.cell(100, 6, limpar_texto(item['turmas']), border=1); pdf.ln()
-    
     pdf.ln(5); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("4. PARECER TÉCNICO"), ln=True, fill=True, align='C')
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
@@ -295,16 +280,46 @@ def gerar_relatorio_pastoral_v3(turmas_detalhadas, totais_gerais, analise_ia):
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
 
-def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "AUDITORIA SACRAMENTAL"); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
-    return finalizar_pdf(pdf)
+def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedimentos_lista, analise_ia):
+    """Auditoria Sacramental de Alta Densidade com Quadro Geral, Turmas e Impedimentos."""
+    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "AUDITORIA SACRAMENTAL E CENSO DE IVC")
+    
+    # 1. Quadro Geral por Público
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("1. QUADRO GERAL DE SACRAMENTALIZAÇÃO (CENSO)"), ln=True, fill=True, align='C')
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(50, 7, "Sacramento", border=1, fill=True); pdf.cell(70, 7, "Infantil / Juvenil", border=1, fill=True, align='C'); pdf.cell(70, 7, "Jovens / Adultos", border=1, fill=True, align='C'); pdf.ln()
+    pdf.set_font("helvetica", "", 9)
+    for n, k, a in [("BATISMO", stats_gerais['bat_k'], stats_gerais['bat_a']), ("EUCARISTIA", stats_gerais['euca_k'], stats_gerais['euca_a']), ("CRISMA", "N/A", stats_gerais['crisma_a'])]:
+        pdf.cell(50, 7, f" {n}", border=1); pdf.cell(70, 7, str(k), border=1, align='C'); pdf.cell(70, 7, str(a), border=1, align='C'); pdf.ln()
+    
+    # 2. Auditoria Nominal por Turma
+    pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("2. AUDITORIA NOMINAL E PREVISÕES POR TURMA"), ln=True, fill=True, align='C')
+    pdf.set_font("helvetica", "B", 7); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(50, 7, "Turma", border=1, fill=True); pdf.cell(25, 7, "Batizados", border=1, fill=True, align='C'); pdf.cell(25, 7, "Pendentes", border=1, fill=True, align='C'); pdf.cell(45, 7, "Prev. Eucaristia", border=1, fill=True, align='C'); pdf.cell(45, 7, "Prev. Crisma", border=1, fill=True, align='C'); pdf.ln()
+    pdf.set_font("helvetica", "", 7)
+    for t in analise_turmas:
+        pdf.cell(50, 6, limpar_texto(t['turma']), border=1); pdf.cell(25, 6, str(t['batizados']), border=1, align='C'); pdf.cell(25, 6, str(t['pendentes']), border=1, align='C'); pdf.cell(45, 6, limpar_texto(t['p_euca']), border=1, align='C'); pdf.cell(45, 6, limpar_texto(t['p_crisma']), border=1, align='C'); pdf.ln()
 
-def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, f"PERFIL DA TURMA: {nome_turma}"); pdf.multi_cell(0, 6, limpar_texto(analise_ia))
+    # 3. Diagnóstico de Impedimentos Canônicos
+    pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("3. DIAGNÓSTICO DE IMPEDIMENTOS CANÔNICOS / MATRIMONIAIS"), ln=True, fill=True, align='C')
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(70, 7, "Catequizando", border=1, fill=True); pdf.cell(50, 7, "Turma", border=1, fill=True); pdf.cell(70, 7, "Situação Identificada", border=1, fill=True); pdf.ln()
+    pdf.set_font("helvetica", "", 8)
+    if impedimentos_lista:
+        for imp in impedimentos_lista:
+            pdf.cell(70, 6, limpar_texto(imp['nome']), border=1); pdf.cell(50, 6, limpar_texto(imp['turma']), border=1); pdf.cell(70, 6, limpar_texto(imp['situacao']), border=1); pdf.ln()
+    else: pdf.cell(190, 6, "Nenhum impedimento canônico registrado.", border=1, align='C', ln=True)
+
+    # 4. Parecer IA
+    pdf.ln(5); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("4. PARECER TÉCNICO E PLANO DE AÇÃO"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 6. FUNÇÕES DE CENSO E UTILITÁRIOS PASTORAIS
+# 6. UTILITÁRIOS PASTORAIS
 # ==============================================================================
 
 def sugerir_etapa(data_nascimento):
@@ -374,3 +389,4 @@ gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v4
 gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v3
 gerar_relatorio_diocesano_v2 = gerar_relatorio_diocesano_v4
 gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v3
+gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
