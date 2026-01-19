@@ -6,3 +6,4 @@ google-genai
 plotly
 fpdf
 openpyxl
+extra-streamlit-components
