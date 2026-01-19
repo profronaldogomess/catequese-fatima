@@ -1325,62 +1325,69 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 st.rerun()
         else:
             # Se não existe, mostra o botão para gerar
-            # --- NO main.py: LÓGICA DA AUDITORIA SACRAMENTAL V2 ---
-            if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac", use_container_width=True):
-                with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
+            # --- NO main.py: LÓGICA DA AUDITORIA SACRAMENTAL V2 (CORRIGIDA) ---
+            if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
+                with st.spinner("O Auditor IA está sincronizando os dados reais..."):
                     try:
-                        # 1. Segmentação de Públicos
-                        etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
-                        df_kids = df_cat[df_cat['etapa'].isin(df_turmas[df_turmas['etapa'].isin(etapas_infantis)]['nome_turma'].tolist())] if not df_cat.empty else pd.DataFrame()
-                        df_adults = df_cat[~df_cat['etapa'].isin(df_turmas[df_turmas['etapa'].isin(etapas_infantis)]['nome_turma'].tolist())] if not df_cat.empty else pd.DataFrame()
+                        # 1. SEGMENTAÇÃO POR IDADE (MAIS PRECISO QUE POR NOME DE TURMA)
+                        # Criamos uma coluna temporária de idade para o cálculo do Censo
+                        df_cat['idade_temp'] = df_cat['data_nascimento'].apply(calcular_idade)
+                        
+                        df_kids_censo = df_cat[df_cat['idade_temp'] < 18] if not df_cat.empty else pd.DataFrame()
+                        df_adults_censo = df_cat[df_cat['idade_temp'] >= 18] if not df_cat.empty else pd.DataFrame()
 
-                        # 2. Quadro Geral (Censo)
+                        # 2. QUADRO GERAL (CENSO REAL)
                         stats_gerais = {
-                            'bat_k': len(df_kids[df_kids['batizado_sn'] == 'SIM']) if not df_kids.empty else 0,
-                            'bat_a': len(df_adults[df_adults['batizado_sn'] == 'SIM']) if not df_adults.empty else 0,
-                            'euca_k': df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_kids.empty else 0,
-                            'euca_a': df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_adults.empty else 0,
-                            'crisma_a': df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not df_adults.empty else 0
+                            'bat_k': len(df_kids_censo[df_kids_censo['batizado_sn'] == 'SIM']) if not df_kids_censo.empty else 0,
+                            'bat_a': len(df_adults_censo[df_adults_censo['batizado_sn'] == 'SIM']) if not df_adults_censo.empty else 0,
+                            'total_k': len(df_kids_censo),
+                            'total_a': len(df_adults_censo),
+                            'euca_k': df_kids_censo['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_kids_censo.empty else 0,
+                            'euca_a': df_adults_censo['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_adults_censo.empty else 0,
+                            'crisma_a': df_adults_censo['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not df_adults_censo.empty else 0
                         }
 
-                        # 3. Auditoria por Turma
+                        # 3. AUDITORIA POR TURMA (NOMINAL)
                         analise_turmas = []
                         for _, t in df_turmas.iterrows():
                             alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
-                            analise_turmas.append({
-                                'turma': t['nome_turma'],
-                                'batizados': len(alunos_t[alunos_t['batizado_sn'] == 'SIM']) if not alunos_t.empty else 0,
-                                'pendentes': len(alunos_t[alunos_t['batizado_sn'] != 'SIM']) if not alunos_t.empty else 0,
-                                'p_euca': t.get('previsao_eucaristia', 'N/A'),
-                                'p_crisma': t.get('previsao_crisma', 'N/A')
-                            })
+                            if not alunos_t.empty:
+                                analise_turmas.append({
+                                    'turma': t['nome_turma'],
+                                    'batizados': len(alunos_t[alunos_t['batizado_sn'] == 'SIM']),
+                                    'pendentes': len(alunos_t[alunos_t['batizado_sn'] != 'SIM']),
+                                    'p_euca': t.get('previsao_eucaristia', 'N/A'),
+                                    'p_cris': t.get('previsao_crisma', 'N/A')
+                                })
 
-                        # 4. Mapeamento de Impedimentos Canônicos
+                        # 4. MAPEAMENTO DE IMPEDIMENTOS (SITUAÇÃO MATRIMONIAL)
                         impedimentos_lista = []
-                        situacoes_impedimento = ['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM', 'UNIÃO DE FACTO']
-                        # Filtra adultos com situações que exigem atenção pastoral
-                        df_imp = df_cat[df_cat['estado_civil_pais_ou_proprio'].isin(situacoes_impedimento)]
+                        # Filtramos quem não é casado na igreja ou tem situações a regularizar
+                        situacoes_alerta = ['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM', 'UNIÃO DE FACTO']
+                        df_imp = df_cat[df_cat['est_civil_pais'].isin(situacoes_alerta) | df_cat['estado_civil_pais_ou_proprio'].isin(situacoes_alerta)]
+                        
                         for _, row in df_imp.iterrows():
                             impedimentos_lista.append({
                                 'nome': row['nome_completo'],
                                 'turma': row['etapa'],
-                                'situacao': row['estado_civil_pais_ou_proprio']
+                                'situacao': row['est_civil_pais'] if row['est_civil_pais'] != "N/A" else row['estado_civil_pais_ou_proprio']
                             })
 
-                        # 5. IA e Geração do PDF
+                        # 5. IA E GERAÇÃO DO PDF
                         resumo_ia = {
-                            "stats": stats_gerais,
+                            "censo": stats_gerais,
                             "turmas": analise_turmas,
-                            "impedimentos": len(impedimentos_lista)
+                            "impedimentos_qtd": len(impedimentos_lista)
                         }
                         analise_ia_sac = gerar_relatorio_sacramentos_ia(str(resumo_ia))
                         
+                        # Chamada do motor v2 no utils.py
                         st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v2(
                             stats_gerais, analise_turmas, impedimentos_lista, analise_ia_sac
                         )
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro na geração da auditoria: {e}")
+                        st.error(f"Erro na sincronização: {e}")
 
     # --- ABAS DE REGISTRO E HISTÓRICO (MANTIDAS IGUAIS AO SEU ORIGINAL) ---
     with tab_reg:
