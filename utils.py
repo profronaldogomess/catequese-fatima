@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 3.8.0 - MASTER ABSOLUTO (INTEGRIDADE TOTAL + TERMO DE SAÍDA)
+# VERSÃO: 3.9.0 - MASTER ABSOLUTO (INTEGRIDADE TOTAL + CORREÇÕES DE LAYOUT)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
@@ -193,11 +193,15 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
 def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
     """Adiciona o brasão e as informações oficiais da paróquia e diocese."""
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", 10, 15, 22)
+        # Ajuste de posição e tamanho para não cortar
+        pdf.image("logo.png", 10, 10, 25)
     
-    data_local = (datetime.now(timezone.utc) + timedelta(hours=-3)).strftime('%d / %m / %Y')
+    # Tradução de Data para Português (Blindagem contra January/English)
+    hoje = datetime.now(timezone.utc) + timedelta(hours=-3)
+    meses_pt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+    data_local = f"{hoje.day} / {hoje.month:02d} / {hoje.year}"
     
-    pdf.set_xy(38, 15)
+    pdf.set_xy(40, 15)
     pdf.set_font("helvetica", "B", 11)
     pdf.set_text_color(65, 123, 153) 
     pdf.cell(100, 5, limpar_texto("Pastoral da Catequese Diocese de Itabuna-BA."), ln=False)
@@ -206,12 +210,13 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 5, limpar_texto(f"Data: {data_local}"), ln=True, align='R')
     
-    pdf.set_x(38)
+    pdf.set_x(40)
     pdf.set_font("helvetica", "B", 11)
     pdf.set_text_color(65, 123, 153)
     pdf.cell(100, 5, limpar_texto("Paróquia: Nossa Senhora de Fátima"), ln=True)
     
-    pdf.ln(10)
+    # Pulo de 3 linhas (20 unidades) para não sobrepor a logo
+    pdf.ln(20)
     
     if titulo:
         y_topo = pdf.get_y()
@@ -457,7 +462,7 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.cell(0, 6, limpar_texto("Declaração de Veracidade e Compromisso"), ln=True)
     pdf.set_font("helvetica", "", 9)
     pdf.set_text_color(0, 0, 0)
-    declara = (f"Eu, {dados.get('nome', '')}, declaro que as informações acima são verdadeiras e assumo o compromisso "
+    declara = (f"Eu, {dados.get('nome', '')}, declaro que as informações acima verdadeiras e assumo o compromisso "
                f"de zelar pelas diretrizes da Pastoral da Catequese da Paróquia Nossa Senhora de Fátima.")
     pdf.multi_cell(0, 5, limpar_texto(declara))
     
@@ -532,7 +537,7 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 7. GESTÃO FAMILIAR (RELATÓRIO DE VISITAÇÃO - 30 COLUNAS)
+# 7. GESTÃO FAMILIAR (RELATÓRIO DE VISITAÇÃO E TERMO DE SAÍDA)
 # ==============================================================================
 
 def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
@@ -577,18 +582,17 @@ def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
     pdf.multi_cell(0, 4, "Este documento contém dados sensíveis. O manuseio deve ser restrito à coordenação paroquial para fins de acompanhamento pastoral.")
     return finalizar_pdf(pdf)
 
-# --- NOVO MOTOR: TERMO DE AUTORIZAÇÃO DE SAÍDA (LAYOUT PADRONIZADO) ---
-def gerar_termo_saida_pdf(dados_cat, dados_turma):
-    """Gera o Termo de Autorização de Saída conforme modelo paroquial."""
+def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_responsavel_escolhido):
+    """Gera o Termo de Autorização de Saída com layout ajustado e data em PT-BR."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "TERMO DE AUTORIZAÇÃO PARA SAÍDA")
     
     # Fundo Creme para o corpo do termo
     pdf.set_fill_color(248, 249, 240)
-    pdf.rect(10, 45, 190, 230, 'F')
+    pdf.rect(10, 50, 190, 230, 'F')
     
-    pdf.set_xy(10, 50)
+    pdf.set_xy(10, 55)
     pdf.set_font("helvetica", "B", 12)
     pdf.set_text_color(65, 123, 153) # Azul Paroquial
     pdf.cell(190, 10, limpar_texto("AUTORIZAÇÃO PARA SAÍDA SEM O RESPONSÁVEL"), ln=True, align='C')
@@ -598,14 +602,13 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma):
     pdf.set_text_color(0, 0, 0)
     
     # Texto do Termo com preenchimento automático
-    nome_resp = dados_cat.get('nome_mae', '') if dados_cat.get('nome_mae') else dados_cat.get('nome_pai', '__________________________')
     nome_cat = dados_cat.get('nome_completo', '__________________________')
     etapa = dados_cat.get('etapa', '__________')
     catequistas = dados_turma.get('catequista_responsavel', '__________________________')
     endereco = dados_cat.get('endereco_completo', '__________________________')
     
     texto_corpo = (
-        f"Eu, {nome_resp}, na condição de responsável legal pelo(a) "
+        f"Eu, {nome_responsavel_escolhido}, na condição de responsável legal pelo(a) "
         f"catequizando(a) {nome_cat}, inscrita(o) na {etapa}, com os/as "
         f"catequistas {catequistas}, autorizo a sua saída sozinho(a), no horário de encerramento "
         f"do encontro. Ciente que, assumo quaisquer riscos que possam ocorrer do trajeto "
@@ -616,10 +619,13 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma):
     pdf.multi_cell(180, 8, limpar_texto(texto_corpo), align='J')
     
     pdf.ln(10)
-    data_hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).strftime('%d de %B de %Y')
-    # Tradução simples de mês para PT-BR (opcional, mas recomendado)
+    # Data em Português (Blindagem contra January)
+    hoje = datetime.now(timezone.utc) + timedelta(hours=-3)
+    meses_pt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+    data_pt = f"{hoje.day} de {meses_pt[hoje.month-1]} de {hoje.year}"
+    
     pdf.set_x(15)
-    pdf.cell(0, 10, limpar_texto(f"Itabuna (BA), {data_hoje}."), ln=True)
+    pdf.cell(0, 10, limpar_texto(f"Itabuna (BA), {data_pt}."), ln=True)
     
     # Assinatura 1
     pdf.ln(15)
