@@ -655,45 +655,69 @@ def obter_aniversariantes_mes(df_cat):
                 lista.append({'nome_completo': r['nome_completo'], 'dia': dt.day, 'etapa': r['etapa']})
     return pd.DataFrame(lista).sort_values(by='dia') if lista else pd.DataFrame()
 
-def gerar_relatorio_local_turma_pdf(nome_turma, metricas, listas_nominais, analise_ia):
-    """Gera o relatório executivo detalhado de uma turma específica."""
+# --- SUBSTITUA A FUNÇÃO ANTERIOR POR ESTA NO utils.py ---
+
+def gerar_relatorio_local_turma_v2(nome_turma, metricas, listas, analise_ia):
+    """Gera o Relatório de Inteligência Pastoral específico de uma turma (Versão Final)."""
     pdf = FPDF()
     pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, f"INTELIGÊNCIA PASTORAL: {nome_turma}")
+    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA PASTORAL: {nome_turma}")
     
-    # 1. QUADRO DE MÉTRICAS
+    # 1. INDICADORES ESTRUTURAIS
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("1. INDICADORES DE DESEMPENHO E ADESÃO"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("1. INDICADORES ESTRUTURAIS E ADESÃO"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
-    desenhar_campo_box(pdf, "Catequistas", str(metricas['qtd_catequistas']), 10, y, 45)
-    desenhar_campo_box(pdf, "Catequizandos", str(metricas['qtd_cat']), 58, y, 45)
-    desenhar_campo_box(pdf, "Freq. Global", f"{metricas['freq_global']}%", 106, y, 45)
+    
+    desenhar_campo_box(pdf, "Catequistas na Turma", str(metricas['qtd_catequistas']), 10, y, 45)
+    desenhar_campo_box(pdf, "Total Catequizandos", str(metricas['qtd_cat']), 58, y, 45)
+    desenhar_campo_box(pdf, "Frequência Global", f"{metricas['freq_global']}%", 106, y, 45)
     desenhar_campo_box(pdf, "Idade Média", f"{metricas['idade_media']} anos", 154, y, 46)
     pdf.ln(18)
 
-    # 2. SITUAÇÃO SACRAMENTAL (NOMINAL)
+    # 2. TAXA DE PRESENÇA MENSAL
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("2. STATUS SACRAMENTAL NOMINAL"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("2. EVOLUÇÃO DA PRESENÇA POR MÊS"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
-    pdf.cell(90, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(100, 7, "Sacramentos Registrados", border=1, fill=True); pdf.ln()
-    pdf.set_font("helvetica", "", 8)
-    for item in listas_nominais['sacramentos']:
-        pdf.cell(90, 6, limpar_texto(item['nome']), border=1)
-        pdf.cell(100, 6, limpar_texto(item['info']), border=1); pdf.ln()
-    
-    # 3. ALERTA DE EVASÃO
-    pdf.ln(5); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("3. ALERTA DE EVASÃO (BAIXA FREQUÊNCIA)"), ln=True, fill=True, align='C')
-    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0)
-    if listas_nominais['evasao']:
-        for ev in listas_nominais['evasao']:
-            pdf.cell(190, 6, limpar_texto(f" - {ev['nome']} ({ev['faltas']} faltas registradas)"), border=1, ln=True)
-    else:
-        pdf.cell(190, 6, "Nenhum alerta de evasão crítico nesta turma.", border=1, ln=True)
+    pdf.cell(95, 7, "Mês / Ano", border=1, fill=True, align='C'); pdf.cell(95, 7, "Taxa de Presença", border=1, fill=True, align='C'); pdf.ln()
+    pdf.set_font("helvetica", "", 9)
+    for m in metricas['freq_mensal']:
+        pdf.cell(95, 6, limpar_texto(m['mes']), border=1, align='C')
+        pdf.cell(95, 6, f"{m['taxa']}%", border=1, align='C'); pdf.ln()
+    pdf.ln(5)
 
-    # 4. PARECER IA
+    # 3. LISTA NOMINAL E EVASÃO
+    pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("3. LISTA NOMINAL E ALERTA DE EVASÃO"), ln=True, fill=True, align='C')
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(120, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(70, 7, "Status / Faltas", border=1, fill=True, align='C'); pdf.ln()
+    pdf.set_font("helvetica", "", 8)
+    for cat in listas['geral']:
+        # Destaca em vermelho quem tem 2 ou mais faltas
+        if cat['faltas'] >= 2: pdf.set_text_color(224, 61, 17)
+        else: pdf.set_text_color(0, 0, 0)
+        
+        info_faltas = f"ATIVO ({cat['faltas']} faltas)" if cat['faltas'] > 0 else "ATIVO (100% Freq.)"
+        pdf.cell(120, 6, limpar_texto(cat['nome']), border=1)
+        pdf.cell(70, 6, limpar_texto(info_faltas), border=1, align='C'); pdf.ln()
+    pdf.set_text_color(0, 0, 0); pdf.ln(5)
+
+    # 4. HISTÓRICO SACRAMENTAL REGISTRADO
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("4. SACRAMENTOS RECEBIDOS (REGISTRO PAROQUIAL)"), ln=True, fill=True, align='C')
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(80, 7, "Nome", border=1, fill=True); pdf.cell(50, 7, "Sacramento", border=1, fill=True, align='C'); pdf.cell(60, 7, "Data do Registro", border=1, fill=True, align='C'); pdf.ln()
+    pdf.set_font("helvetica", "", 8)
+    if listas['sac_recebidos']:
+        for s in listas['sac_recebidos']:
+            pdf.cell(80, 6, limpar_texto(s['nome']), border=1)
+            pdf.cell(50, 6, limpar_texto(s['tipo']), border=1, align='C')
+            pdf.cell(60, 6, formatar_data_br(s['data']), border=1, align='C'); pdf.ln()
+    else:
+        pdf.cell(190, 6, "Nenhum sacramento registrado para esta turma no ano vigente.", border=1, align='C', ln=True)
+
+    # 5. PARECER TÉCNICO IA
     pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("4. ANÁLISE PASTORAL DA TURMA"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("5. PARECER TÉCNICO E ORIENTAÇÃO PASTORAL"), ln=True, fill=True, align='C')
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
     pdf.multi_cell(190, 6, limpar_texto(analise_ia))
 
@@ -708,3 +732,4 @@ gerar_relatorio_diocesano_v2 = gerar_relatorio_diocesano_v4
 gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v3
 gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
 gerar_pdf_perfil_turma = lambda n, m, a, l: finalizar_pdf(FPDF()) # Placeholder para compatibilidade
+gerar_relatorio_local_turma_pdf = gerar_relatorio_local_turma_v2
