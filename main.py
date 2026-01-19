@@ -1,11 +1,14 @@
 # ARQUIVO: main.py
+# VERSÃO: 3.0.0 - HOMOLOGAÇÃO (SEGURANÇA E PERSISTÊNCIA)
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import time
 import os 
+import uuid
 from fpdf import FPDF
 import plotly.express as px
+import extra_streamlit_components as stx
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
@@ -15,149 +18,122 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- 2. MOTOR DE MANUTENÇÃO (BLOQUEIO PREVENTIVO) ---
+from database import verificar_status_sistema
+if verificar_status_sistema() == "MANUTENCAO":
+    from utils import exibir_tela_manutencao
+    exibir_tela_manutencao()
+    st.stop()
+
 # --- VARIÁVEIS GLOBAIS DE PADRONIZAÇÃO ---
 MIN_DATA = date(1900, 1, 1)
 MAX_DATA = date(2030, 12, 31)
 
-# --- INJEÇÃO DE CSS (CORREÇÃO VISUAL DEFINITIVA) ---
+# --- 3. INJEÇÃO DE CSS (IDENTIDADE VISUAL ECLESIÁSTICA) ---
 st.markdown("""
     <style>
-    /* 1. FORÇAR FUNDO BRANCO GERAL */
-    .stApp {
-        background-color: #ffffff;
-        color: #333333;
-    }
-
-    /* 2. FORÇAR CAIXAS DE TEXTO (INPUTS) A SEREM CLARAS E LEGÍVEIS */
+    .stApp { background-color: #ffffff; color: #333333; }
     .stTextInput input, .stDateInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: #f0f2f6 !important; 
-        color: #000000 !important; 
-        border: 1px solid #ccc;
+        background-color: #f0f2f6 !important; color: #000000 !important; border: 1px solid #ccc;
     }
-    
-    /* Corrigir Selectbox (Menu suspenso) */
-    div[data-baseweb="select"] > div {
-        background-color: #f0f2f6 !important;
-        color: #000000 !important;
-    }
-    
-    /* Garante que o texto digitado seja preto */
-    input, textarea, select {
-        color: black !important;
-        -webkit-text-fill-color: black !important;
-    }
-
-    /* 3. BARRA LATERAL AZUL */
-    [data-testid="stSidebar"] {
-        background-color: #417b99;
-    }
-    [data-testid="stSidebar"] * {
-        color: white !important; 
-    }
-
-    /* 4. TÍTULOS E ETIQUETAS */
-    h1, h2, h3, h4 {
-        color: #417b99 !important; 
-        font-family: 'Helvetica', sans-serif;
-    }
-    
-    label, .stMarkdown p {
-        color: #417b99 !important; 
-        font-weight: 600;
-    }
-    
-    p, li {
-        color: #333333;
-    }
-
-    /* 5. BOTÕES LARANJA */
+    div[data-baseweb="select"] > div { background-color: #f0f2f6 !important; color: #000000 !important; }
+    input, textarea, select { color: black !important; -webkit-text-fill-color: black !important; }
+    [data-testid="stSidebar"] { background-color: #417b99; }
+    [data-testid="stSidebar"] * { color: white !important; }
+    h1, h2, h3, h4 { color: #417b99 !important; font-family: 'Helvetica', sans-serif; }
+    label, .stMarkdown p { color: #417b99 !important; font-weight: 600; }
+    p, li { color: #333333; }
     div.stButton > button {
-        background-color: #e03d11;
-        color: white !important;
-        border: none;
-        font-weight: bold;
-        border-radius: 8px;
-        padding: 10px 20px;
+        background-color: #e03d11; color: white !important; border: none;
+        font-weight: bold; border-radius: 8px; padding: 10px 20px;
     }
-    div.stButton > button:hover {
-        background-color: #c0320d;
-        color: white !important;
-    }
-    
-    /* 6. MÉTRICAS */
-    [data-testid="stMetricValue"] {
-        color: #e03d11 !important;
-    }
-    
-    /* Ajuste Mobile */
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 5rem;
-    }
+    div.stButton > button:hover { background-color: #c0320d; color: white !important; }
+    [data-testid="stMetricValue"] { color: #e03d11 !important; }
+    .block-container { padding-top: 2rem; padding-bottom: 5rem; }
     </style>
 """, unsafe_allow_html=True)
 
-# Importações das nossas funções personalizadas
+# --- 4. IMPORTAÇÕES DE MOTORES INTERNOS ---
 from database import (
     ler_aba, salvar_lote_catequizandos, atualizar_catequizando, 
     conectar_google_sheets, atualizar_turma, salvar_presencas, 
     verificar_login, salvar_encontro, salvar_tema_cronograma, 
     buscar_encontro_por_data, atualizar_usuario, salvar_formacao, 
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
-    registrar_evento_sacramento_completo
+    registrar_evento_sacramento_completo, atualizar_session_id, obter_session_id_db
 )
-# --- NO main.py: SUBSTITUA O BLOCO DE IMPORTAÇÃO DO UTILS ---
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
     obter_aniversariantes_mes, converter_para_data, verificar_status_ministerial, 
     obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
     gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, 
-    gerar_fichas_turma_completa,
-    gerar_relatorio_diocesano_v4,
-    gerar_relatorio_diocesano_pdf,
-    gerar_relatorio_diocesano_v2,
-    gerar_relatorio_pastoral_v3,
-    gerar_relatorio_pastoral_v2,
-    gerar_relatorio_pastoral_interno_pdf,
-    gerar_pdf_perfil_turma,
-    gerar_relatorio_sacramentos_tecnico_v2,
-    gerar_relatorio_sacramentos_tecnico_pdf, 
-    formatar_data_br,
-    gerar_relatorio_familia_pdf,
+    gerar_fichas_turma_completa, gerar_relatorio_diocesano_v4,
+    gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2,
+    gerar_relatorio_pastoral_v3, gerar_relatorio_pastoral_v2,
+    gerar_relatorio_pastoral_interno_pdf, gerar_pdf_perfil_turma,
+    gerar_relatorio_sacramentos_tecnico_v2, gerar_relatorio_sacramentos_tecnico_pdf, 
+    formatar_data_br, gerar_relatorio_familia_pdf,
     gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote
 )
 from ai_engine import (
-    gerar_analise_pastoral, 
-    gerar_mensagem_whatsapp, 
-    analisar_turma_local, 
-    gerar_relatorio_sacramentos_ia,
-    analisar_saude_familiar_ia  # <--- ADICIONE ESTA LINHA
+    gerar_analise_pastoral, gerar_mensagem_whatsapp, 
+    analisar_turma_local, gerar_relatorio_sacramentos_ia, analisar_saude_familiar_ia
 )
 
-# --- FUNÇÕES AUXILIARES DE LOGO ---
+# --- 5. FUNÇÕES AUXILIARES DE INTERFACE ---
 def mostrar_logo_sidebar():
     if os.path.exists("logo.png"):
         c1, c2, c3 = st.sidebar.columns([1, 3, 1])
-        with c2:
-            st.image("logo.png", width=130)
-    else:
-        st.sidebar.title("Catequese Fátima")
+        with c2: st.image("logo.png", width=130)
+    else: st.sidebar.title("Catequese Fátima")
 
 def mostrar_logo_login():
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=150)
-    else:
-        st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
+    if os.path.exists("logo.png"): st.image("logo.png", width=150)
+    else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
 
-# --- CONTROLE DE SESSÃO (LOGIN) ---
+# --- 6. GESTÃO DE PERSISTÊNCIA E SESSÃO ÚNICA ---
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
+
 if 'logado' not in st.session_state:
     st.session_state.logado = False
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = None
 
+# A. Tentativa de Auto-Login (Cookies)
+if not st.session_state.logado:
+    auth_cookie = cookie_manager.get("fatima_auth_v2")
+    if auth_cookie:
+        user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
+        if user:
+            new_sid = str(uuid.uuid4())
+            if atualizar_session_id(user['email'], new_sid):
+                st.session_state.logado = True
+                st.session_state.usuario = user
+                st.session_state.session_id = new_sid
+                st.rerun()
+
+# B. Validação de Sessão Única (Single Session)
+if st.session_state.logado:
+    sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
+    if sid_no_db and sid_no_db != st.session_state.session_id:
+        st.warning("⚠️ Esta conta foi conectada em outro dispositivo.")
+        st.info("Sua sessão atual foi encerrada por segurança.")
+        st.session_state.logado = False
+        st.session_state.session_id = None
+        cookie_manager.delete("fatima_auth_v2")
+        if st.button("RECONECTAR"): st.rerun()
+        st.stop()
+
+# C. Tela de Login Manual
 if not st.session_state.logado:
     st.container()
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        col_vazia, col_conteudo, col_vazia2 = st.columns([0.2, 2, 0.2])
+        col_conteudo = st.columns([0.2, 2, 0.2])[1]
         with col_conteudo:
             st.markdown("<br>", unsafe_allow_html=True)
             mostrar_logo_login()
@@ -165,86 +141,64 @@ if not st.session_state.logado:
             
             email_login = st.text_input("E-mail")
             senha_login = st.text_input("Senha", type="password")
+            lembrar = st.checkbox("Manter conectado por 30 dias")
             
             st.write("") 
             if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-                try:
-                    user = verificar_login(email_login, senha_login)
-                    if user:
+                user = verificar_login(email_login, senha_login)
+                if user:
+                    new_sid = str(uuid.uuid4())
+                    if atualizar_session_id(email_login, new_sid):
                         st.session_state.logado = True
                         st.session_state.usuario = user
+                        st.session_state.session_id = new_sid
+                        if lembrar:
+                            cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=datetime.now() + timedelta(days=30))
                         st.success(f"Bem-vindo(a), {user['nome']}!")
                         time.sleep(1)
                         st.rerun()
-                    else:
-                        st.error("🚫 Acesso negado. Verifique suas credenciais.")
-                except Exception as e:
-                    st.error("⚠️ Erro de conexão. Tente novamente.")
+                    else: st.error("Erro ao validar sessão única.")
+                else: st.error("🚫 Acesso negado. Verifique suas credenciais.")
     st.stop() 
 
-# --- SE CHEGOU AQUI, O USUÁRIO ESTÁ LOGADO ---
-
-# --- CARREGAMENTO GLOBAL DE DADOS (PREVENÇÃO DE NAMEERROR E REGRESSÃO) ---
+# --- 7. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
 df_cat = ler_aba("catequizandos")
 df_turmas = ler_aba("turmas")
 df_pres = ler_aba("presencas")
 df_usuarios = ler_aba("usuarios") 
 df_sac_eventos = ler_aba("sacramentos_eventos")
 
-# Filtro de Equipe Global: Remove ADMIN da contagem técnica e evita NameError
 equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
 
-# --- BARRA LATERAL (SIDEBAR) ---
+# --- 8. BARRA LATERAL E DEFINIÇÃO DE MENU ---
 mostrar_logo_sidebar() 
-
-# 1. Data do Dia
-hoje_str = date.today().strftime('%d/%m/%Y')
-st.sidebar.markdown(f"📅 **{hoje_str}**")
-
-# 2. Mensagem de Boas Vindas
-nome_usuario = st.session_state.usuario['nome']
-st.sidebar.success(f"Bem-vindo(a),\n**{nome_usuario}**")
-
+st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
+st.sidebar.success(f"Bem-vindo(a),\n**{st.session_state.usuario['nome']}**")
 st.sidebar.divider()
 
-# 3. Botões de Ação
-if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_unique_99x"):
-    st.cache_data.clear()
-    st.toast("Memória limpa! Os dados foram atualizados.", icon="✅")
-    time.sleep(1)
-    st.rerun()
+if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_99x"):
+    st.cache_data.clear(); st.toast("Dados atualizados!", icon="✅"); time.sleep(1); st.rerun()
 
-if st.sidebar.button("🚪 Sair / Logoff", key="btn_sidebar_logout_definitivo"):
+if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_99x"):
+    cookie_manager.delete("fatima_auth_v2")
     st.session_state.logado = False
+    st.session_state.session_id = None
     st.rerun()
 
-# --- IDENTIFICAÇÃO DO PAPEL E TURMA ---
 papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
 turma_do_catequista = st.session_state.usuario.get('turma_vinculada', 'TODAS')
-
-# Definimos quem tem poder de gestão
 eh_gestor = papel_usuario in ["COORDENADOR", "ADMIN"]
 
 if eh_gestor:
     menu = st.sidebar.radio("MENU PRINCIPAL", [
-        "🏠 Início / Dashboard", 
-        "🏠 Minha Turma",
-        "👨‍👩‍👧‍👦 Gestão Familiar", # Módulo de Cuidado e Igreja Doméstica
-        "📖 Diário de Encontros",    
-        "📝 Cadastrar Catequizando", 
-        "👤 Perfil Individual", 
-        "🏫 Gestão de Turmas", 
-        "🕊️ Gestão de Sacramentos",
-        "👥 Gestão de Catequistas",
-        "✅ Fazer Chamada"
+        "🏠 Início / Dashboard", "🏠 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
+        "📖 Diário de Encontros", "📝 Cadastrar Catequizando", "👤 Perfil Individual", 
+        "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada"
     ])
 else:
     menu = st.sidebar.radio("MENU DO CATEQUISTA", [
-        "🏠 Minha Turma", 
-        "👨‍👩‍👧‍👦 Gestão Familiar", # Módulo de Cuidado e Igreja Doméstica
-        "📖 Diário de Encontros",
-        "✅ Fazer Chamada",
-        "📝 Cadastrar Catequizando"
+        "🏠 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", "📖 Diário de Encontros", 
+        "✅ Fazer Chamada", "📝 Cadastrar Catequizando"
     ])
 
 # --- PÁGINA 1: DASHBOARD (COORDENADOR) ---
