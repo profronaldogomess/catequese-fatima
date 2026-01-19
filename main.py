@@ -117,7 +117,7 @@ from utils import (
     gerar_relatorio_pastoral_interno_pdf,   # Apelido para Pastoral (Resolve seu erro)
     gerar_pdf_perfil_turma,                 # Função Perfil de Turma
     gerar_relatorio_sacramentos_tecnico_pdf, 
-    formatar_data_br
+    formatar_data_br, gerar_relatorio_pastoral_v3
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -449,21 +449,56 @@ if menu == "🏠 Início / Dashboard":
             # --- LÓGICA DO RELATÓRIO PASTORAL ---
             if st.button("📋 Gerar Relatório Pastoral", use_container_width=True):
                 if "analise_dashboard" in st.session_state:
-                    with st.spinner("Preparando Relatório Pastoral..."):
-                        turmas_data = []
+                    with st.spinner("Calculando métricas por turma..."):
+                        turmas_detalhadas = []
+                        etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
+                        
+                        t_inf, t_adu = 0, 0
+                        soma_freq = 0
+                        
                         for _, t in df_turmas.iterrows():
+                            # 1. Filtro de Alunos
                             alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
-                            turmas_data.append({
-                                'nome': t['nome_turma'], 'catequistas': t['catequista_responsavel'],
-                                'local': t.get('local', 'N/A'), 'dia': t.get('dias_semana', 'N/A'),
-                                'total': len(alunos_t),
-                                'batizados': len(alunos_t[alunos_t['batizado_sn'] == 'SIM']) if not alunos_t.empty else 0,
-                                'eucaristia': alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not alunos_t.empty else 0
+                            
+                            # 2. Contagem de Sacramentos (Censo da Turma)
+                            bat = len(alunos_t[alunos_t['batizado_sn'] == 'SIM']) if not alunos_t.empty else 0
+                            euc = alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not alunos_t.empty else 0
+                            cri = alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not alunos_t.empty else 0
+                            
+                            # 3. Cálculo de Frequência da Turma
+                            pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
+                            freq = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
+                            soma_freq += freq
+                            
+                            # 4. Classificação
+                            if t['etapa'] in etapas_infantis: t_inf += 1
+                            else: t_adu += 1
+                            
+                            turmas_detalhadas.append({
+                                'nome': t['nome_turma'],
+                                'catequista': t['catequista_responsavel'],
+                                'dia': t.get('dias_semana', 'N/A'),
+                                'local': t.get('local', 'N/A'),
+                                'batizados': bat,
+                                'eucaristia': euc,
+                                'crisma': cri,
+                                'frequencia': round(freq, 1),
+                                'total': len(alunos_t)
                             })
-                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_interno_pdf(turmas_data, st.session_state.analise_dashboard)
+                        
+                        totais_gerais = {
+                            'total_turmas': len(df_turmas),
+                            't_infantil': t_inf,
+                            't_adultos': t_adu,
+                            'freq_geral': round(soma_freq / len(df_turmas), 1) if not df_turmas.empty else 0
+                        }
+                        
+                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(
+                            turmas_detalhadas, totais_gerais, st.session_state.analise_dashboard
+                        )
                         st.rerun()
                 else:
-                    st.warning("Gere a Auditoria da IA primeiro.")
+                    st.warning("⚠️ Gere a Auditoria da IA primeiro.")
 
             if "pdf_pastoral" in st.session_state:
                 st.download_button(
