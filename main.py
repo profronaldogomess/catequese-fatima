@@ -948,25 +948,66 @@ elif menu == "🏫 Gestão de Turmas":
     with t2:
         st.subheader("➕ Cadastrar Nova Turma")
         c1, c2 = st.columns(2)
-        n_t = c1.text_input("Nome da Turma (Ex: TURMA SANTA RITA)", key="n_t_criar_v5").upper()
+        n_t = c1.text_input("Nome da Turma (Ex: PRÉ ETAPA 2026)", key="n_t_criar_v5").upper()
         e_t = c1.selectbox("Etapa Base", etapas_lista, key="e_t_criar_v5")
         ano = c2.number_input("Ano Letivo", value=2026, key="ano_criar_v5")
         n_dias = st.multiselect("Dias de Encontro:", dias_opcoes, key="dias_criar_v5")
+        
         st.markdown("---")
         c3, c4 = st.columns(2)
         turno_t = c3.selectbox("Turno do Encontro", ["MANHÃ", "TARDE", "NOITE"], key="turno_criar_v5")
         local_t = c4.text_input("Local/Sala do Encontro", key="local_criar_v5").upper()
+        
         p_euca, p_cris = "", ""
         if e_t in ["TERCEIRA ETAPA", "ADULTOS TURMA EUCARISTIA/BATISMO"]:
             p_euca = st.text_input("📅 Previsão da Eucaristia", key="p_euca_criar_v5")
         elif e_t == "ADULTOS CRISMA":
             p_cris = st.text_input("🕊️ Previsão da Crisma", key="p_cris_criar_v5")
+        
+        # Busca catequistas da aba usuários (Filtro global já definido no main)
         cats = st.multiselect("Catequistas Responsáveis:", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [], key="cats_criar_v5")
-        if st.button("🚀 SALVAR NOVA TURMA", key="btn_salvar_t_v5"):
-            if n_t and cats and n_dias:
-                nova_t = [f"TRM-{int(time.time())}", n_t, e_t, ano, ", ".join(cats), ", ".join(n_dias), p_euca, p_cris, turno_t, local_t]
-                if conectar_google_sheets().worksheet("turmas").append_row(nova_t):
-                    st.success(f"Turma {n_t} criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        
+        st.divider()
+        
+        if st.button("🚀 SALVAR NOVA TURMA", key="btn_salvar_t_v5", use_container_width=True):
+            # Validação de campos obrigatórios com feedback ao usuário
+            if not n_t:
+                st.warning("⚠️ Por favor, informe o NOME da turma.")
+            elif not cats:
+                st.warning("⚠️ Selecione ao menos um CATEQUISTA responsável.")
+            elif not n_dias:
+                st.warning("⚠️ Selecione os DIAS de encontro.")
+            else:
+                with st.spinner("Conectando ao banco de dados e salvando..."):
+                    try:
+                        # Montagem da lista de 10 colunas (A até J)
+                        nova_t = [
+                            f"TRM-{int(time.time())}", # A: ID
+                            n_t,                       # B: Nome
+                            e_t,                       # C: Etapa
+                            int(ano),                  # D: Ano
+                            ", ".join(cats),           # E: Catequistas
+                            ", ".join(n_dias),         # F: Dias
+                            p_euca,                    # G: Prev Euca
+                            p_cris,                    # H: Prev Crisma
+                            turno_t,                   # I: Turno
+                            local_t                    # J: Local
+                        ]
+                        
+                        planilha = conectar_google_sheets()
+                        if planilha:
+                            aba = planilha.worksheet("turmas")
+                            aba.append_row(nova_t)
+                            
+                            st.success(f"✅ Turma '{n_t}' cadastrada com sucesso!")
+                            st.balloons()
+                            st.cache_data.clear() # Limpa o cache para a nova turma aparecer nas listas
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.error("❌ Erro crítico: Não foi possível conectar à planilha Google.")
+                    except Exception as e:
+                        st.error(f"❌ Erro ao salvar: Verifique se a aba 'turmas' existe na planilha. Detalhe: {e}")
 
     with t3:
         st.subheader("✏️ Detalhes e Edição")
