@@ -117,7 +117,7 @@ from utils import (
     gerar_relatorio_pastoral_interno_pdf,   # Apelido para Pastoral (Resolve seu erro)
     gerar_pdf_perfil_turma,                 # Função Perfil de Turma
     gerar_relatorio_sacramentos_tecnico_pdf, 
-    formatar_data_br, gerar_relatorio_pastoral_v3
+    formatar_data_br, gerar_relatorio_pastoral_v3, gerar_relatorio_sacramentos_tecnico_v2
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -1069,27 +1069,62 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 st.rerun()
         else:
             # Se não existe, mostra o botão para gerar
+            # --- NO main.py: LÓGICA DA AUDITORIA SACRAMENTAL V2 ---
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac", use_container_width=True):
                 with st.spinner("O Auditor IA está analisando impedimentos e engajamento..."):
                     try:
-                        resumo_ia = {
-                            "total_batismos_ano": total_batismos_ano,
-                            "censo_kids": {"total": len(df_kids), "batizados": k_bat},
-                            "censo_adultos": {"total": len(df_adults), "batizados": a_bat},
-                            "detalhes_por_turma": analise_detalhada_ia
+                        # 1. Segmentação de Públicos
+                        etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
+                        df_kids = df_cat[df_cat['etapa'].isin(df_turmas[df_turmas['etapa'].isin(etapas_infantis)]['nome_turma'].tolist())] if not df_cat.empty else pd.DataFrame()
+                        df_adults = df_cat[~df_cat['etapa'].isin(df_turmas[df_turmas['etapa'].isin(etapas_infantis)]['nome_turma'].tolist())] if not df_cat.empty else pd.DataFrame()
+
+                        # 2. Quadro Geral (Censo)
+                        stats_gerais = {
+                            'bat_k': len(df_kids[df_kids['batizado_sn'] == 'SIM']) if not df_kids.empty else 0,
+                            'bat_a': len(df_adults[df_adults['batizado_sn'] == 'SIM']) if not df_adults.empty else 0,
+                            'euca_k': df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_kids.empty else 0,
+                            'euca_a': df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_adults.empty else 0,
+                            'crisma_a': df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not df_adults.empty else 0
                         }
-                        
-                        # Chamadas das funções do ai_engine e utils
+
+                        # 3. Auditoria por Turma
+                        analise_turmas = []
+                        for _, t in df_turmas.iterrows():
+                            alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
+                            analise_turmas.append({
+                                'turma': t['nome_turma'],
+                                'batizados': len(alunos_t[alunos_t['batizado_sn'] == 'SIM']) if not alunos_t.empty else 0,
+                                'pendentes': len(alunos_t[alunos_t['batizado_sn'] != 'SIM']) if not alunos_t.empty else 0,
+                                'p_euca': t.get('previsao_eucaristia', 'N/A'),
+                                'p_crisma': t.get('previsao_crisma', 'N/A')
+                            })
+
+                        # 4. Mapeamento de Impedimentos Canônicos
+                        impedimentos_lista = []
+                        situacoes_impedimento = ['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM', 'UNIÃO DE FACTO']
+                        # Filtra adultos com situações que exigem atenção pastoral
+                        df_imp = df_cat[df_cat['estado_civil_pais_ou_proprio'].isin(situacoes_impedimento)]
+                        for _, row in df_imp.iterrows():
+                            impedimentos_lista.append({
+                                'nome': row['nome_completo'],
+                                'turma': row['etapa'],
+                                'situacao': row['estado_civil_pais_ou_proprio']
+                            })
+
+                        # 5. IA e Geração do PDF
+                        resumo_ia = {
+                            "stats": stats_gerais,
+                            "turmas": analise_turmas,
+                            "impedimentos": len(impedimentos_lista)
+                        }
                         analise_ia_sac = gerar_relatorio_sacramentos_ia(str(resumo_ia))
-                        stats_pdf = {'bat_ano': total_batismos_ano, 'bat_k': k_bat, 'bat_a': a_bat}
                         
-                        pdf_data = gerar_relatorio_sacramentos_tecnico_pdf(stats_pdf, analise_detalhada_ia, analise_ia_sac)
-                        
-                        if pdf_data:
-                            st.session_state.pdf_sac_tecnico = pdf_data
-                            st.rerun() # Agora o rerun é seguro pois o PDF já está no state
+                        st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v2(
+                            stats_gerais, analise_turmas, impedimentos_lista, analise_ia_sac
+                        )
+                        st.rerun()
                     except Exception as e:
-                        st.error(f"Erro na geração do PDF: {e}")
+                        st.error(f"Erro na geração da auditoria: {e}")
 
     # --- ABAS DE REGISTRO E HISTÓRICO (MANTIDAS IGUAIS AO SEU ORIGINAL) ---
     with tab_reg:
