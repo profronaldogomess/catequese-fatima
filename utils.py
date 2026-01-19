@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 2.2.0 - RIGOR EXECUTIVO MÁXIMO E INTEGRIDADE TOTAL
+# VERSÃO: 2.3.0 - RIGOR DOCUMENTAL MÁXIMO (LGPD E VERACIDADE INTEGRAIS)
 # MISSÃO: Gestão de PDFs, Lógicas de Censo, Fuso Horário e Documentação Oficial.
 # ==============================================================================
 
@@ -97,7 +97,7 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
 # ==============================================================================
 
 def _desenhar_corpo_ficha(pdf, dados):
-    """Lógica central de desenho da ficha com consentimento LGPD rigoroso."""
+    """Lógica central de desenho da ficha com consentimento LGPD RIGOROSO E INTEGRAL."""
     y_base = pdf.get_y()
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_menor = idade_real < 18
@@ -123,6 +123,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     # Identificação
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("IDENTIFICAÇÃO DA/O CATEQUIZANDA/O"), ln=True, fill=True, align='C')
+    
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Nome:", dados.get('nome_completo', ''), 10, y, 190)
     y += 14; desenhar_campo_box(pdf, "Data de nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 10, y, 45)
@@ -151,17 +152,31 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_font("helvetica", "B", 8); pdf.cell(45, 5, limpar_texto("Já tem o Sacramento:"), ln=0)
     marcar_opcao(pdf, "Batismo", "BATISMO" in sac, 50, pdf.get_y()); marcar_opcao(pdf, "Eucaristia", "EUCARISTIA" in sac, 80, pdf.get_y()); marcar_opcao(pdf, "Matrimônio", "MATRIMÔNIO" in sac, 110, pdf.get_y())
     
-    # LGPD Rigoroso
+    # --- TERMO DE CONSENTIMENTO LGPD INTEGRAL ---
     pdf.ln(10); pdf.set_font("helvetica", "B", 9); pdf.set_text_color(224, 61, 17); pdf.cell(0, 6, limpar_texto("Termo de Consentimento LGPD"), ln=True)
     pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0); nome_cat = dados.get('nome_completo', '________________')
+    
     if is_menor:
-        mae = str(dados.get('nome_mae', '')).strip(); pai = str(dados.get('nome_pai', '')).strip()
-        resp = f"{mae} e {pai}" if mae and pai else (mae or pai or str(dados.get('nome_responsavel', 'Responsável')))
-        texto_lgpd = f"Nós/Eu, {resp}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, AUTORIZAMOS o uso da publicação da imagem..."
+        mae = str(dados.get('nome_mae', '')).strip()
+        pai = str(dados.get('nome_pai', '')).strip()
+        mae = "" if mae.upper() in ["N/A", "NONE", ""] else mae
+        pai = "" if pai.upper() in ["N/A", "NONE", ""] else pai
+        if mae and pai: resp = f"{mae} e {pai}"
+        elif mae: resp = mae
+        elif pai: resp = pai
+        else: resp = str(dados.get('nome_responsavel', '________________________________'))
+        
+        texto_lgpd = (f"Nós/Eu, {resp}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, "
+                      f"AUTORIZAMOS o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese "
+                      f"da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, "
+                      f"conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD).")
         label_ass = "Assinatura do(s) Responsável(is) Legal(is)"
     else:
-        texto_lgpd = f"Eu {nome_cat}, AUTORIZO o uso da publicação da minha imagem nos eventos realizados pela Pastoral da Catequese..."
+        texto_lgpd = (f"Eu {nome_cat}, AUTORIZO o uso da publicação da minha imagem nos eventos realizados pela Pastoral da Catequese "
+                      f"da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, "
+                      f"conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD).")
         label_ass = "Assinatura do(a) Catequizando(a)"
+        
     pdf.multi_cell(0, 4, limpar_texto(texto_lgpd))
     pdf.ln(12); y_ass = pdf.get_y(); pdf.line(10, y_ass, 90, y_ass); pdf.line(110, y_ass, 190, y_ass)
     pdf.set_xy(10, y_ass + 1); pdf.set_font("helvetica", "B", 8); pdf.cell(80, 5, limpar_texto(label_ass), align='C')
@@ -183,20 +198,26 @@ def gerar_fichas_turma_completa(nome_turma, df_alunos):
 # ==============================================================================
 
 def gerar_ficha_catequista_pdf(dados, df_formacoes):
-    """Gera o prontuário ministerial completo do catequista com histórico de formações."""
+    """Gera o prontuário ministerial completo do catequista com histórico e DECLARAÇÃO DE VERACIDADE."""
     pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, titulo="FICHA DO CATEQUISTA", etapa="EQUIPE")
+    
+    # Seção 1: Identificação
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("1. DADOS PESSOAIS E CONTATO"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome', ''), 10, y, 135)
     desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 150, y, 45)
     y += 14; desenhar_campo_box(pdf, "E-mail:", dados.get('email', ''), 10, y, 110); desenhar_campo_box(pdf, "Telefone:", dados.get('telefone', ''), 125, y, 75)
+    
+    # Seção 2: Vida Ministerial
     pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(0, 7, limpar_texto("2. VIDA MINISTERIAL E SACRAMENTAL"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(dados.get('data_inicio_catequese', '')), 10, y, 45)
     desenhar_campo_box(pdf, "Batismo:", formatar_data_br(dados.get('data_batismo', '')), 58, y, 45)
     desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(dados.get('data_eucaristia', '')), 106, y, 45)
     desenhar_campo_box(pdf, "Crisma:", formatar_data_br(dados.get('data_crisma', '')), 154, y, 46)
+    
+    # Seção 3: Histórico de Formação
     pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(0, 7, limpar_texto("3. HISTÓRICO DE FORMAÇÃO"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
     pdf.cell(30, 7, "Data", border=1, fill=True, align='C'); pdf.cell(100, 7, "Tema", border=1, fill=True); pdf.cell(60, 7, "Formador", border=1, fill=True); pdf.ln()
@@ -205,8 +226,19 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
         for _, f in df_formacoes.iterrows():
             pdf.cell(30, 6, formatar_data_br(f['data']), border=1, align='C'); pdf.cell(100, 6, limpar_texto(f['tema']), border=1); pdf.cell(60, 6, limpar_texto(f['formador']), border=1); pdf.ln()
     else: pdf.cell(190, 6, "Nenhuma formação registrada.", border=1, align='C', ln=True)
+    
+    # --- SEÇÃO 4: DECLARAÇÃO DE VERACIDADE E RESPONSABILIDADE ---
+    pdf.ln(5); pdf.set_font("helvetica", "B", 9); pdf.set_text_color(224, 61, 17); pdf.cell(0, 6, limpar_texto("Declaração de Responsabilidade"), ln=True)
+    pdf.set_font("helvetica", "", 9); pdf.set_text_color(0, 0, 0)
+    declara = (f"Eu, {dados.get('nome', '')}, declaro para os devidos fins que as informações acima prestadas são verdadeiras e assumo o compromisso "
+               f"de zelar pela sã doutrina e pelas diretrizes da Pastoral da Catequese da Paróquia Nossa Senhora de Fátima, "
+               f"atuando com fidelidade ao Evangelho e ao Magistério da Igreja.")
+    pdf.multi_cell(0, 5, limpar_texto(declara))
+    
+    # Assinaturas
     pdf.ln(12); y_ass = pdf.get_y(); pdf.line(15, y_ass, 95, y_ass); pdf.line(115, y_ass, 195, y_ass)
-    pdf.set_xy(15, y_ass + 1); pdf.set_font("helvetica", "B", 8); pdf.cell(80, 5, limpar_texto("Assinatura Catequista"), align='C'); pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura Coordenador"), align='C')
+    pdf.set_xy(15, y_ass + 1); pdf.set_font("helvetica", "B", 8); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
+    pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Coordenador"), align='C')
     return finalizar_pdf(pdf)
 
 # ==============================================================================
@@ -223,6 +255,7 @@ def gerar_relatorio_diocesano_v4(dados_censo, equipe_stats, sac_ano, sac_censo, 
     desenhar_campo_box(pdf, "Turmas Infantil/Juv.", str(dados_censo.get('t_infantil', '0')), 58, y, 45)
     desenhar_campo_box(pdf, "Turmas Jovens/Adultos", str(dados_censo.get('t_adultos', '0')), 106, y, 45)
     desenhar_campo_box(pdf, "Equipe (Exceto Admin)", str(dados_censo.get('total_equipe', '0')), 154, y, 46); pdf.ln(18)
+    
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("2. DADOS SACRAMENTAIS DA EQUIPE"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
     pdf.cell(100, 7, "Indicador", border=1, fill=True); pdf.cell(45, 7, "Qtd", border=1, fill=True, align='C'); pdf.cell(45, 7, "%", border=1, fill=True, align='C'); pdf.ln()
@@ -230,10 +263,12 @@ def gerar_relatorio_diocesano_v4(dados_censo, equipe_stats, sac_ano, sac_censo, 
     for desc, qtd in [("Batismo", equipe_stats.get('bat', 0)), ("Eucaristia", equipe_stats.get('euca', 0)), ("Crisma", equipe_stats.get('crisma', 0)), ("Ministros", equipe_stats.get('ministros', 0)), ("Aptos", equipe_stats.get('aptos', 0))]:
         perc = (int(qtd)/total_e)*100 if total_e > 0 else 0
         pdf.cell(100, 7, limpar_texto(f" {desc}"), border=1); pdf.cell(45, 7, str(qtd), border=1, align='C'); pdf.cell(45, 7, f"{perc:.1f}%", border=1, align='C'); pdf.ln()
+    
     pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("3. LOGÍSTICA E DISTRIBUIÇÃO"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
     pdf.cell(40, 7, "Dia", border=1, fill=True); pdf.cell(50, 7, "Local", border=1, fill=True); pdf.cell(100, 7, "Turmas", border=1, fill=True); pdf.ln()
     for item in logistica_lista: pdf.cell(40, 6, limpar_texto(item['dia']), border=1); pdf.cell(50, 6, limpar_texto(item['local']), border=1); pdf.cell(100, 6, limpar_texto(item['turmas']), border=1); pdf.ln()
+    
     pdf.ln(5); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("4. PARECER TÉCNICO"), ln=True, fill=True, align='C')
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
@@ -269,7 +304,7 @@ def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 6. UTILITÁRIOS PASTORAIS
+# 6. FUNÇÕES DE CENSO E UTILITÁRIOS PASTORAIS
 # ==============================================================================
 
 def sugerir_etapa(data_nascimento):
