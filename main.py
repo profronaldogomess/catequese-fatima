@@ -1675,25 +1675,49 @@ elif menu == "👥 Gestão de Catequistas":
                                 st.success("Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_novo:
-        st.subheader("➕ Criar Novo Acesso para Catequista")
-        with st.form("form_novo_catequista_v2"):
-            c1, c2, c3 = st.columns(3)
+        st.subheader("➕ Criar Novo Acesso para Equipe")
+        st.info("Defina o nível de acesso com cuidado. 'ADMIN' e 'COORDENADOR' possuem acesso total aos dados paroquiais.")
+        
+        with st.form("form_novo_catequista_v3", clear_on_submit=True):
+            c1, c2 = st.columns(2)
             n_nome = c1.text_input("Nome Completo").upper()
-            n_email = c2.text_input("E-mail (Login)")
-            n_senha = c3.text_input("Senha Inicial")
+            n_email = c2.text_input("E-mail (Login de Acesso)")
+            
+            c3, c4 = st.columns(2)
+            n_senha = c3.text_input("Senha Inicial", type="password")
+            # --- CAMPO DE PAPEL ADICIONADO ---
+            n_papel = c4.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"])
             
             lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-            n_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes)
+            n_turmas = st.multiselect("Vincular às Turmas (Opcional para Coordenadores):", lista_t_nomes)
             
-            st.info("As datas de sacramentos e ministério podem ser preenchidas depois no perfil do catequista.")
-            
-            if st.form_submit_button("🚀 CRIAR ACESSO E VINCULAR"):
+            st.markdown("---")
+            if st.form_submit_button("🚀 CRIAR ACESSO E DEFINIR PERMISSÕES", use_container_width=True):
                 if n_nome and n_email and n_senha:
-                    novo_user = [n_nome, n_email, n_senha, "CATEQUISTA", ", ".join(n_turmas), "", "", "", "", "", "", ""]
-                    if conectar_google_sheets().worksheet("usuarios").append_row(novo_user):
-                        st.success(f"Acesso criado para {n_nome}!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    with st.spinner("Registrando novo membro da equipe..."):
+                        # Ordem das 12 colunas da aba 'usuarios':
+                        # A:nome, B:email, C:senha, D:papel, E:turma_vinculada, F:telefone, 
+                        # G:nascimento, H:inicio, I:batismo, J:euca, K:crisma, L:ministerio
+                        novo_user = [
+                            n_nome, 
+                            n_email, 
+                            n_senha, 
+                            n_papel, # <--- Agora gravando o papel selecionado
+                            ", ".join(n_turmas), 
+                            "", "", "", "", "", "", "" # Campos vazios para preenchimento posterior
+                        ]
+                        
+                        try:
+                            planilha = conectar_google_sheets()
+                            planilha.worksheet("usuarios").append_row(novo_user)
+                            st.success(f"✅ Sucesso! {n_nome} cadastrado como {n_papel}.")
+                            st.cache_data.clear()
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar no banco de dados: {e}")
                 else:
-                    st.error("Nome, E-mail e Senha são obrigatórios.")
+                    st.warning("⚠️ Nome, E-mail e Senha são campos obrigatórios.")
 
     with tab_formacao:
         st.subheader("🎓 Registro de Formação Continuada")
