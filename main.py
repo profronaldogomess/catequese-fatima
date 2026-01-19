@@ -115,7 +115,7 @@ from utils import (
     gerar_relatorio_pastoral_interno_pdf, gerar_pdf_perfil_turma,
     gerar_relatorio_sacramentos_tecnico_v2, gerar_relatorio_sacramentos_tecnico_pdf, 
     formatar_data_br, gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote
+    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, gerar_card_aniversario
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -251,6 +251,26 @@ if menu == "🏠 Início / Dashboard":
         for msg in aniversariantes_agora:
             st.success(f"🎂 **HOJE É ANIVERSÁRIO!** {msg}")
             st.balloons()
+        
+        # --- NOVO: ÁREA DE CARDS DO DIA (INTEGRADO) ---
+        with st.expander("🖼️ GERAR CARDS DE PARABÉNS (HOJE)", expanded=True):
+            cols_niver = st.columns(len(aniversariantes_agora) if len(aniversariantes_agora) < 4 else 4)
+            for i, msg in enumerate(aniversariantes_agora):
+                # Limpeza do nome para o card
+                nome_limpo = msg.replace("😇 Catequizando: **", "").replace("🛡️ Catequista: **", "").replace("**", "")
+                with cols_niver[i % 4]:
+                    st.write(f"**{nome_limpo}**")
+                    if st.button(f"🎨 Gerar Card", key=f"btn_dia_{i}"):
+                        card_img = gerar_card_aniversario(nome_limpo, tipo="DIA")
+                        if card_img:
+                            st.image(card_img, use_container_width=True)
+                            st.download_button(
+                                label="📥 Baixar Card",
+                                data=card_img,
+                                file_name=f"Parabens_Hoje_{nome_limpo}.png",
+                                mime="image/png",
+                                key=f"dl_dia_{i}"
+                            )
 
     if df_cat.empty:
         st.info("👋 Bem-vindo! Comece cadastrando turmas e catequizandos.")
@@ -261,7 +281,6 @@ if menu == "🏠 Início / Dashboard":
         ativos = len(df_cat[df_cat['status'] == 'ATIVO'])
         total_t = len(df_turmas)
         
-        # Filtro de Equipe Real (Exclui ADMIN da contagem pastoral)
         equipe_real = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
         total_equipe = len(equipe_real)
         
@@ -275,8 +294,6 @@ if menu == "🏠 Início / Dashboard":
         # --- SEÇÃO 2: DESEMPENHO ---
         st.subheader("📈 Desempenho e Frequência")
         freq_global = 0.0
-        temas_vistos = []
-
         if df_pres.empty:
             st.info("Ainda não há registros de presença.")
         else:
@@ -292,7 +309,6 @@ if menu == "🏠 Início / Dashboard":
             with c2:
                 total_encontros = df_pres['data_encontro'].nunique()
                 freq_global = df_pres['status_num'].mean() * 100
-                temas_vistos = df_pres['tema_do_dia'].unique().tolist()
                 st.metric("Encontros Realizados", total_encontros)
                 st.write(f"**Frequência Global:** {freq_global:.1f}%")
                 st.progress(freq_global / 100)
@@ -305,10 +321,27 @@ if menu == "🏠 Início / Dashboard":
             st.subheader("🎂 Aniversariantes do Mês")
             df_niver_unificado = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
             if not df_niver_unificado.empty:
-                for _, niver in df_niver_unificado.iterrows():
+                for i, niver in df_niver_unificado.iterrows():
                     icone = "🛡️" if niver['tipo'] == 'CATEQUISTA' else "🎁"
-                    st.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']} ({niver['info']})")
-            else: st.write("Nenhum aniversariante este mes.")
+                    
+                    # Layout de linha: Nome + Botão de Card Mensal
+                    c_txt, c_btn = st.columns([3, 1])
+                    c_txt.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']} ({niver['info']})")
+                    
+                    # Botão para gerar o Card Mensal (Template 4)
+                    if c_btn.button("🖼️ Card", key=f"btn_mes_{i}"):
+                        card_mes = gerar_card_aniversario(niver['nome'], tipo="MES")
+                        if card_mes:
+                            st.image(card_mes, caption=f"Card Mensal: {niver['nome']}", width=300)
+                            st.download_button(
+                                label="📥 Baixar Card Mensal",
+                                data=card_mes,
+                                file_name=f"Niver_Mes_{niver['nome']}.png",
+                                mime="image/png",
+                                key=f"dl_mes_{i}"
+                            )
+            else: 
+                st.write("Nenhum aniversariante este mês.")
 
         with col_evasao:
             st.subheader("🚨 Alerta de Evasão")
@@ -318,7 +351,8 @@ if menu == "🏠 Início / Dashboard":
                 if not evasao.empty:
                     st.warning(f"Existem {len(evasao)} catequizandos com 2 ou mais faltas!")
                     st.dataframe(evasao, use_container_width=True, hide_index=True)
-                else: st.success("Nenhum alerta de evasão no momento.")
+                else: 
+                    st.success("Nenhum alerta de evasão no momento.")
 
 # --- SEÇÃO 4: DOCUMENTAÇÃO E AUDITORIA (SISTEMA DE QUATRO BOTÕES - VERSÃO INTEGRAL) ---
         st.divider()
