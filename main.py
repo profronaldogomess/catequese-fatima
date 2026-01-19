@@ -115,7 +115,7 @@ from utils import (
     gerar_relatorio_pastoral_interno_pdf, gerar_pdf_perfil_turma,
     gerar_relatorio_sacramentos_tecnico_v2, gerar_relatorio_sacramentos_tecnico_pdf, 
     formatar_data_br, gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, gerar_card_aniversario
+    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, gerar_card_aniversario, gerar_termo_saida_pdf
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -1790,7 +1790,9 @@ elif menu == "👥 Gestão de Catequistas":
                     st.warning("Informe o tema e selecione ao menos um participante.")
 # --- FIM DO BLOCO: GESTÃO DE CATEQUISTAS ---
 
-# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO COM REGISTRO DE RELATO PASTORAL)
+# ==============================================================================
+# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO INTEGRAL COM TERMO DE AUTORIZAÇÃO)
+# ==============================================================================
 elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
     st.title("👨‍👩‍👧‍👦 Gestão Familiar e Igreja Doméstica")
     st.markdown("---")
@@ -1857,13 +1859,11 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     dados_f = fam.iloc[0]
                     st.success(f"✅ Família Localizada: {dados_f['nome_mae']} & {dados_f['nome_pai']}")
                     
-                    # --- NOVO: CAMPO DE DIGITAÇÃO DO RELATO ---
+                    # --- RELATO PASTORAL (COLUNA AD / 30) ---
                     st.markdown("#### 📝 Relato de Visita e Necessidades da Família")
-                    # Tenta pegar o relato da coluna AD (índice 29)
                     obs_atual = dados_f.get('obs_pastoral_familia', '')
                     if obs_atual == "N/A": obs_atual = ""
                     
-                    # ÁREA PARA VOCÊ DIGITAR
                     novo_relato = st.text_area("Descreva aqui o que foi conversado ou as carências detectadas:", 
                                              value=obs_atual, height=150, key="txt_relato_familia")
                     
@@ -1871,7 +1871,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         with st.spinner("Gravando relato..."):
                             sucesso = True
                             for _, filho in fam.iterrows():
-                                # Prepara a lista de 30 colunas para salvar
                                 lista_up = filho.tolist()
                                 while len(lista_up) < 30: lista_up.append("N/A")
                                 lista_up[29] = novo_relato # Coluna AD
@@ -1887,14 +1886,30 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         st.write(f"· **{f['nome_completo']}** - Turma: `{f['etapa']}`")
                         filhos_pdf.append({'nome': f['nome_completo'], 'etapa': f['etapa'], 'status': f['status']})
                     
-                    if st.button("📄 GERAR FICHA DE VISITAÇÃO (PDF)"):
-                        # Passa o relato para o PDF
-                        dados_p = dados_f.to_dict()
-                        dados_p['obs_pastoral_familia'] = novo_relato
-                        st.session_state.pdf_fam_v = gerar_relatorio_familia_pdf(dados_p, filhos_pdf)
+                    # --- SEÇÃO DE DOCUMENTOS (FICHA + TERMO DE SAÍDA) ---
+                    st.divider()
+                    st.markdown("#### 📄 Documentos para Impressão")
+                    col_doc_fam1, col_doc_fam2 = st.columns(2)
                     
-                    if "pdf_fam_v" in st.session_state:
-                        st.download_button("📥 BAIXAR FICHA COM RELATO", st.session_state.pdf_fam_v, f"Visita_{busca_pais}.pdf", use_container_width=True)
+                    with col_doc_fam1:
+                        if st.button("📄 FICHA DE VISITAÇÃO (PDF)", use_container_width=True, key="btn_pdf_visita"):
+                            dados_p = dados_f.to_dict()
+                            dados_p['obs_pastoral_familia'] = novo_relato
+                            st.session_state.pdf_fam_v = gerar_relatorio_familia_pdf(dados_p, filhos_pdf)
+                        
+                        if "pdf_fam_v" in st.session_state:
+                            st.download_button("📥 BAIXAR FICHA", st.session_state.pdf_fam_v, f"Visita_{busca_pais}.pdf", use_container_width=True)
+
+                    with col_doc_fam2:
+                        if st.button("📜 TERMO DE AUTORIZAÇÃO DE SAÍDA", use_container_width=True, key="btn_pdf_termo_saida"):
+                            with st.spinner("Gerando termo oficial..."):
+                                # Busca dados da turma para extrair os catequistas responsáveis
+                                info_t_termo = df_turmas[df_turmas['nome_turma'] == dados_f['etapa']].iloc[0].to_dict() if not df_turmas.empty else {}
+                                st.session_state.pdf_termo_saida = gerar_termo_saida_pdf(dados_f.to_dict(), info_t_termo)
+                        
+                        if "pdf_termo_saida" in st.session_state:
+                            st.download_button("📥 BAIXAR TERMO (PDF)", st.session_state.pdf_termo_saida, f"Termo_Saida_{dados_f['nome_completo'].replace(' ', '_')}.pdf", use_container_width=True)
+                
                 else: st.warning("Nenhuma família localizada.")
 
         with tab_ia:
@@ -1906,4 +1921,8 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
         # VISÃO CATEQUISTA
         st.subheader(f"📞 Agenda de Emergência - Turma: {turma_do_catequista}")
         meus_alunos = df_cat[df_cat['etapa'] == turma_do_catequista]
-        for _, row in meus_alunos.iterrows(): exibir_card_contato_pastoral(row)
+        if not meus_alunos.empty:
+            for _, row in meus_alunos.iterrows(): exibir_card_contato_pastoral(row)
+        else:
+            st.info("Nenhum catequizando vinculado a esta turma.")
+# ==============================================================================
