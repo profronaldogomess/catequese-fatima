@@ -124,7 +124,7 @@ from utils import (
     gerar_relatorio_sacramentos_tecnico_pdf, 
     formatar_data_br,
     gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_v2
+    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote
 )
 from ai_engine import (
     gerar_analise_pastoral, 
