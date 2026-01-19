@@ -1,5 +1,5 @@
 # ARQUIVO: main.py
-# VERSÃO: 3.1.0 - HOMOLOGAÇÃO (SEGURANÇA, PERSISTÊNCIA E ADMIN BYPASS)
+# VERSÃO: 3.2.0 - INTEGRAL (HOMOLOGAÇÃO + ADMIN BYPASS + SEGURANÇA)
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
@@ -10,9 +10,12 @@ from fpdf import FPDF
 import plotly.express as px
 import extra_streamlit_components as stx
 
+# --- CONFIGURAÇÃO DE AMBIENTE (MUDE PARA FALSE NA BRANCH MAIN) ---
+IS_HOMOLOGACAO = True 
+
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
-    page_title="Catequese Fátima", 
+    page_title="Catequese Fátima" if not IS_HOMOLOGACAO else "LABORATÓRIO - FÁTIMA", 
     layout="wide", 
     page_icon="✝️",
     initial_sidebar_state="expanded"
@@ -20,7 +23,7 @@ st.set_page_config(
 
 # --- 2. INICIALIZAÇÃO DE COMPONENTES DE SEGURANÇA ---
 def get_cookie_manager():
-    return stx.CookieManager(key="catequese_fatima_cookies_v3")
+    return stx.CookieManager(key="catequese_fatima_cookies_v3_2")
 
 cookie_manager = get_cookie_manager()
 
@@ -34,21 +37,23 @@ from database import verificar_status_sistema, verificar_login, atualizar_sessio
 status_sistema = verificar_status_sistema()
 
 # Verificação de Identidade para Bypass
-is_admin = False
-if st.session_state.logado and st.session_state.usuario.get('papel') == 'ADMIN':
-    is_admin = True
+is_admin = (st.session_state.logado and st.session_state.usuario.get('papel') == 'ADMIN')
 
-# Se estiver em manutenção e NÃO for admin, bloqueia e mostra login de emergência
+# Banner de Homologação (Aparece apenas na branch de teste)
+if IS_HOMOLOGACAO:
+    st.warning("🧪 **AMBIENTE DE TESTES (HOMOLOGAÇÃO)** - As alterações feitas aqui podem não ser definitivas.")
+
+# Lógica de Bloqueio de Manutenção
 if status_sistema == "MANUTENCAO" and not is_admin:
     from utils import exibir_tela_manutencao
     exibir_tela_manutencao()
     
-    # Expander discreto para o Administrador entrar durante a manutenção
-    with st.expander("🔐 Acesso de Manutenção (Apenas Administradores)"):
-        with st.form("login_admin_emergencia"):
+    # Porta de entrada para o Administrador
+    with st.expander("🔐 Acesso Técnico (Administração)"):
+        with st.form("login_admin_manutencao"):
             u_adm = st.text_input("E-mail Admin")
             s_adm = st.text_input("Senha", type="password")
-            if st.form_submit_button("ACESSAR MODO TÉCNICO"):
+            if st.form_submit_button("ENTRAR EM MODO MANUTENÇÃO"):
                 user = verificar_login(u_adm, s_adm)
                 if user and user.get('papel') == 'ADMIN':
                     st.session_state.logado = True
@@ -57,38 +62,40 @@ if status_sistema == "MANUTENCAO" and not is_admin:
                     atualizar_session_id(u_adm, st.session_state.session_id)
                     st.rerun()
                 else:
-                    st.error("Acesso negado. Apenas administradores podem acessar em manutenção.")
+                    st.error("Apenas Administradores podem acessar durante a manutenção.")
     st.stop()
 
 # --- VARIÁVEIS GLOBAIS DE PADRONIZAÇÃO ---
 MIN_DATA = date(1900, 1, 1)
 MAX_DATA = date(2030, 12, 31)
 
-# --- 4. INJEÇÃO DE CSS (IDENTIDADE VISUAL ECLESIÁSTICA) ---
-st.markdown("""
+# --- 4. INJEÇÃO DE CSS (ESTILIZAÇÃO DIFERENCIADA PARA HOMOLOGAÇÃO) ---
+cor_sidebar = "#417b99" if not IS_HOMOLOGACAO else "#5d4037" # Azul para oficial, Marrom para teste
+
+st.markdown(f"""
     <style>
-    .stApp { background-color: #ffffff; color: #333333; }
-    .stTextInput input, .stDateInput input, .stNumberInput input, .stTextArea textarea {
+    .stApp {{ background-color: #ffffff; color: #333333; }}
+    .stTextInput input, .stDateInput input, .stNumberInput input, .stTextArea textarea {{
         background-color: #f0f2f6 !important; color: #000000 !important; border: 1px solid #ccc;
-    }
-    div[data-baseweb="select"] > div { background-color: #f0f2f6 !important; color: #000000 !important; }
-    input, textarea, select { color: black !important; -webkit-text-fill-color: black !important; }
-    [data-testid="stSidebar"] { background-color: #417b99; }
-    [data-testid="stSidebar"] * { color: white !important; }
-    h1, h2, h3, h4 { color: #417b99 !important; font-family: 'Helvetica', sans-serif; }
-    label, .stMarkdown p { color: #417b99 !important; font-weight: 600; }
-    p, li { color: #333333; }
-    div.stButton > button {
+    }}
+    div[data-baseweb="select"] > div {{ background-color: #f0f2f6 !important; color: #000000 !important; }}
+    input, textarea, select {{ color: black !important; -webkit-text-fill-color: black !important; }}
+    [data-testid="stSidebar"] {{ background-color: {cor_sidebar}; }}
+    [data-testid="stSidebar"] * {{ color: white !important; }}
+    h1, h2, h3, h4 {{ color: {cor_sidebar} !important; font-family: 'Helvetica', sans-serif; }}
+    label, .stMarkdown p {{ color: {cor_sidebar} !important; font-weight: 600; }}
+    p, li {{ color: #333333; }}
+    div.stButton > button {{
         background-color: #e03d11; color: white !important; border: none;
         font-weight: bold; border-radius: 8px; padding: 10px 20px;
-    }
-    div.stButton > button:hover { background-color: #c0320d; color: white !important; }
-    [data-testid="stMetricValue"] { color: #e03d11 !important; }
-    .block-container { padding-top: 2rem; padding-bottom: 5rem; }
+    }}
+    div.stButton > button:hover {{ background-color: #c0320d; color: white !important; }}
+    [data-testid="stMetricValue"] {{ color: #e03d11 !important; }}
+    .block-container {{ padding-top: 2rem; padding-bottom: 5rem; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. IMPORTAÇÕES DE MOTORES INTERNOS ---
+# --- 5. IMPORTAÇÕES DE MOTORES INTERNOS (INTEGRIDADE TOTAL) ---
 from database import (
     ler_aba, salvar_lote_catequizandos, atualizar_catequizando, 
     conectar_google_sheets, atualizar_turma, salvar_presencas, 
@@ -128,7 +135,7 @@ def mostrar_logo_login():
 
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
 
-# A. Tentativa de Auto-Login (Cookies)
+# A. Auto-Login via Cookies
 if not st.session_state.logado:
     auth_cookie = cookie_manager.get("fatima_auth_v2")
     if auth_cookie:
@@ -141,7 +148,7 @@ if not st.session_state.logado:
                 st.session_state.session_id = new_sid
                 st.rerun()
 
-# B. Validação de Sessão Única (Single Session)
+# B. Validação de Sessão Única
 if st.session_state.logado:
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
     if sid_no_db and sid_no_db != st.session_state.session_id:
@@ -162,7 +169,7 @@ if not st.session_state.logado:
         with col_conteudo:
             st.markdown("<br>", unsafe_allow_html=True)
             mostrar_logo_login()
-            st.markdown("<h2 style='text-align: center; color: #417b99;'>Acesso Restrito</h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='text-align: center; color: {cor_sidebar};'>Acesso Restrito</h2>", unsafe_allow_html=True)
             
             email_login = st.text_input("E-mail")
             senha_login = st.text_input("Senha", type="password")
@@ -200,9 +207,11 @@ mostrar_logo_sidebar()
 st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
 st.sidebar.success(f"Bem-vindo(a),\n**{st.session_state.usuario['nome']}**")
 
-# Alerta visual para o Admin em manutenção
+# Alertas de Ambiente e Manutenção
+if IS_HOMOLOGACAO:
+    st.sidebar.info("🧪 MODO HOMOLOGAÇÃO")
 if status_sistema == "MANUTENCAO":
-    st.sidebar.warning("⚠️ MODO MANUTENÇÃO ATIVO\n(Apenas você tem acesso)")
+    st.sidebar.warning("⚠️ MANUTENÇÃO ATIVA")
 
 st.sidebar.divider()
 
