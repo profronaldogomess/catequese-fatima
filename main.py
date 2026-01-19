@@ -1,5 +1,5 @@
 # ARQUIVO: main.py
-# VERSÃO: 3.0.0 - HOMOLOGAÇÃO (SEGURANÇA E PERSISTÊNCIA)
+# VERSÃO: 3.1.0 - HOMOLOGAÇÃO (SEGURANÇA, PERSISTÊNCIA E ADMIN BYPASS)
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
@@ -18,18 +18,53 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. MOTOR DE MANUTENÇÃO (BLOQUEIO PREVENTIVO) ---
-from database import verificar_status_sistema
-if verificar_status_sistema() == "MANUTENCAO":
+# --- 2. INICIALIZAÇÃO DE COMPONENTES DE SEGURANÇA ---
+def get_cookie_manager():
+    return stx.CookieManager(key="catequese_fatima_cookies_v3")
+
+cookie_manager = get_cookie_manager()
+
+if 'logado' not in st.session_state:
+    st.session_state.logado = False
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = None
+
+# --- 3. MOTOR DE MANUTENÇÃO COM BYPASS DE ADMINISTRADOR ---
+from database import verificar_status_sistema, verificar_login, atualizar_session_id, obter_session_id_db
+status_sistema = verificar_status_sistema()
+
+# Verificação de Identidade para Bypass
+is_admin = False
+if st.session_state.logado and st.session_state.usuario.get('papel') == 'ADMIN':
+    is_admin = True
+
+# Se estiver em manutenção e NÃO for admin, bloqueia e mostra login de emergência
+if status_sistema == "MANUTENCAO" and not is_admin:
     from utils import exibir_tela_manutencao
     exibir_tela_manutencao()
+    
+    # Expander discreto para o Administrador entrar durante a manutenção
+    with st.expander("🔐 Acesso de Manutenção (Apenas Administradores)"):
+        with st.form("login_admin_emergencia"):
+            u_adm = st.text_input("E-mail Admin")
+            s_adm = st.text_input("Senha", type="password")
+            if st.form_submit_button("ACESSAR MODO TÉCNICO"):
+                user = verificar_login(u_adm, s_adm)
+                if user and user.get('papel') == 'ADMIN':
+                    st.session_state.logado = True
+                    st.session_state.usuario = user
+                    st.session_state.session_id = str(uuid.uuid4())
+                    atualizar_session_id(u_adm, st.session_state.session_id)
+                    st.rerun()
+                else:
+                    st.error("Acesso negado. Apenas administradores podem acessar em manutenção.")
     st.stop()
 
 # --- VARIÁVEIS GLOBAIS DE PADRONIZAÇÃO ---
 MIN_DATA = date(1900, 1, 1)
 MAX_DATA = date(2030, 12, 31)
 
-# --- 3. INJEÇÃO DE CSS (IDENTIDADE VISUAL ECLESIÁSTICA) ---
+# --- 4. INJEÇÃO DE CSS (IDENTIDADE VISUAL ECLESIÁSTICA) ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; color: #333333; }
@@ -53,14 +88,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. IMPORTAÇÕES DE MOTORES INTERNOS ---
+# --- 5. IMPORTAÇÕES DE MOTORES INTERNOS ---
 from database import (
     ler_aba, salvar_lote_catequizandos, atualizar_catequizando, 
     conectar_google_sheets, atualizar_turma, salvar_presencas, 
-    verificar_login, salvar_encontro, salvar_tema_cronograma, 
+    salvar_encontro, salvar_tema_cronograma, 
     buscar_encontro_por_data, atualizar_usuario, salvar_formacao, 
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
-    registrar_evento_sacramento_completo, atualizar_session_id, obter_session_id_db
+    registrar_evento_sacramento_completo
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -80,7 +115,7 @@ from ai_engine import (
     analisar_turma_local, gerar_relatorio_sacramentos_ia, analisar_saude_familiar_ia
 )
 
-# --- 5. FUNÇÕES AUXILIARES DE INTERFACE ---
+# --- 6. FUNÇÕES AUXILIARES DE INTERFACE ---
 def mostrar_logo_sidebar():
     if os.path.exists("logo.png"):
         c1, c2, c3 = st.sidebar.columns([1, 3, 1])
@@ -91,17 +126,7 @@ def mostrar_logo_login():
     if os.path.exists("logo.png"): st.image("logo.png", width=150)
     else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
 
-# --- 6. GESTÃO DE PERSISTÊNCIA E SESSÃO ÚNICA ---
-def get_cookie_manager():
-    # Adicionamos um 'key' para garantir a estabilidade do componente no Streamlit
-    return stx.CookieManager(key="catequese_fatima_cookies")
-
-cookie_manager = get_cookie_manager()
-
-if 'logado' not in st.session_state:
-    st.session_state.logado = False
-if 'session_id' not in st.session_state:
-    st.session_state.session_id = None
+# --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
 
 # A. Tentativa de Auto-Login (Cookies)
 if not st.session_state.logado:
@@ -161,7 +186,7 @@ if not st.session_state.logado:
                 else: st.error("🚫 Acesso negado. Verifique suas credenciais.")
     st.stop() 
 
-# --- 7. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
+# --- 8. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
 df_cat = ler_aba("catequizandos")
 df_turmas = ler_aba("turmas")
 df_pres = ler_aba("presencas")
@@ -170,10 +195,15 @@ df_sac_eventos = ler_aba("sacramentos_eventos")
 
 equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
 
-# --- 8. BARRA LATERAL E DEFINIÇÃO DE MENU ---
+# --- 9. BARRA LATERAL E DEFINIÇÃO DE MENU ---
 mostrar_logo_sidebar() 
 st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
 st.sidebar.success(f"Bem-vindo(a),\n**{st.session_state.usuario['nome']}**")
+
+# Alerta visual para o Admin em manutenção
+if status_sistema == "MANUTENCAO":
+    st.sidebar.warning("⚠️ MODO MANUTENÇÃO ATIVO\n(Apenas você tem acesso)")
+
 st.sidebar.divider()
 
 if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_99x"):
