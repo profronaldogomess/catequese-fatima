@@ -92,9 +92,9 @@ def mostrar_logo_login():
     else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
 
 # --- 6. GESTÃO DE PERSISTÊNCIA E SESSÃO ÚNICA ---
-@st.cache_resource
 def get_cookie_manager():
-    return stx.CookieManager()
+    # Adicionamos um 'key' para garantir a estabilidade do componente no Streamlit
+    return stx.CookieManager(key="catequese_fatima_cookies")
 
 cookie_manager = get_cookie_manager()
 
