@@ -1,5 +1,5 @@
 # ARQUIVO: utils.py
-# VERSÃO: Refinamento Final - Auditoria e Fichas em Lote
+# VERSÃO: Corrigida (Restauração de gerar_pdf_perfil_turma + Lote + LGPD)
 from datetime import date, datetime
 import pandas as pd
 from fpdf import FPDF
@@ -82,21 +82,12 @@ def adicionar_cabecalho_diocesano(pdf, titulo, etapa=""):
     pdf.ln(12) 
     y_topo = pdf.get_y()
     pdf.set_fill_color(245, 245, 245)
-    pdf.rect(10, y_topo, 105, 20, 'F')
-    pdf.rect(10, y_topo, 105, 20)
-    pdf.set_xy(12, y_topo + 4)
-    pdf.set_font("helvetica", "B", 12); pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(100, 6, limpar_texto("Ficha de Inscrição da Catequese com Inspiração Catecumenal"))
-    
-    pdf.set_xy(115, y_topo)
-    pdf.set_font("helvetica", "B", 12)
-    pdf.cell(30, 20, limpar_texto(f"Ano: {date.today().year}"), border=1, align='C')
-    
-    pdf.set_xy(145, y_topo)
-    pdf.set_font("helvetica", "B", 7)
-    etapa_txt = str(etapa)
-    pdf.multi_cell(55, 10, limpar_texto(f"Etapa: {etapa_txt}\nTurma: {etapa_txt}"), border=1, align='L')
-    pdf.ln(8)
+    pdf.rect(10, y_topo, 190, 15, 'F')
+    pdf.rect(10, y_topo, 190, 15)
+    pdf.set_xy(10, y_topo + 4)
+    pdf.set_font("helvetica", "B", 12); pdf.set_text_color(65, 123, 153)
+    pdf.cell(190, 7, limpar_texto(titulo), align='C')
+    pdf.ln(15)
 
 # ==========================================
 # 3. GERADOR DE FICHAS (INDIVIDUAL E LOTE)
@@ -109,9 +100,23 @@ def _desenhar_corpo_ficha(pdf, dados):
     est_civil_raw = str(dados.get('estado_civil_pais_ou_proprio', 'N/A')).upper()
     is_adulto_cadastro = est_civil_raw != "N/A"
     
-    adicionar_cabecalho_diocesano(pdf, "FICHA DE INSCRIÇÃO", etapa=dados.get('etapa', ''))
+    # Cabeçalho específico da ficha de inscrição
+    pdf.set_fill_color(245, 245, 245)
+    pdf.rect(10, 42, 105, 20, 'F')
+    pdf.rect(10, 42, 105, 20)
+    pdf.set_xy(12, 46)
+    pdf.set_font("helvetica", "B", 12); pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(100, 6, limpar_texto("Ficha de Inscrição da Catequese com Inspiração Catecumenal"))
     
-    # Turno e Local
+    pdf.set_xy(115, 42)
+    pdf.cell(30, 20, limpar_texto(f"Ano: {date.today().year}"), border=1, align='C')
+    
+    pdf.set_xy(145, 42)
+    pdf.set_font("helvetica", "B", 7)
+    etapa_txt = str(dados.get('etapa', ''))
+    pdf.multi_cell(55, 10, limpar_texto(f"Etapa: {etapa_txt}\nTurma: {etapa_txt}"), border=1, align='L')
+    
+    pdf.set_xy(10, 65)
     pdf.set_font("helvetica", "B", 10)
     turno = str(dados.get('turno', '')).upper()
     mark_m = "X" if "MANHÃ" in turno or "M" == turno else " "
@@ -172,20 +177,17 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
     
     nome_cat = dados.get('nome_completo', '________________')
-    
     if is_menor:
         mae = str(dados.get('nome_mae', '')).strip()
         pai = str(dados.get('nome_pai', '')).strip()
         mae = "" if mae.upper() in ["N/A", "NONE", ""] else mae
         pai = "" if pai.upper() in ["N/A", "NONE", ""] else pai
-        
         if mae and pai: responsaveis = f"{mae} e {pai}"
         elif mae: responsaveis = mae
         elif pai: responsaveis = pai
         else:
             resp_campo = str(dados.get('nome_responsavel', '')).strip()
             responsaveis = resp_campo if resp_campo.upper() not in ["N/A", "NONE", ""] else "________________________________"
-        
         texto_lgpd = (f"Nós/Eu, {responsaveis}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, AUTORIZAMOS o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD), que regula as atividades de tratamento de dados pessoais colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
         label_assinatura_principal = "Assinatura do(s) Responsável(is) Legal(is)"
     else:
@@ -200,13 +202,13 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_xy(110, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
 
 def gerar_ficha_cadastral_catequizando(dados):
-    pdf = FPDF(); pdf.add_page(); _desenhar_corpo_ficha(pdf, dados); return finalizar_pdf(pdf)
+    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "FICHA DE INSCRIÇÃO"); _desenhar_corpo_ficha(pdf, dados); return finalizar_pdf(pdf)
 
 def gerar_fichas_turma_completa(nome_turma, df_alunos):
     if df_alunos.empty: return None
     pdf = FPDF()
     for _, row in df_alunos.iterrows():
-        pdf.add_page(); _desenhar_corpo_ficha(pdf, row.to_dict())
+        pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "FICHA DE INSCRIÇÃO"); _desenhar_corpo_ficha(pdf, row.to_dict())
     return finalizar_pdf(pdf)
 
 # ==========================================
@@ -217,7 +219,6 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
     pdf = FPDF(); pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "AUDITORIA SACRAMENTAL E CENSO DE INICIAÇÃO CRISTÃ")
     
-    # Seção 1: Resumo
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto("1. RESUMO GERAL DE SACRAMENTOS"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
@@ -226,7 +227,6 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
     desenhar_campo_box(pdf, "Batizados (Adultos)", str(stats['bat_a']), 140, y, 60)
     pdf.ln(18)
     
-    # Seção 2: Tabela Nominal
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 8, limpar_texto("2. DIAGNÓSTICO NOMINAL E PENDÊNCIAS"), ln=True, fill=True, align='C')
     pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
@@ -247,7 +247,6 @@ def gerar_relatorio_sacramentos_tecnico_pdf(stats, analise_turmas, analise_ia):
         pdf.cell(100, 6, limpar_texto(nomes), border=1)
         pdf.set_text_color(0, 0, 0); pdf.ln()
 
-    # Seção 3: IA
     pdf.ln(10); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto("3. PARECER TÉCNICO E RECOMENDAÇÕES PASTORAIS"), ln=True, fill=True, align='C')
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
@@ -263,6 +262,11 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.set_xy(15, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Catequista"), align='C')
     pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, limpar_texto("Assinatura do Coordenador"), align='C')
     return finalizar_pdf(pdf)
+
+def gerar_pdf_perfil_turma(nome_turma, metricas, analise_ia, lista_alunos):
+    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, f"PERFIL DA TURMA: {nome_turma}", etapa=nome_turma)
+    pdf.ln(10); pdf.set_font("helvetica", "", 10); pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 6, limpar_texto(analise_ia)); return finalizar_pdf(pdf)
 
 def gerar_relatorio_diocesano_pdf(dados_g, turmas_list, sac_stats, proj_list, analise_tecnica):
     pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO DIOCESANO", etapa="DIOCESANO")
