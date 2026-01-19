@@ -650,9 +650,8 @@ elif menu == "📖 Diário de Encontros":
                 st.write("Nenhum tema planejado ainda.")
 
 # ==================================================================================
-# BLOCO UNIFICADO: CADASTRO E PERFIL (CORREÇÃO DE PÁGINA EM BRANCO E 29 COLUNAS)
+# BLOCO ATUALIZADO: CADASTRO COM FOCO EM RESPONSÁVEL LEGAL E DIVERSIDADE FAMILIAR
 # ==================================================================================
-
 elif menu == "📝 Cadastrar Catequizando":
     st.title("📝 Cadastro de Catequizandos")
     tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
@@ -661,7 +660,7 @@ elif menu == "📝 Cadastrar Catequizando":
         tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
         lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
 
-        with st.form("form_cadastro_29_colunas_v3", clear_on_submit=True):
+        with st.form("form_cadastro_30_colunas_v4", clear_on_submit=True):
             st.subheader("📍 1. Identificação")
             c1, c2, c3 = st.columns([2, 1, 1])
             nome = c1.text_input("Nome Completo").upper()
@@ -669,21 +668,36 @@ elif menu == "📝 Cadastrar Catequizando":
             etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
 
             c4, c5, c6 = st.columns(3)
-            contato = c4.text_input("Telefone/WhatsApp Principal")
+            contato = c4.text_input("Telefone/WhatsApp Principal (Catequese)")
             batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
             docs_faltando = c6.text_input("Documentos em Falta").upper()
             endereco = st.text_input("Endereço Completo (Morada)").upper()
 
             st.divider()
-            st.subheader("👪 2. Filiação (Dados dos Pais)")
-            f1, f2 = st.columns(2)
-            nome_mae = f1.text_input("Nome da Mãe").upper()
-            prof_mae = f2.text_input("Profissão da Mãe").upper()
-            tel_mae = f2.text_input("Telemóvel da Mãe")
+            st.subheader("👪 2. Filiação e Responsáveis")
             
-            nome_pai = f1.text_input("Nome do Pai").upper()
-            prof_pai = f2.text_input("Profissão do Pai").upper()
-            tel_pai = f2.text_input("Telemóvel do Pai")
+            # Sub-bloco para Pais Biológicos
+            col_mae, col_pai = st.columns(2)
+            with col_mae:
+                st.markdown("##### 👩‍🦱 Dados da Mãe")
+                nome_mae = st.text_input("Nome da Mãe").upper()
+                prof_mae = st.text_input("Profissão da Mãe").upper()
+                tel_mae = st.text_input("Telemóvel da Mãe")
+            with col_pai:
+                st.markdown("##### 👨‍🦱 Dados do Pai")
+                nome_pai = st.text_input("Nome do Pai").upper()
+                prof_pai = st.text_input("Profissão do Pai").upper()
+                tel_pai = st.text_input("Telemóvel do Pai")
+
+            # NOVO ESPAÇO EXTRA: RESPONSÁVEL LEGAL / CUIDADOR (Acolhimento de novas realidades familiares)
+            st.markdown("---")
+            st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
+            st.caption("Preencha caso a criança seja cuidada por Avós, Tios, Primos ou Tutores.")
+            
+            cr1, cr2, cr3 = st.columns([2, 1, 1])
+            responsavel_nome = cr1.text_input("Nome do Cuidador/Responsável").upper()
+            vinculo_resp = cr2.selectbox("Vínculo", ["PAIS", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
+            tel_responsavel = cr3.text_input("Telefone do Cuidador")
 
             st.divider()
             if tipo_ficha == "Adulto":
@@ -695,12 +709,12 @@ elif menu == "📝 Cadastrar Catequizando":
                 
                 part_grupo = a1.radio("Participa de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
                 qual_grupo = a1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
-                responsavel, est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", "N/A", "NÃO", 0
+                est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", "NÃO", 0
             else:
                 st.subheader("⛪ 3. Vida Eclesial da Família (Infantil)")
                 fe1, fe2 = st.columns(2)
-                est_civil_pais = fe1.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
-                sac_pais_list = fe2.multiselect("Sacramentos que os PAIS já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
+                est_civil_pais = fe1.selectbox("Estado Civil dos Pais/Responsáveis", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
+                sac_pais_list = fe2.multiselect("Sacramentos que os PAIS/RESPONSÁVEIS já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
                 sac_pais = ", ".join(sac_pais_list)
                 
                 part_grupo = fe1.radio("Os pais ou a criança participam de Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
@@ -708,7 +722,6 @@ elif menu == "📝 Cadastrar Catequizando":
                 
                 tem_irmaos = fe2.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
                 qtd_irmaos = fe2.number_input("Se sim, quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
-                responsavel = f"{nome_mae} / {nome_pai}"
                 estado_civil, sacramentos = "N/A", "N/A"
 
             st.divider()
@@ -722,18 +735,51 @@ elif menu == "📝 Cadastrar Catequizando":
             if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
                 if nome and contato and etapa_inscricao != "SEM TURMAS":
                     novo_id = f"CAT-{int(time.time())}"
-                    # MONTAGEM DAS 29 COLUNAS (A até AC)
+                    
+                    # Lógica de definição do Responsável Principal (Coluna J)
+                    # Se houver um cuidador específico, ele vai para a ficha, senão usa os pais.
+                    resp_final = responsavel_nome if responsavel_nome else f"{nome_mae} / {nome_pai}"
+                    
+                    # Lógica da 30ª Coluna (AD): Observação Pastoral da Família
+                    obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
+
+                    # MONTAGEM RIGOROSA DAS 30 COLUNAS (A até AD)
                     registro = [[
-                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco,
-                        nome_mae, nome_pai, responsavel, docs_faltando, qual_grupo, "ATIVO",
-                        medicamento, tgo, estado_civil, sacramentos,
-                        prof_mae, tel_mae, prof_pai, tel_pai, est_civil_pais, sac_pais,
-                        part_grupo, qual_grupo, tem_irmaos, qtd_irmaos, turno, local_enc
+                        novo_id,          # A
+                        etapa_inscricao,  # B
+                        nome,             # C
+                        str(data_nasc),   # D
+                        batizado,         # E
+                        contato,          # F
+                        endereco,         # G
+                        nome_mae,         # H
+                        nome_pai,         # I
+                        resp_final,       # J (Responsável Principal)
+                        docs_faltando,    # K
+                        qual_grupo,       # L
+                        "ATIVO",          # M
+                        medicamento,      # N
+                        tgo,              # O
+                        estado_civil,     # P
+                        sacramentos,      # Q
+                        prof_mae,         # R
+                        tel_mae,          # S
+                        prof_pai,         # T
+                        tel_pai,          # U
+                        est_civil_pais,   # V
+                        sac_pais,         # W
+                        part_grupo,       # X
+                        qual_grupo,       # Y
+                        tem_irmaos,       # Z
+                        qtd_irmaos,       # AA
+                        turno,            # AB
+                        local_enc,        # AC
+                        obs_familia       # AD (30ª Coluna - Observação Pastoral)
                     ]]
+                    
                     if salvar_lote_catequizandos(registro):
-                        st.success(f"✅ {nome} CADASTRADO!"); st.balloons(); time.sleep(1); st.rerun()
+                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
       
-# --- SUBSTITUIÇÃO CORRIGIDA: ABA tab_csv (MECANISMO DE MODULAÇÃO SEM ERROS) ---
 # --- SUBSTITUIÇÃO: ABA tab_csv (CORREÇÃO TERMINOLÓGICA) ---
     with tab_csv:
         st.subheader("📂 Importação em Massa (29 Colunas)")
