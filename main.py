@@ -504,15 +504,41 @@ elif menu == "🏠 Minha Turma":
 
     st.subheader("🎂 Aniversariantes do Mês")
     df_niver_mes = obter_aniversariantes_mes(meus_alunos)
+    
     if not df_niver_mes.empty:
+        # 1. Opção de Card Coletivo para a Turma
+        if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True, key="btn_coletivo_turma_cat"):
+            with st.spinner("Renderizando card coletivo..."):
+                # Formata lista para o motor: "DIA | PAPEL | NOME"
+                lista_para_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome_completo']}" for _, row in df_niver_mes.iterrows()]
+                card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
+                if card_coletivo:
+                    st.image(card_coletivo, caption=f"Aniversariantes de {turma_do_catequista}")
+                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, f"Aniversariantes_{turma_do_catequista}.png", "image/png")
+        
+        st.divider()
+
+        # 2. Cards Individuais em Colunas
         cols_n = st.columns(len(df_niver_mes) if len(df_niver_mes) < 4 else 4)
         for i, (_, niver) in enumerate(df_niver_mes.iterrows()):
             with cols_n[i % 4]:
                 st.info(f"**Dia {int(niver['dia'])}**\n\n{niver['nome_completo']}")
+                
+                if st.button(f"🎨 Gerar Card", key=f"btn_card_mt_{i}"):
+                    # Formata dados para o motor individual
+                    dados_envio = f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome_completo']}"
+                    card_img = gerar_card_aniversario(dados_envio, tipo="DIA")
+                    if card_img:
+                        st.image(card_img, use_container_width=True)
+                        st.download_button(
+                            label="📥 Baixar",
+                            data=card_img,
+                            file_name=f"Parabens_{niver['nome_completo'].replace(' ', '_')}.png",
+                            mime="image/png",
+                            key=f"dl_mt_{i}"
+                        )
     else:
-        st.write("Nenhum aniversariante este mês.")
-
-    st.divider()
+        st.write("Nenhum aniversariante este mês na sua turma.")
 
     col_passado, col_futuro = st.columns(2)
     with col_passado:
