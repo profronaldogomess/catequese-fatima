@@ -84,8 +84,8 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
             aba = planilha.worksheet("catequizandos")
             celula = aba.find(str(id_catequizando))
             if celula:
-                # Rigor: 29 colunas (A-AC)
-                aba.update(f"A{celula.row}:AC{celula.row}", [novos_dados_lista])
+                # Atualizado para AD (30 colunas)
+                aba.update(f"A{celula.row}:AD{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
