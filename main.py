@@ -1401,7 +1401,7 @@ elif menu == "✅ Fazer Chamada":
                                 st.rerun()
 # --- FIM DO BLOCO: FAZER CHAMADA ---
 
-# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE CATEQUISTAS (VERSÃO AUDITORIA) ---
+# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE CATEQUISTAS (VERSÃO AUDITORIA COM LOTE) ---
 elif menu == "👥 Gestão de Catequistas":
     st.title("👥 Gestão de Catequistas e Formação")
     
@@ -1420,7 +1420,6 @@ elif menu == "👥 Gestão de Catequistas":
             total_c = len(equipe_tecnica)
             
             # Cálculos de Sacramentos e Ministério
-            # Consideramos que possui o sacramento se a data estiver preenchida
             tem_batismo = equipe_tecnica['data_batismo'].apply(lambda x: str(x).strip() != "" and str(x) != "None").sum()
             tem_euca = equipe_tecnica['data_eucaristia'].apply(lambda x: str(x).strip() != "" and str(x) != "None").sum()
             tem_crisma = equipe_tecnica['data_crisma'].apply(lambda x: str(x).strip() != "" and str(x) != "None").sum()
@@ -1432,6 +1431,31 @@ elif menu == "👥 Gestão de Catequistas":
             m3.metric("Eucaristia", f"{tem_euca}")
             m4.metric("Crismados", f"{tem_crisma}")
             m5.metric("Ministros", f"{sao_ministros}")
+
+            # ==================================================================
+            # 📂 NOVO BLOCO: DOCUMENTAÇÃO EM LOTE (EQUIPE)
+            # ==================================================================
+            st.divider()
+            st.markdown("#### 📂 Documentação da Equipe")
+            col_lote_c1, col_lote_c2 = st.columns([2, 1])
+            
+            with col_lote_c1:
+                if st.button("🗂️ GERAR TODAS AS FICHAS DE CATEQUISTAS (LOTE)", use_container_width=True, key="btn_lote_cat_final"):
+                    with st.spinner("Consolidando currículos e formações..."):
+                        from utils import gerar_fichas_catequistas_lote
+                        pdf_equipe = gerar_fichas_catequistas_lote(equipe_tecnica, df_pres_form, df_formacoes)
+                        st.session_state.pdf_lote_equipe = pdf_equipe
+                        st.toast("Dossiê da Equipe gerado!", icon="✅")
+
+            if "pdf_lote_equipe" in st.session_state:
+                with col_lote_c2:
+                    st.download_button(
+                        label="📥 BAIXAR DOSSIÊ (PDF)",
+                        data=st.session_state.pdf_lote_equipe,
+                        file_name=f"Dossie_Equipe_Catequetica_{date.today().year}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
             st.divider()
             st.markdown("### 🛡️ Status Ministerial (Regra Diocesana)")
@@ -1544,7 +1568,6 @@ elif menu == "👥 Gestão de Catequistas":
             
             if st.form_submit_button("🚀 CRIAR ACESSO E VINCULAR"):
                 if n_nome and n_email and n_senha:
-                    # Ordem: nome, email, senha, papel, turma_vinculada, telefone, nascimento, inicio, batismo, euca, crisma, ministerio
                     novo_user = [n_nome, n_email, n_senha, "CATEQUISTA", ", ".join(n_turmas), "", "", "", "", "", "", ""]
                     if conectar_google_sheets().worksheet("usuarios").append_row(novo_user):
                         st.success(f"Acesso criado para {n_nome}!"); st.cache_data.clear(); time.sleep(1); st.rerun()
@@ -1560,16 +1583,13 @@ elif menu == "👥 Gestão de Catequistas":
             f_formador = st.text_input("Nome do Formador / Palestrante").upper()
             
             st.markdown("**Selecione os Catequistas Presentes:**")
-            # Cria dicionário Nome -> Email para salvar a presença corretamente
             dict_equipe = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
             participantes = st.multiselect("Lista de Presença:", list(dict_equipe.keys()))
             
             if st.form_submit_button("💾 REGISTRAR FORMAÇÃO E PRESENÇAS"):
                 if f_tema and participantes:
                     id_f = f"FOR-{int(time.time())}"
-                    # Salva a formação
                     if salvar_formacao([id_f, f_tema, str(f_data), f_formador, "", ""]):
-                        # Salva as presenças em lote
                         lista_p = [[id_f, dict_equipe[nome]] for nome in participantes]
                         if salvar_presenca_formacao(lista_p):
                             st.success(f"Formação '{f_tema}' registrada com {len(participantes)} presenças!"); st.cache_data.clear(); time.sleep(1); st.rerun()
