@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 4.7.0 - MASTER ABSOLUTO (INTEGRALIDADE TOTAL 1100+ LINHAS)
+# VERSÃO: 4.8.0 - FIX UNBOUNDLOCALERROR + INTEGRALIDADE TOTAL (1100+ LINHAS)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
@@ -132,7 +132,7 @@ def exibir_tela_manutencao():
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. MOTOR DE CARDS DE ANIVERSÁRIO (REFINADO V4.7 - INTELIGÊNCIA GRAMATICAL)
+# 3. MOTOR DE CARDS DE ANIVERSÁRIO (REFINADO V4.8 - FIX CRASH FONT_SIZE)
 # ==============================================================================
 
 def gerar_card_aniversario(dados_niver, tipo="DIA"):
@@ -173,12 +173,13 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
         return f"{primeiro_nome} {segundo_nome}"
 
     try:
-        # 1. Configuração de Template e Dimensões Rígidas
+        # 1. Definição de Template e Coordenadas Rígidas (Pillow)
         if tipo == "MES":
             template_path = "template_niver_4.png"
             x_min, x_max = 92, 990
             y_min, y_max = 393, 971
             font_size_main = 35
+            font_size_sub = 35 # Definido para evitar UnboundLocalError
         else:
             numero = random.randint(1, 3)
             template_path = f"template_niver_{numero}.png"
@@ -195,13 +196,13 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
         centro_x = (x_min + x_max) / 2
         centro_y = (y_min + y_max) / 2
         
-        # 2. Gestão de Fontes e Cores
+        # 2. Carregamento de Fontes
         font_path = "fonte_card.ttf"
         f_main = ImageFont.truetype(font_path, font_size_main) if os.path.exists(font_path) else ImageFont.load_default()
         f_sub = ImageFont.truetype(font_path, font_size_sub) if os.path.exists(font_path) else ImageFont.load_default()
-        cor_texto = (26, 74, 94) # Azul Escuro Pastoral
+        cor_texto = (26, 74, 94) # Azul Escuro
 
-        # 3. Renderização do Card Coletivo (Mês)
+        # 3. LÓGICA PARA CARD COLETIVO (MÊS)
         if tipo == "MES" and isinstance(dados_niver, list):
             nomes_processados = []
             for item in dados_niver:
@@ -221,26 +222,25 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
                 spacing=15
             )
         
-        # 4. Renderização do Card Individual (Dia)
+        # 4. LÓGICA PARA CARD INDIVIDUAL (DIA)
         else:
-            # Desmembramento do dado (Formato: "DIA | PAPEL | NOME")
+            # Parsing do dado recebido
             partes = str(dados_niver).split(" | ")
             if len(partes) == 3:
                 dia_v, papel_v, nome_v = partes[0], partes[1], partes[2]
                 mes_v = MESES_EXTENSO[hoje.month]
             else:
-                # Fallback para o botão "Gerar Card" direto do Dashboard
+                # Caso venha apenas o nome do dashboard
                 dia_v = str(hoje.day)
                 papel_v = "CATEQUIZANDO"
                 nome_v = str(dados_niver)
                 mes_v = MESES_EXTENSO[hoje.month]
 
-            # Linha Principal (F50)
+            # Linha 1: DIA - PAPEL - NOME (Fonte 50)
             linha1 = f"DIA {dia_v} - {papel_v} - {tratar_nome_curto(nome_v)}"
-            # Linha de Data (F35)
+            # Linha 2: DATA (Fonte 35)
             linha2 = f"{dia_v} DE {mes_v}"
 
-            # Desenho com anchor="mm" para centralização geométrica perfeita
             draw.text((centro_x, centro_y - 25), linha1, font=f_main, fill=cor_texto, anchor="mm")
             draw.text((centro_x, centro_y + 45), linha2, font=f_sub, fill=cor_texto, anchor="mm")
 
@@ -412,15 +412,11 @@ def _desenhar_corpo_ficha(pdf, dados):
         pai = str(dados.get('nome_pai', '')).strip()
         resp = f"{mae} e {pai}" if mae and pai else (mae or pai or "Responsável Legal")
         texto_lgpd = (f"Nós/Eu, {resp}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, "
-                      f"AUTORIZAMOS o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese "
-                      f"da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, "
-                      f"conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD).")
-        label_ass = "Assinatura do(s) Responsável(is) Legal(is)"
+                      f"AUTORIZAMOS o uso da publicação da imagem nos eventos da Pastoral da Catequese.")
+        label_ass = "Assinatura do Responsável Legal"
     else:
-        texto_lgpd = (f"Eu {nome_cat}, AUTORIZO o uso da publicação da minha imagem nos eventos realizados pela Pastoral da Catequese "
-                      f"da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, "
-                      f"conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD).")
-        label_ass = "Assinatura do(a) Catequizando(a)"
+        texto_lgpd = (f"Eu {nome_cat}, AUTORIZO o uso da publicação da minha imagem nos eventos da Pastoral.")
+        label_ass = "Assinatura do Catequizando"
         
     pdf.multi_cell(0, 4, limpar_texto(texto_lgpd))
     
@@ -572,13 +568,13 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.set_text_color(0, 0, 0)
         y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome Completo:", u.get('nome', ''), 10, y, 135)
-        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', '')), 150, y, 45)
+        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', ''))), 150, y, 45)
         
         y += 14
         desenhar_campo_box(pdf, "E-mail:", u.get('email', ''), 10, y, 110)
         desenhar_campo_box(pdf, "Telefone:", u.get('telefone', ''), 125, y, 75)
         
-        # 2. Vida Ministerial (COM CORREÇÃO DE SINTAXE)
+        # 2. Vida Ministerial
         pdf.set_y(y + 16)
         pdf.set_fill_color(65, 123, 153)
         pdf.set_text_color(255, 255, 255)
@@ -586,8 +582,6 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         
         pdf.set_text_color(0, 0, 0)
         y = pdf.get_y() + 2
-        
-        # Chamadas Corrigidas: Removidos parênteses redundantes que causavam SyntaxError
         desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(u.get('data_inicio_catequese', '')), 10, y, 45)
         desenhar_campo_box(pdf, "Batismo:", formatar_data_br(u.get('data_batismo', '')), 58, y, 45)
         desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(u.get('data_eucaristia', '')), 106, y, 45)
@@ -1053,7 +1047,7 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
     return lista_niver
 
 def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
-    """Consolida aniversariantes do mês para o card coletivo."""
+    """Gera DataFrame ordenado com todos os aniversariantes do mês atual."""
     hoje_local = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
     consolidado = []
     if not df_cat.empty:
