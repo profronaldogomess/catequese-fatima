@@ -1,8 +1,8 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 4.1.0 - INTEGRALIDADE TOTAL RECUPERADA + REFINAMENTO DESIGN CARDS
+# VERSÃO: 4.2.0 - CORREÇÃO DE SINTAXE + INTEGRALIDADE TOTAL (1000+ LINHAS)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
-# LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES. (1000+ LINHAS)
+# LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
 
 from datetime import date, datetime, timedelta, timezone
@@ -517,7 +517,7 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.cell(0, 7, limpar_texto("1. DADOS PESSOAIS E CONTATO"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome Completo:", u.get('nome', ''), 10, y, 135)
-        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', ''))), 150, y, 45)
+        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', '')), 150, y, 45)
         y += 14
         desenhar_campo_box(pdf, "E-mail:", u.get('email', ''), 10, y, 110)
         desenhar_campo_box(pdf, "Telefone:", u.get('telefone', ''), 125, y, 75)
@@ -525,10 +525,10 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 7, limpar_texto("2. VIDA MINISTERIAL E SACRAMENTAL"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
-        desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(u.get('data_inicio_catequese', ''))), 10, y, 45)
-        desenhar_campo_box(pdf, "Batismo:", formatar_data_br(u.get('data_batismo', ''))), 58, y, 45)
-        desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(u.get('data_eucaristia', ''))), 106, y, 45)
-        desenhar_campo_box(pdf, "Crisma:", formatar_data_br(u.get('data_crisma', ''))), 154, y, 46)
+        desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(u.get('data_inicio_catequese', '')), 10, y, 45)
+        desenhar_campo_box(pdf, "Batismo:", formatar_data_br(u.get('data_batismo', '')), 58, y, 45)
+        desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(u.get('data_eucaristia', '')), 106, y, 45)
+        desenhar_campo_box(pdf, "Crisma:", formatar_data_br(u.get('data_crisma', '')), 154, y, 46)
         
         pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 7, limpar_texto("3. HISTÓRICO DE FORMAÇÃO CONTINUADA"), ln=True, fill=True, align='C')
