@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 4.2.0 - CORREÇÃO DE SINTAXE + INTEGRALIDADE TOTAL (1000+ LINHAS)
+# VERSÃO: 4.2.1 - CORREÇÃO DE ESCOPO (font_size_sub) + INTEGRALIDADE TOTAL
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
@@ -149,6 +149,7 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
             template_path = "template_niver_4.png"
             x_min, x_max, y_min, y_max = 92, 990, 393, 971
             font_size_main = 35
+            font_size_sub = 25 # Correção: Inicialização para evitar UnboundLocalError
         else:
             numero = random.randint(1, 3)
             template_path = f"template_niver_{numero}.png"
@@ -1105,4 +1106,3 @@ gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v3
 gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
 gerar_pdf_perfil_turma = lambda n, m, a, l: finalizar_pdf(FPDF())
 gerar_relatorio_local_turma_pdf = gerar_relatorio_local_turma_v2
-
