@@ -1,8 +1,8 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 3.9.0 - MASTER ABSOLUTO (INTEGRIDADE TOTAL + CORREÇÕES DE LAYOUT)
+# VERSÃO: 4.1.0 - INTEGRALIDADE TOTAL RECUPERADA + REFINAMENTO DESIGN CARDS
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
-# LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
+# LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES. (1000+ LINHAS)
 # ==============================================================================
 
 from datetime import date, datetime, timedelta, timezone
@@ -124,36 +124,37 @@ def exibir_tela_manutencao():
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. MOTOR DE CARDS DE ANIVERSÁRIO (IDENTIDADE VISUAL)
+# 3. MOTOR DE CARDS DE ANIVERSÁRIO (REFINADO PARA HOMOLOGAÇÃO)
 # ==============================================================================
 
 def gerar_card_aniversario(dados_niver, tipo="DIA"):
     """
-    Gera card de aniversário com processamento de texto:
-    Formato: DIA - PAPEL - NOME (2 primeiras palavras)
-    Fonte: 35 | Centralização: Total (anchor="mm")
+    Gera card de aniversário com fontes dinâmicas:
+    DIA: Linha 1 (F50: DIA - PAPEL - NOME), Linha 2 (F35: DATA).
+    MES: Fonte fixa 35 para listas.
     """
-    def tratar_nome_curto(texto_bruto):
-        # Espera o formato enviado pelo main: "DIA | PAPEL | NOME COMPLETO"
-        partes = str(texto_bruto).split(" | ")
-        if len(partes) == 3:
-            dia, papel, nome_completo = partes
-            # Pega as duas primeiras palavras do nome
-            nome_curto = " ".join(nome_completo.split()[:2])
-            return f"{dia} - {papel} - {nome_curto}".upper()
-        return str(texto_bruto).upper()
+    MESES_EXTENSO = {
+        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL", 5: "MAIO", 6: "JUNHO",
+        7: "JULHO", 8: "AGOSTO", 9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
+    }
+    
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    
+    def tratar_nome_curto(nome_completo):
+        return " ".join(str(nome_completo).split()[:2]).upper()
 
     try:
-        # 1. Definição de Template e Coordenadas
+        # 1. Definição de Template e Coordenadas Rígidas
         if tipo == "MES":
             template_path = "template_niver_4.png"
-            x_min, x_max = 92, 990
-            y_min, y_max = 393, 971
+            x_min, x_max, y_min, y_max = 92, 990, 393, 971
+            font_size_main = 35
         else:
             numero = random.randint(1, 3)
             template_path = f"template_niver_{numero}.png"
-            x_min, x_max = 108, 972
-            y_min, y_max = 549, 759
+            x_min, x_max, y_min, y_max = 108, 972, 549, 759
+            font_size_main = 50
+            font_size_sub = 35
 
         if not os.path.exists(template_path): return None
             
@@ -162,22 +163,42 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
         centro_x = (x_min + x_max) / 2
         centro_y = (y_min + y_max) / 2
         
-        # 2. Configuração da Fonte (Aumentada para 50)
-        font_size = 50 
         font_path = "fonte_card.ttf"
-        font = ImageFont.truetype(font_path, font_size) if os.path.exists(font_path) else ImageFont.load_default()
-        cor_texto = (26, 74, 94) # Azul Escuro
+        f_main = ImageFont.truetype(font_path, font_size_main) if os.path.exists(font_path) else ImageFont.load_default()
+        f_sub = ImageFont.truetype(font_path, font_size_sub) if os.path.exists(font_path) else ImageFont.load_default()
+        cor_texto = (26, 74, 94) # Azul Escuro Paroquial
 
-        # 3. LÓGICA PARA CARD COLETIVO (LISTA)
+        # 2. LÓGICA PARA CARD COLETIVO (MÊS) - FONTE 35
         if tipo == "MES" and isinstance(dados_niver, list):
-            nomes_processados = [tratar_nome_curto(n) for n in dados_niver]
+            nomes_processados = []
+            for item in dados_niver:
+                partes = str(item).split(" | ")
+                if len(partes) == 3:
+                    dia, papel, nome = partes
+                    nomes_processados.append(f"{dia} - {papel} - {tratar_nome_curto(nome)}")
+            
             texto_completo = "\n".join(nomes_processados)
-            draw.multiline_text((centro_x, centro_y), texto_completo, font=font, fill=cor_texto, align="center", anchor="mm", spacing=15)
+            draw.multiline_text((centro_x, centro_y), texto_completo, font=f_main, fill=cor_texto, align="center", anchor="mm", spacing=15)
         
-        # 4. LÓGICA PARA CARD INDIVIDUAL
+        # 3. LÓGICA PARA CARD INDIVIDUAL (HOJE OU LISTA) - F50 E F35
         else:
-            texto_final = tratar_nome_curto(dados_niver)
-            draw.text((centro_x, centro_y), texto_final, font=font, fill=cor_texto, anchor="mm")
+            partes = str(dados_niver).split(" | ")
+            if len(partes) == 3:
+                dia_v, papel_v, nome_v = partes[0], partes[1], partes[2]
+                mes_v = MESES_EXTENSO[hoje.month]
+            else:
+                # Fallback para o botão "Gerar Card" do Dashboard Hoje
+                dia_v, papel_v, nome_v = str(hoje.day), "CATEQUIZANDO", str(dados_niver)
+                mes_v = MESES_EXTENSO[hoje.month]
+
+            # Linha 1: DIA - PAPEL - NOME (Fonte 50)
+            linha1 = f"DIA {dia_v} - {papel_v} - {tratar_nome_curto(nome_v)}"
+            # Linha 2: DIA X DE MES (Fonte 35)
+            linha2 = f"{dia_v} DE {mes_v}"
+
+            # Desenho com centralização anchor="mm" e offset vertical
+            draw.text((centro_x, centro_y - 25), linha1, font=f_main, fill=cor_texto, anchor="mm")
+            draw.text((centro_x, centro_y + 40), linha2, font=f_sub, fill=cor_texto, anchor="mm")
 
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -196,9 +217,8 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
         # Ajuste de posição e tamanho para não cortar
         pdf.image("logo.png", 10, 10, 25)
     
-    # Tradução de Data para Português (Blindagem contra January/English)
+    # Tradução de Data para Português
     hoje = datetime.now(timezone.utc) + timedelta(hours=-3)
-    meses_pt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     data_local = f"{hoje.day} / {hoje.month:02d} / {hoje.year}"
     
     pdf.set_xy(40, 15)
@@ -497,7 +517,7 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.cell(0, 7, limpar_texto("1. DADOS PESSOAIS E CONTATO"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome Completo:", u.get('nome', ''), 10, y, 135)
-        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', '')), 150, y, 45)
+        desenhar_campo_box(pdf, "Nascimento:", formatar_data_br(u.get('data_nascimento', ''))), 150, y, 45)
         y += 14
         desenhar_campo_box(pdf, "E-mail:", u.get('email', ''), 10, y, 110)
         desenhar_campo_box(pdf, "Telefone:", u.get('telefone', ''), 125, y, 75)
@@ -505,10 +525,10 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 7, limpar_texto("2. VIDA MINISTERIAL E SACRAMENTAL"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
-        desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(u.get('data_inicio_catequese', '')), 10, y, 45)
-        desenhar_campo_box(pdf, "Batismo:", formatar_data_br(u.get('data_batismo', '')), 58, y, 45)
-        desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(u.get('data_eucaristia', '')), 106, y, 45)
-        desenhar_campo_box(pdf, "Crisma:", formatar_data_br(u.get('data_crisma', '')), 154, y, 46)
+        desenhar_campo_box(pdf, "Início Catequese:", formatar_data_br(u.get('data_inicio_catequese', ''))), 10, y, 45)
+        desenhar_campo_box(pdf, "Batismo:", formatar_data_br(u.get('data_batismo', ''))), 58, y, 45)
+        desenhar_campo_box(pdf, "Eucaristia:", formatar_data_br(u.get('data_eucaristia', ''))), 106, y, 45)
+        desenhar_campo_box(pdf, "Crisma:", formatar_data_br(u.get('data_crisma', ''))), 154, y, 46)
         
         pdf.set_y(y + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 7, limpar_texto("3. HISTÓRICO DE FORMAÇÃO CONTINUADA"), ln=True, fill=True, align='C')
@@ -619,7 +639,7 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_responsavel_escolhido):
     pdf.multi_cell(180, 8, limpar_texto(texto_corpo), align='J')
     
     pdf.ln(10)
-    # Data em Português (Blindagem contra January)
+    # Data em Português
     hoje = datetime.now(timezone.utc) + timedelta(hours=-3)
     meses_pt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     data_pt = f"{hoje.day} de {meses_pt[hoje.month-1]} de {hoje.year}"
@@ -1076,7 +1096,7 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER)
+# 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
 # ==============================================================================
 gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v4
 gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v3
