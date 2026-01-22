@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
+import datetime as dt_module # Adicionar esta linha
 import time
 import os 
 import uuid
@@ -188,7 +189,7 @@ if not st.session_state.logado:
                         st.session_state.usuario = user
                         st.session_state.session_id = new_sid
                         if lembrar:
-                            cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=datetime.now() + timedelta(days=30))
+                            cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
                         st.success(f"Bem-vindo(a), {user['nome']}!")
                         time.sleep(1)
                         st.rerun()
