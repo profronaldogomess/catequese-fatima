@@ -262,7 +262,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_menor = idade_real < 18
     
-    # Cabeçalho da Ficha
+    # --- CABEÇALHO DA FICHA ---
     pdf.set_fill_color(245, 245, 245)
     pdf.rect(10, y_base, 105, 20, 'F')
     pdf.rect(10, y_base, 105, 20)
@@ -278,7 +278,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_font("helvetica", "B", 7)
     pdf.multi_cell(55, 10, limpar_texto(f"Etapa: {dados.get('etapa', '')}"), border=1, align='L')
     
-    # Turno e Local
+    # --- TURNO E LOCAL ---
     y_next = y_base + 23
     pdf.set_xy(10, y_next)
     pdf.set_font("helvetica", "B", 10)
@@ -289,8 +289,8 @@ def _desenhar_corpo_ficha(pdf, dados):
     local = str(dados.get('local_encontro', '_______________________')).upper()
     pdf.cell(0, 8, limpar_texto(f"Turno: ( {mark_m} ) M  ( {mark_t} ) T  ( {mark_n} ) N        Local: {local}"), ln=True)
 
-    # Seção 1: Identificação
-    pdf.set_fill_color(65, 123, 153)
+    # --- SEÇÃO 1: IDENTIFICAÇÃO ---
+    pdf.set_fill_color(65, 123, 153) # Azul Paroquial
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 7, limpar_texto("IDENTIFICAÇÃO DA/O CATEQUIZANDA/O"), ln=True, fill=True, align='C')
@@ -316,7 +316,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     desenhar_campo_box(pdf, "Telefone/WhatsApp:", dados.get('contato_principal', ''), 10, y, 60)
     desenhar_campo_box(pdf, "Toma algum medicamento? (Qual/Por quê?):", dados.get('toma_medicamento_sn', 'NÃO'), 75, y, 125)
 
-    # Seção 2: Filiação
+    # --- SEÇÃO 2: FILIAÇÃO ---
     pdf.set_y(y + 16)
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
@@ -331,7 +331,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     desenhar_campo_box(pdf, "Nome do Pai:", dados.get('nome_pai', ''), 10, y, 110)
     desenhar_campo_box(pdf, "Profissão/Tel:", f"{dados.get('profissao_pai','')} / {dados.get('tel_pai','')}", 125, y, 75)
     
-    # Seção 3: Vida Eclesial
+    # --- SEÇÃO 3: VIDA ECLESIAL ---
     pdf.set_y(y + 16)
     pdf.set_font("helvetica", "B", 9)
     pdf.set_text_color(65, 123, 153)
@@ -353,10 +353,10 @@ def _desenhar_corpo_ficha(pdf, dados):
     marcar_opcao(pdf, "Eucaristia", "EUCARISTIA" in sac, 80, pdf.get_y())
     marcar_opcao(pdf, "Matrimônio", "MATRIMÔNIO" in sac, 110, pdf.get_y())
     
-    # Seção 4: LGPD (Termo Integral)
+    # --- SEÇÃO 4: LGPD (TERMO INTEGRAL) ---
     pdf.ln(10)
     pdf.set_font("helvetica", "B", 9)
-    pdf.set_text_color(224, 61, 17)
+    pdf.set_text_color(224, 61, 17) # Laranja Paroquial
     pdf.cell(0, 6, limpar_texto("Termo de Consentimento LGPD (Lei Geral de Proteção de Dados)"), ln=True)
     
     pdf.set_font("helvetica", "", 8)
@@ -380,7 +380,7 @@ def _desenhar_corpo_ficha(pdf, dados):
         
     pdf.multi_cell(0, 4, limpar_texto(texto_lgpd))
     
-    # Assinaturas
+    # --- ASSINATURAS ---
     pdf.ln(12)
     y_ass = pdf.get_y()
     pdf.line(10, y_ass, 90, y_ass)
@@ -392,6 +392,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.cell(80, 5, limpar_texto("Assinatura do Catequista / Coordenação"), align='C')
 
 def gerar_ficha_cadastral_catequizando(dados):
+    """Gera o PDF da ficha individual."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf)
@@ -399,6 +400,7 @@ def gerar_ficha_cadastral_catequizando(dados):
     return finalizar_pdf(pdf)
 
 def gerar_fichas_turma_completa(nome_turma, df_alunos):
+    """Gera um PDF com todas as fichas de uma turma específica."""
     if df_alunos.empty: return None
     pdf = FPDF()
     for _, row in df_alunos.iterrows():
@@ -424,6 +426,7 @@ def gerar_fichas_paroquia_total(df_catequizandos):
 # ==============================================================================
 
 def gerar_ficha_catequista_pdf(dados, df_formacoes):
+    """Gera a ficha curricular e ministerial do catequista."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, titulo="FICHA DO CATEQUISTA", etapa="EQUIPE")
@@ -483,7 +486,7 @@ def gerar_ficha_catequista_pdf(dados, df_formacoes):
     pdf.cell(0, 6, limpar_texto("Declaração de Veracidade e Compromisso"), ln=True)
     pdf.set_font("helvetica", "", 9)
     pdf.set_text_color(0, 0, 0)
-    declara = (f"Eu, {dados.get('nome', '')}, declaro que as informações acima verdadeiras e assumo o compromisso "
+    declara = (f"Eu, {dados.get('nome', '')}, declaro que as informações acima prestadas são verdadeiras e assumo o compromisso "
                f"de zelar pelas diretrizes da Pastoral da Catequese da Paróquia Nossa Senhora de Fátima.")
     pdf.multi_cell(0, 5, limpar_texto(declara))
     
@@ -513,7 +516,7 @@ def gerar_fichas_catequistas_lote(df_equipe, df_pres_form, df_formacoes):
         pdf.add_page()
         adicionar_cabecalho_diocesano(pdf, titulo="FICHA DO CATEQUISTA", etapa="EQUIPE")
         
-        # Reutiliza a lógica de desenho individual
+        # Reutiliza a lógica de desenho individual para manter o padrão
         pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
         pdf.cell(0, 7, limpar_texto("1. DADOS PESSOAIS E CONTATO"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
