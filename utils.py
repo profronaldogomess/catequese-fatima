@@ -6,7 +6,7 @@
 # ==============================================================================
 
 from datetime import date, datetime, timedelta, timezone
-import datetime as dt_module
+import datetime as dt_module # Alias crítico para evitar AttributeError
 import pandas as pd
 from fpdf import FPDF
 import os
@@ -56,11 +56,11 @@ def calcular_idade(data_nascimento):
     """Calcula a idade exata forçando o fuso horário UTC-3 (Bahia/Brasília)."""
     if not data_nascimento or str(data_nascimento).strip() in ["None", "", "N/A"]:
         return 0
-    # Força UTC-3 para evitar erros em servidores estrangeiros
-    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    # Uso do dt_module para evitar conflito de nomes
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     try:
         d_str = formatar_data_br(data_nascimento)
-        dt = datetime.strptime(d_str, "%d/%m/%Y").date()
+        dt = dt_module.datetime.strptime(d_str, "%d/%m/%Y").date()
         idade = hoje.year - dt.year - ((hoje.month, hoje.day) < (dt.month, dt.day))
         return idade if idade >= 0 else 0
     except: return 0
@@ -875,7 +875,6 @@ def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
 
 def obter_aniversariantes_mes(df_cat):
     """Versão para painéis de turma (apenas catequizandos)."""
-    # Passa explicitamente None, mas a função acima agora está blindada para tratar isso.
     return obter_aniversariantes_mes_unificado(df_cat, None)
 
 # ==============================================================================
