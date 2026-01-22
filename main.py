@@ -466,13 +466,26 @@ if menu == "🏠 Início / Dashboard":
                     use_container_width=True
                 )
 
-# --- PÁGINA: MINHA TURMA ---
+# --- PÁGINA: MINHA TURMA (VERSÃO MULTI-TURMAS) ---
 elif menu == "🏠 Minha Turma":
-    st.title(f"🏠 Painel da Turma: {turma_do_catequista}")
+    # 1. Lógica de Identificação de Múltiplas Turmas
+    turmas_vinculadas = [t.strip() for t in str(st.session_state.usuario.get('turma_vinculada', '')).split(',') if t.strip()]
+    
+    if not turmas_vinculadas:
+        st.warning("⚠️ Você não possui turmas vinculadas ao seu perfil. Contate a coordenação.")
+        st.stop()
+    
+    # 2. Seletor de Turma (Aparece apenas se tiver mais de uma)
+    if len(turmas_vinculadas) > 1:
+        turma_ativa = st.selectbox("🔄 Alternar entre minhas turmas:", turmas_vinculadas, key="selector_multi_turma")
+    else:
+        turma_ativa = turmas_vinculadas[0]
+
+    st.title(f"🏠 Painel da Turma: {turma_ativa}")
     
     df_cron = ler_aba("cronograma")
-    meus_alunos = df_cat[df_cat['etapa'] == turma_do_catequista] if not df_cat.empty else pd.DataFrame()
-    minhas_pres = df_pres[df_pres['id_turma'] == turma_do_catequista] if not df_pres.empty else pd.DataFrame()
+    meus_alunos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
+    minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Total de Catequizandos", len(meus_alunos))
@@ -506,37 +519,26 @@ elif menu == "🏠 Minha Turma":
     df_niver_mes = obter_aniversariantes_mes(meus_alunos)
     
     if not df_niver_mes.empty:
-        # 1. Opção de Card Coletivo para a Turma
-        if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True, key="btn_coletivo_turma_cat"):
+        if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True, key=f"btn_coletivo_{turma_ativa}"):
             with st.spinner("Renderizando card coletivo..."):
-                # Formata lista para o motor: "DIA | PAPEL | NOME"
                 lista_para_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome_completo']}" for _, row in df_niver_mes.iterrows()]
                 card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
                 if card_coletivo:
-                    st.image(card_coletivo, caption=f"Aniversariantes de {turma_do_catequista}")
-                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, f"Aniversariantes_{turma_do_catequista}.png", "image/png")
+                    st.image(card_coletivo, caption=f"Aniversariantes de {turma_ativa}")
+                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, f"Aniversariantes_{turma_ativa}.png", "image/png")
         
         st.divider()
 
-        # 2. Cards Individuais em Colunas
         cols_n = st.columns(len(df_niver_mes) if len(df_niver_mes) < 4 else 4)
         for i, (_, niver) in enumerate(df_niver_mes.iterrows()):
             with cols_n[i % 4]:
                 st.info(f"**Dia {int(niver['dia'])}**\n\n{niver['nome_completo']}")
-                
-                if st.button(f"🎨 Gerar Card", key=f"btn_card_mt_{i}"):
-                    # Formata dados para o motor individual
+                if st.button(f"🎨 Card", key=f"btn_card_{turma_ativa}_{i}"):
                     dados_envio = f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome_completo']}"
                     card_img = gerar_card_aniversario(dados_envio, tipo="DIA")
                     if card_img:
                         st.image(card_img, use_container_width=True)
-                        st.download_button(
-                            label="📥 Baixar",
-                            data=card_img,
-                            file_name=f"Parabens_{niver['nome_completo'].replace(' ', '_')}.png",
-                            mime="image/png",
-                            key=f"dl_mt_{i}"
-                        )
+                        st.download_button("📥 Baixar", card_img, f"Niver_{niver['nome_completo']}.png", "image/png", key=f"dl_{turma_ativa}_{i}")
     else:
         st.write("Nenhum aniversariante este mês na sua turma.")
 
@@ -553,7 +555,7 @@ elif menu == "🏠 Minha Turma":
         st.subheader("🎯 Próximo Encontro")
         if not df_cron.empty:
             temas_feitos = minhas_pres['tema_do_dia'].unique().tolist() if not minhas_pres.empty else []
-            proximos = df_cron[~df_cron['titulo_tema'].isin(temas_feitos)]
+            proximos = df_cron[(df_cron['etapa'] == turma_ativa) & (~df_cron['titulo_tema'].isin(temas_feitos))]
             if not proximos.empty:
                 proximo_tema = proximos.iloc[0]
                 st.success(f"**Sugestão de Tema:**\n\n### {proximo_tema['titulo_tema']}")
@@ -561,7 +563,7 @@ elif menu == "🏠 Minha Turma":
             else:
                 st.write("✅ Todos os temas do cronograma foram concluídos!")
         else:
-            st.info("Dica: Peça para a coordenação cadastrar o Cronograma na planilha para ver os próximos temas aqui.")
+            st.info("Dica: Peça para a coordenação cadastrar o Cronograma.")
 
     st.divider()
     with st.expander("👥 Ver Lista Completa de Contatos"):
@@ -576,29 +578,14 @@ elif menu == "🏠 Minha Turma":
         lista_presentes = dados_ultimo[dados_ultimo['status'] == 'PRESENTE']['nome_catequizando'].tolist()
         lista_faltosos = dados_ultimo[dados_ultimo['status'] == 'AUSENTE']['nome_catequizando'].tolist()
 
-        with st.expander("✨ Gerar Mensagem para o Grupo da Turma"):
-            st.write("A IA vai criar um texto baseado no último encontro para você copiar e colar.")
-            
-            if st.button("📝 Criar Texto Personalizado"):
+        with st.expander("✨ Gerar Mensagem para o Grupo"):
+            if st.button("📝 Criar Texto Personalizado", key=f"btn_ia_zap_{turma_ativa}"):
                 with st.spinner("Escrevendo mensagem..."):
-                    from ai_engine import gerar_mensagem_whatsapp
                     texto_zap = gerar_mensagem_whatsapp(tema_ultimo, lista_presentes, lista_faltosos)
-                    
-                    st.markdown("---")
-                    st.write("**Sugestão de Mensagem:**")
                     st.info(texto_zap)
-                    
                     import urllib.parse
-                    texto_url = urllib.parse.quote(texto_zap)
-                    link_zap = f"https://wa.me/?text={texto_url}"
-                    
-                    st.markdown(f"""
-                        <a href="{link_zap}" target="_blank" style="text-decoration:none;">
-                            <button style="background-color:#25d366; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; width:100%;">
-                                📲 Enviar direto para o WhatsApp
-                            </button>
-                        </a>
-                    """, unsafe_allow_html=True)
+                    link_zap = f"https://wa.me/?text={urllib.parse.quote(texto_zap)}"
+                    st.markdown(f'<a href="{link_zap}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:10px; border-radius:5px; width:100%;">📲 Enviar para WhatsApp</button></a>', unsafe_allow_html=True)
     else:
         st.info("Faça a primeira chamada para liberar esta função.")
 
