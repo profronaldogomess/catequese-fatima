@@ -283,3 +283,31 @@ def excluir_tema_cronograma(turma, titulo_tema):
                     return True
         except: pass
     return False
+
+def sincronizar_renomeacao_turma_catequizandos(nome_antigo, nome_novo):
+    """
+    Varre a aba catequizandos e atualiza o nome da etapa 
+    para todos os vinculados ao nome antigo.
+    """
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("catequizandos")
+            dados = aba.get_all_values()
+            if len(dados) < 2: return True # Nada para atualizar
+            
+            headers = [h.lower() for h in dados[0]]
+            col_etapa = headers.index("etapa") + 1
+            
+            # Localiza todas as linhas que precisam de atualização
+            celulas_para_atualizar = []
+            for i, linha in enumerate(dados[1:], start=2):
+                if linha[col_etapa-1] == nome_antigo:
+                    aba.update_cell(i, col_etapa, nome_novo)
+            
+            st.cache_data.clear()
+            return True
+        except Exception as e:
+            st.error(f"Erro na sincronia de nomes: {e}")
+            return False
+    return False
