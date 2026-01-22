@@ -1811,8 +1811,22 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
     st.title("👨‍👩‍👧‍👦 Gestão Familiar e Igreja Doméstica")
     st.markdown("---")
 
-    # --- FUNÇÃO INTERNA: CARD DE CONTATO E CUIDADO ---
+# --- FUNÇÃO INTERNA CORRIGIDA: CARD DE CONTATO (SEM ERRO DE 55 DUPLICADO) ---
     def exibir_card_contato_pastoral(aluno_row):
+        # Função auxiliar para tratar o número e evitar o erro do "5555"
+        def limpar_whatsapp(tel):
+            if not tel or str(tel).strip() in ["N/A", "", "None"]:
+                return None
+            # Remove tudo que não for número (parênteses, traços, espaços)
+            num = "".join(filter(str.isdigit, str(tel)))
+            if len(num) < 8: 
+                return None
+            # Se o número já começar com 55, retorna ele puro
+            if num.startswith("55") and len(num) >= 12:
+                return num
+            # Se não tiver o 55, adiciona apenas uma vez
+            return f"55{num}"
+
         with st.container():
             st.markdown(f"""
                 <div style='background-color:#f8f9f0; padding:15px; border-radius:10px; border-left:8px solid #417b99; margin-bottom:10px;'>
@@ -1820,17 +1834,25 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     <p style='margin:0; color:#666;'><b>Turma:</b> {aluno_row['etapa']} | <b>Status:</b> {aluno_row['status']}</p>
                 </div>
             """, unsafe_allow_html=True)
+            
             c1, c2, c3 = st.columns([2, 2, 1.5])
+            
             with c1:
                 st.markdown("**👩‍🦱 MÃE:** " + str(aluno_row['nome_mae']))
-                t_mae = str(aluno_row['tel_mae']).replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                if t_mae and t_mae != "N/A" and len(t_mae) > 7:
-                    st.markdown(f"""<a href="https://wa.me/55{t_mae}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:10px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">📲 WhatsApp Mãe</button></a>""", unsafe_allow_html=True)
+                link_mae = limpar_whatsapp(aluno_row['tel_mae'])
+                if link_mae:
+                    st.markdown(f"""<a href="https://wa.me/{link_mae}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:10px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">📲 WhatsApp Mãe</button></a>""", unsafe_allow_html=True)
+                else:
+                    st.caption("⚠️ Sem telefone")
+
             with c2:
                 st.markdown("**👨‍🦱 PAI:** " + str(aluno_row['nome_pai']))
-                t_pai = str(aluno_row['tel_pai']).replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                if t_pai and t_pai != "N/A" and len(t_pai) > 7:
-                    st.markdown(f"""<a href="https://wa.me/55{t_pai}" target="_blank"><button style="background-color:#128c7e; color:white; border:none; padding:10px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">📲 WhatsApp Pai</button></a>""", unsafe_allow_html=True)
+                link_pai = limpar_whatsapp(aluno_row['tel_pai'])
+                if link_pai:
+                    st.markdown(f"""<a href="https://wa.me/{link_pai}" target="_blank"><button style="background-color:#128c7e; color:white; border:none; padding:10px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">📲 WhatsApp Pai</button></a>""", unsafe_allow_html=True)
+                else:
+                    st.caption("⚠️ Sem telefone")
+
             with c3:
                 if str(aluno_row['toma_medicamento_sn']).upper() != "NÃO":
                     st.error(f"💊 MEDICAMENTO: {aluno_row['toma_medicamento_sn']}")
