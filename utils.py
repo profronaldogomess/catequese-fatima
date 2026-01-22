@@ -1,11 +1,12 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 5.6.0 - REFINAMENTO FINAL E HOMOLOGAÇÃO (INTEGRIDADE TOTAL)
+# VERSÃO: 5.5.0 - REFINAMENTO FINAL E HOMOLOGAÇÃO (INTEGRIDADE TOTAL)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
 
 from datetime import date, datetime, timedelta, timezone
+import datetime as dt_module
 import pandas as pd
 from fpdf import FPDF
 import os
@@ -731,18 +732,12 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
     pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto(f"6. EQUIPE CATEQUÉTICA E QUALIFICAÇÃO (Total: {len(df_equipe_real)} membros)"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-    pdf.cell(100, 7, "Indicador de Fé (Equipe)", border=1, fill=True)
-    pdf.cell(45, 7, "Quantidade", border=1, fill=True, align='C')
-    pdf.cell(45, 7, "Percentual", border=1, fill=True, align='C'); pdf.ln()
+    pdf.cell(100, 7, "Indicador de Fé (Equipe)", border=1, fill=True); pdf.cell(45, 7, "Quantidade", border=1, fill=True, align='C'); pdf.cell(45, 7, "Percentual", border=1, fill=True, align='C'); pdf.ln()
     bat_e = df_equipe_real['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
     euc_e = df_equipe_real['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
     cri_e = df_equipe_real['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-    aptos = 0
-    for _, u in df_equipe_real.iterrows():
-        status, _ = verificar_status_ministerial(u.get('data_inicio_catequese',''), u.get('data_batismo',''), u.get('data_eucaristia',''), u.get('data_crisma',''), u.get('data_ministerio',''))
-        if status in ["APTO", "MINISTRO"]: aptos += 1
     pdf.set_font("helvetica", "", 8)
-    for desc, qtd in [("Batismo", bat_e), ("Eucaristia", euc_e), ("Crisma", cri_e), ("Aptos para o Ministério", aptos)]:
+    for desc, qtd in [("Batismo", bat_e), ("Eucaristia", euc_e), ("Crisma", cri_e)]:
         pdf.cell(100, 6, f" {desc}", border=1); pdf.cell(45, 6, str(qtd), border=1, align='C'); pdf.cell(45, 6, f"{(qtd/total_e)*100:.1f}%", border=1, align='C'); pdf.ln()
     
     # Lista Nominal da Equipe
@@ -834,7 +829,8 @@ def eh_aniversariante_da_semana(data_nasc_str):
         d_str = formatar_data_br(data_nasc_str)
         if d_str == "N/A": return False
         nasc = datetime.strptime(d_str, "%d/%m/%Y").date()
-        hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+        hoje = dt_module.datetime.now(dt_module.timezone.utc) + timedelta(hours=-3)
+        data_local = f"{hoje.day} / {hoje.month:02d} / {hoje.year}"
         nasc_este_ano = nasc.replace(year=hoje.year)
         diff = (nasc_este_ano - hoje).days
         return 0 <= diff <= 7
@@ -857,8 +853,7 @@ def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_min
     except: return "EM_CAMINHADA", 0
 
 def obter_aniversariantes_hoje(df_cat, df_usuarios):
-    """Retorna lista estruturada: 'DIA | PAPEL | NOME' para os aniversariantes de hoje."""
-    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + timedelta(hours=-3)).date()
     niver = []
     if not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
@@ -867,7 +862,7 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
                 dt = datetime.strptime(d, "%d/%m/%Y")
                 if dt.day == hoje.day and dt.month == hoje.month:
                     niver.append(f"{hoje.day} | CATEQUIZANDO | {r['nome_completo']}")
-    if df_usuarios is not None and not df_usuarios.empty:
+    if not df_usuarios.empty:
         df_e = df_usuarios[df_usuarios['papel'] != 'ADMIN']
         for _, u in df_e.drop_duplicates(subset=['nome']).iterrows():
             d = formatar_data_br(u.get('data_nascimento', ''))
@@ -878,29 +873,23 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
     return niver
 
 def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
-    """Retorna DataFrame com aniversariantes do mês (Padronizado: coluna 'nome')."""
-    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + timedelta(hours=-3)).date()
     lista = []
     if not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
             d = formatar_data_br(r['data_nascimento'])
             if d != "N/A":
                 dt = datetime.strptime(d, "%d/%m/%Y")
-                if dt.month == hoje.month:
-                    lista.append({'dia': dt.day, 'nome': r['nome_completo'], 'tipo': 'CATEQUIZANDO', 'info': r['etapa']})
-    
-    if df_usuarios is not None and not df_usuarios.empty:
+                if dt.month == hoje.month: lista.append({'dia': dt.day, 'nome': r['nome_completo'], 'tipo': 'CATEQUIZANDO'})
+    if not df_usuarios.empty:
         for _, u in df_usuarios.drop_duplicates(subset=['nome']).iterrows():
             d = formatar_data_br(u.get('data_nascimento', ''))
             if d != "N/A":
                 dt = datetime.strptime(d, "%d/%m/%Y")
-                if dt.month == hoje.month:
-                    lista.append({'dia': dt.day, 'nome': u['nome'], 'tipo': 'CATEQUISTA', 'info': 'EQUIPE'})
-    
+                if dt.month == hoje.month: lista.append({'dia': dt.day, 'nome': u['nome'], 'tipo': 'CATEQUISTA'})
     return pd.DataFrame(lista).sort_values(by='dia') if lista else pd.DataFrame()
 
 def obter_aniversariantes_mes(df_cat):
-    """Versão para painéis de turma (apenas catequizandos)."""
     return obter_aniversariantes_mes_unificado(df_cat, None)
 
 # ==============================================================================
