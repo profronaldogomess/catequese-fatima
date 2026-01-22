@@ -598,13 +598,13 @@ def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
 def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_resp):
     """
     Gera o Termo de Autorização de Saída com Rigor Estético Diocesano.
-    Tradução de data manual, linhas de margem a margem e fundo creme.
+    Fundo Branco, tradução de data manual e linhas de margem a margem.
     """
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. IDENTIDADE VISUAL (Fundo Creme #f8f9f0)
-    pdf.set_fill_color(248, 249, 240)
+    # 1. IDENTIDADE VISUAL (Fundo Branco #ffffff)
+    pdf.set_fill_color(255, 255, 255)
     pdf.rect(0, 0, 210, 297, 'F')
     
     # 2. CABEÇALHO OFICIAL
@@ -654,9 +654,8 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_resp):
     pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
     
-    # 7. OBSERVAÇÃO (BOX DE DESTAQUE)
+    # 7. OBSERVAÇÃO (DESTAQUE EM LARANJA)
     pdf.ln(8)
-    pdf.set_fill_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 9)
     pdf.set_text_color(224, 61, 17) # Laranja para Alerta
     pdf.cell(0, 5, limpar_texto("Obs.:"), ln=True)
