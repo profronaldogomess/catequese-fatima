@@ -750,7 +750,6 @@ elif menu == "📝 Cadastrar Catequizando":
             st.divider()
             st.subheader("👪 2. Filiação e Responsáveis")
             
-            # Sub-bloco para Pais Biológicos
             col_mae, col_pai = st.columns(2)
             with col_mae:
                 st.markdown("##### 👩‍🦱 Dados da Mãe")
@@ -763,11 +762,8 @@ elif menu == "📝 Cadastrar Catequizando":
                 prof_pai = st.text_input("Profissão do Pai").upper()
                 tel_pai = st.text_input("Telemóvel do Pai")
 
-            # NOVO ESPAÇO EXTRA: RESPONSÁVEL LEGAL / CUIDADOR (Acolhimento de novas realidades familiares)
             st.markdown("---")
             st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
-            st.caption("Preencha caso a criança seja cuidada por Avós, Tios, Primos ou Tutores. Isso NÃO apaga os nomes dos pais acima.")
-            
             cr1, cr2, cr3 = st.columns([2, 1, 1])
             responsavel_nome = cr1.text_input("Nome do Cuidador/Responsável").upper()
             vinculo_resp = cr2.selectbox("Vínculo", ["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
@@ -780,7 +776,6 @@ elif menu == "📝 Cadastrar Catequizando":
                 estado_civil = a1.selectbox("Seu Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"])
                 sacramentos_list = a2.multiselect("Sacramentos que VOCÊ já possui:", ["BATISMO", "EUCARISTIA", "MATRIMÔNIO"])
                 sacramentos = ", ".join(sacramentos_list)
-                
                 part_grupo = a1.radio("Participa de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
                 qual_grupo = a1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
                 est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", "NÃO", 0
@@ -790,10 +785,8 @@ elif menu == "📝 Cadastrar Catequizando":
                 est_civil_pais = fe1.selectbox("Estado Civil dos Pais/Responsáveis", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
                 sac_pais_list = fe2.multiselect("Sacramentos que os PAIS/RESPONSÁVEIS já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
                 sac_pais = ", ".join(sac_pais_list)
-                
                 part_grupo = fe1.radio("Os pais ou a criança participam de Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
                 qual_grupo = fe1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
-                
                 tem_irmaos = fe2.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
                 qtd_irmaos = fe2.number_input("Se sim, quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
                 estado_civil, sacramentos = "N/A", "N/A"
@@ -809,50 +802,86 @@ elif menu == "📝 Cadastrar Catequizando":
             if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
                 if nome and contato and etapa_inscricao != "SEM TURMAS":
                     novo_id = f"CAT-{int(time.time())}"
-                    
-                    # Lógica de definição do Responsável Principal (Coluna J)
-                    # Se houver um cuidador específico, ele vai para a ficha, senão usa os pais.
                     resp_final = responsavel_nome if responsavel_nome else f"{nome_mae} / {nome_pai}"
-                    
-                    # Lógica da 30ª Coluna (AD): Observação Pastoral da Família
                     obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
 
-                    # MONTAGEM RIGOROSA DAS 30 COLUNAS (A até AD)
                     registro = [[
-                        novo_id,          # A: id_catequizando
-                        etapa_inscricao,  # B: etapa
-                        nome,             # C: nome_completo
-                        str(data_nasc),   # D: data_nascimento
-                        batizado,         # E: batizado_sn
-                        contato,          # F: contato_principal
-                        endereco,         # G: endereco_completo
-                        nome_mae,         # H: nome_mae
-                        nome_pai,         # I: nome_pai
-                        resp_final,       # J: nome_responsavel (Cuidador ou Pais)
-                        docs_faltando,    # K: doc_em_falta
-                        qual_grupo,       # L: engajado_grupo
-                        "ATIVO",          # M: status
-                        medicamento,      # N: toma_medicamento_sn
-                        tgo,              # O: tgo_sn
-                        estado_civil,     # P: estado_civil_pais_ou_proprio
-                        sacramentos,      # Q: sacramentos_ja_feitos
-                        prof_mae,         # R: profissao_mae
-                        tel_mae,          # S: tel_mae
-                        prof_pai,         # T: profissao_pai
-                        tel_pai,          # U: tel_pai
-                        est_civil_pais,   # V: est_civil_pais
-                        sac_pais,         # W: sac_pais
-                        part_grupo,       # X: participa_grupo
-                        qual_grupo,       # Y: qual_grupo
-                        tem_irmaos,       # Z: tem_irmaos
-                        qtd_irmaos,       # AA: qtd_irmaos
-                        turno,            # AB: turno
-                        local_enc,        # AC: local_encontro
-                        obs_familia       # AD: obs_pastoral_familia (30ª Coluna)
+                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco,
+                        nome_mae, nome_pai, resp_final, docs_faltando, qual_grupo, "ATIVO",
+                        medicamento, tgo, estado_civil, sacramentos, prof_mae, tel_mae,
+                        prof_pai, tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo,
+                        tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia
                     ]]
                     
                     if salvar_lote_catequizandos(registro):
                         st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
+
+    with tab_csv:
+        st.subheader("📂 Importação em Massa (CSV)")
+        st.write("Utilize esta aba para subir a lista de 2025 extraída anteriormente.")
+        
+        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_v2025")
+        
+        if arquivo_csv:
+            try:
+                df_import = pd.read_csv(arquivo_csv, encoding='utf-8').fillna("N/A")
+                df_import.columns = [c.strip().lower() for c in df_import.columns]
+                
+                st.markdown("### 🔍 Revisão dos Dados")
+                col_nome = 'nome_completo' if 'nome_completo' in df_import.columns else ('nome' if 'nome' in df_import.columns else None)
+                col_etapa = 'etapa' if 'etapa' in df_import.columns else None
+
+                if not col_nome or not col_etapa:
+                    st.error("❌ Erro: O CSV precisa ter ao menos as colunas 'nome_completo' e 'etapa'.")
+                else:
+                    st.dataframe(df_import[[col_nome, col_etapa]].head(10), use_container_width=True)
+                    
+                    if st.button("🚀 CONFIRMAR IMPORTAÇÃO DE 2025", use_container_width=True):
+                        with st.spinner("Gravando no banco de dados..."):
+                            lista_final = []
+                            for i, linha in df_import.iterrows():
+                                # Montagem das 30 colunas para manter integridade
+                                registro = [
+                                    str(linha.get('id_catequizando', f"CAT-2025-{i}")),
+                                    str(linha.get('etapa', 'CATEQUIZANDOS SEM TURMA')).upper(),
+                                    str(linha.get(col_nome, 'SEM NOME')).upper(),
+                                    str(linha.get('data_nascimento', '01/01/2000')),
+                                    str(linha.get('batizado_sn', 'NÃO')).upper(),
+                                    str(linha.get('contato_principal', 'N/A')),
+                                    str(linha.get('endereco_completo', 'N/A')).upper(),
+                                    str(linha.get('nome_mae', 'N/A')).upper(),
+                                    str(linha.get('nome_pai', 'N/A')).upper(),
+                                    str(linha.get('nome_responsavel', 'N/A')).upper(),
+                                    str(linha.get('doc_em_falta', 'NADA')).upper(),
+                                    str(linha.get('engajado_grupo', 'N/A')).upper(),
+                                    "ATIVO",
+                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(),
+                                    str(linha.get('tgo_sn', 'NÃO')).upper(),
+                                    str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(),
+                                    str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(),
+                                    str(linha.get('profissao_mae', 'N/A')).upper(),
+                                    str(linha.get('tel_mae', 'N/A')),
+                                    str(linha.get('profissao_pai', 'N/A')).upper(),
+                                    str(linha.get('tel_pai', 'N/A')),
+                                    str(linha.get('est_civil_pais', 'N/A')).upper(),
+                                    str(linha.get('sac_pais', 'N/A')).upper(),
+                                    str(linha.get('participa_grupo', 'NÃO')).upper(),
+                                    str(linha.get('qual_grupo', 'N/A')).upper(),
+                                    str(linha.get('tem_irmaos', 'NÃO')).upper(),
+                                    linha.get('qtd_irmaos', 0),
+                                    str(linha.get('turno', 'N/A')).upper(),
+                                    str(linha.get('local_encontro', 'N/A')).upper(),
+                                    "Importado via CSV 2025" # Coluna AD (30)
+                                ]
+                                lista_final.append(registro)
+                            
+                            if salvar_lote_catequizandos(lista_final):
+                                st.success(f"✅ {len(lista_final)} catequizandos importados com sucesso!")
+                                st.balloons()
+                                time.sleep(2)
+                                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erro ao processar arquivo: {e}")
 
 # ==============================================================================
 # PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO BLINDADA CONTRA INDEXERROR)
