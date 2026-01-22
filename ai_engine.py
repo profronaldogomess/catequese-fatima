@@ -99,3 +99,24 @@ def analisar_turma_local(nome_turma, dados_resumo):
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
         return response.text
     except: return "Análise pastoral indisponível."
+
+def gerar_mensagem_reacolhida_ia(nome_catequizando, nome_turma):
+    """Gera uma mensagem carinhosa e pastoral para catequizandos faltosos."""
+    try:
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        prompt = f"""
+        Você é um Catequista muito acolhedor da Paróquia Nossa Senhora de Fátima. 
+        Escreva uma mensagem curta para WhatsApp destinada ao catequizando {nome_catequizando} (ou aos pais dele), 
+        que faz parte da turma {nome_turma} e tem faltado aos encontros.
+        
+        DIRETRIZES PASTORAIS:
+        1. O tom deve ser de SAUDADE e ACOLHIMENTO, nunca de cobrança ou bronca.
+        2. Use termos como 'sentimos sua falta', 'nossa comunidade fica mais completa com você', 'caminhada de fé'.
+        3. JAMAIS use termos escolares como 'aula', 'falta', 'matéria' ou 'curso'.
+        4. NÃO use asteriscos (**) para negrito.
+        5. A mensagem deve ser curta (máximo 3 parágrafos pequenos).
+        """
+        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
+        return response.text
+    except:
+        return f"Olá! Sentimos muito a sua falta em nosso último encontro da catequese. A turma {nome_turma} não é a mesma sem você! Esperamos te ver no próximo encontro para continuarmos nossa caminhada de fé. Deus abençoe!"
