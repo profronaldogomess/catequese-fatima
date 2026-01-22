@@ -956,7 +956,7 @@ elif menu == "👤 Perfil Individual":
                             use_container_width=True
                         )
 
-# --- PÁGINA: GESTÃO DE TURMAS (CORREÇÃO DE RECUO E SINCRONIZAÇÃO) ---
+# --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) ---
 elif menu == "🏫 Gestão de Turmas":
     st.title("🏫 Gestão de Turmas e Fila de Espera")
     
@@ -973,9 +973,24 @@ elif menu == "🏫 Gestão de Turmas":
 
     with t0:
         st.subheader("⏳ Fila de Espera")
-        turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
-        fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))] if not df_cat.empty else pd.DataFrame()
-        st.dataframe(fila_espera[['nome_completo', 'etapa', 'contato_principal']], use_container_width=True, hide_index=True)
+        if df_cat.empty:
+            st.info("Nenhum catequizando cadastrado no sistema.")
+        else:
+            # Identifica turmas que realmente existem no banco para achar os 'órfãos'
+            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+            
+            # Filtra quem está sem turma ou em turma que não existe mais
+            fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
+            
+            if not fila_espera.empty:
+                # Blindagem: Só tenta filtrar colunas se o DataFrame não estiver vazio
+                colunas_para_exibir = ['nome_completo', 'etapa', 'contato_principal']
+                # Garante que só usaremos colunas que realmente existem no DF
+                cols_existentes = [c for c in colunas_para_exibir if c in fila_espera.columns]
+                
+                st.dataframe(fila_espera[cols_existentes], use_container_width=True, hide_index=True)
+            else:
+                st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
 
     with t1:
         st.subheader("📋 Turmas Cadastradas")
