@@ -484,13 +484,15 @@ elif menu == "📚 Minha Turma":
                 st.success(f"Parabéns! No último encontro ({ultima_data}), todos estavam presentes! 🎉")
         st.divider()
 
-    # 6. Aniversariantes do Mês
+# 6. Aniversariantes do Mês (CORREÇÃO DE COLUNA 'NOME')
     st.subheader("🎂 Aniversariantes do Mês")
     df_niver_mes = obter_aniversariantes_mes(meus_alunos)
+    
     if not df_niver_mes.empty:
         if st.button(f"🖼️ GERAR CARD COLETIVO: {turma_ativa}", use_container_width=True, key=f"btn_col_{turma_ativa}"):
             with st.spinner("Renderizando card..."):
-                lista_para_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome_completo']}" for _, row in df_niver_mes.iterrows()]
+                # Ajustado para row['nome']
+                lista_para_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome']}" for _, row in df_niver_mes.iterrows()]
                 card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
                 if card_coletivo:
                     st.image(card_coletivo)
@@ -500,14 +502,16 @@ elif menu == "📚 Minha Turma":
         cols_n = st.columns(4)
         for i, (_, niver) in enumerate(df_niver_mes.iterrows()):
             with cols_n[i % 4]:
-                st.info(f"**Dia {int(niver['dia'])}**\n\n{niver['nome_completo']}")
+                # Ajustado para niver['nome']
+                st.info(f"**Dia {int(niver['dia'])}**\n\n{niver['nome']}")
                 if st.button(f"🎨 Card", key=f"btn_ind_{turma_ativa}_{i}"):
-                    card_img = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome_completo']}", tipo="DIA")
+                    # Ajustado para niver['nome']
+                    card_img = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome']}", tipo="DIA")
                     if card_img:
                         st.image(card_img, use_container_width=True)
-                        st.download_button("📥", card_img, f"Niver_{niver['nome_completo']}.png", "image/png", key=f"dl_{turma_ativa}_{i}")
+                        st.download_button("📥", card_img, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_{turma_ativa}_{i}")
     else:
-        st.write("Nenhum aniversariante este mês.")
+        st.write("Nenhum aniversariante este mês no escopo selecionado.")
 
     # 7. Histórico e Contatos
     col_passado, col_futuro = st.columns(2)
