@@ -938,7 +938,7 @@ elif menu == "👤 Perfil Individual":
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia.")
     else:
-        # 1. ÁREA DE BUSCA E FILTRAGEM
+        # --- 1. ÁREA DE BUSCA E FILTRAGEM (VERSÃO BLINDADA) ---
         c1, c2 = st.columns([2, 1])
         busca = c1.text_input("🔍 Pesquisar por nome:", key="busca_perfil_v6").upper()
         lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
@@ -950,7 +950,16 @@ elif menu == "👤 Perfil Individual":
         if filtro_t != "TODAS": 
             df_f = df_f[df_f['etapa'] == filtro_t]
         
-        st.dataframe(df_f[['nome_completo', 'etapa', 'status']], use_container_width=True, hide_index=True)
+        # --- BLINDAGEM CONTRA KEYERROR ---
+        cols_necessarias = ['nome_completo', 'etapa', 'status']
+        if all(col in df_f.columns for col in cols_necessarias):
+            st.dataframe(df_f[cols_necessarias], use_container_width=True, hide_index=True)
+        else:
+            st.error("⚠️ Erro de Estrutura: As colunas do Banco de Dados não foram identificadas.")
+            st.info("Verifique se a primeira linha da aba 'catequizandos' no Google Sheets contém os cabeçalhos oficiais.")
+            if not df_f.empty:
+                st.write("Colunas encontradas atualmente:", list(df_f.columns))
+            st.stop()
         
         # 2. SELEÇÃO DO CATEQUIZANDO (USANDO ID PARA EVITAR ERRO DE PARÊNTESES)
         # Criamos um rótulo de exibição que termina com o ID único entre colchetes
