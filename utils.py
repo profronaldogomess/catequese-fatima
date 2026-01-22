@@ -813,15 +813,48 @@ def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedim
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 9. UTILITÁRIOS PASTORAIS E CENSO (ANIVERSARIANTES E STATUS) - VERSÃO BLINDADA
+# 9. UTILITÁRIOS PASTORAIS E CENSO (ANIVERSARIANTES E STATUS)
 # ==============================================================================
+
+def sugerir_etapa(data_nascimento):
+    idade = calcular_idade(data_nascimento)
+    if idade <= 6: return "PRÉ"
+    elif idade <= 8: return "PRIMEIRA ETAPA"
+    elif idade <= 10: return "SEGUNDA ETAPA"
+    elif idade <= 13: return "TERCEIRA ETAPA"
+    return "ADULTOS"
+
+def eh_aniversariante_da_semana(data_nasc_str):
+    try:
+        d_str = formatar_data_br(data_nasc_str)
+        if d_str == "N/A": return False
+        nasc = dt_module.datetime.strptime(d_str, "%d/%m/%Y").date()
+        hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+        nasc_este_ano = nasc.replace(year=hoje.year)
+        diff = (nasc_este_ano - hoje).days
+        return 0 <= diff <= 7
+    except: return False
+
+def converter_para_data(valor_str):
+    if not valor_str or str(valor_str).strip() in ["None", "", "N/A"]: return date.today()
+    try: return dt_module.datetime.strptime(formatar_data_br(valor_str), "%d/%m/%Y").date()
+    except: return date.today()
+
+def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_ministerio):
+    if d_ministerio and str(d_ministerio).strip() not in ["", "N/A", "None"]: return "MINISTRO", 0 
+    try:
+        hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+        inicio = dt_module.datetime.strptime(formatar_data_br(data_inicio), "%d/%m/%Y").date()
+        anos = hoje.year - inicio.year
+        tem_s = all([str(x).strip() not in ["", "N/A", "None"] for x in [d_batismo, d_euca, d_crisma]])
+        if anos >= 5 and tem_s: return "APTO", anos
+        return "EM_CAMINHADA", anos
+    except: return "EM_CAMINHADA", 0
 
 def obter_aniversariantes_hoje(df_cat, df_usuarios):
     """Retorna lista estruturada: 'DIA | PAPEL | NOME' para os aniversariantes de hoje."""
-    # Chamada blindada com alias dt_module para evitar conflito de classe/módulo
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     niver = []
-    
     if isinstance(df_cat, pd.DataFrame) and not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
             d = formatar_data_br(r['data_nascimento'])
@@ -831,8 +864,6 @@ def obter_aniversariantes_hoje(df_cat, df_usuarios):
                     if dt.day == hoje.day and dt.month == hoje.month:
                         niver.append(f"{hoje.day} | CATEQUIZANDO | {r['nome_completo']}")
                 except: pass
-
-    # Verificação robusta para evitar AttributeError: 'NoneType' object has no attribute 'empty'
     if isinstance(df_usuarios, pd.DataFrame) and not df_usuarios.empty:
         df_e = df_usuarios[df_usuarios['papel'] != 'ADMIN']
         for _, u in df_e.drop_duplicates(subset=['nome']).iterrows():
@@ -849,7 +880,6 @@ def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
     """Retorna DataFrame com aniversariantes do mês (Padronizado: coluna 'nome')."""
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     lista = []
-    
     if isinstance(df_cat, pd.DataFrame) and not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
             d = formatar_data_br(r['data_nascimento'])
@@ -859,8 +889,6 @@ def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
                     if dt.month == hoje.month:
                         lista.append({'dia': dt.day, 'nome': r['nome_completo'], 'tipo': 'CATEQUIZANDO', 'info': r['etapa']})
                 except: pass
-    
-    # Verificação robusta para evitar erro quando df_usuarios for None (ex: em turmas individuais)
     if isinstance(df_usuarios, pd.DataFrame) and not df_usuarios.empty:
         for _, u in df_usuarios.drop_duplicates(subset=['nome']).iterrows():
             d = formatar_data_br(u.get('data_nascimento', ''))
@@ -870,7 +898,6 @@ def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
                     if dt.month == hoje.month:
                         lista.append({'dia': dt.day, 'nome': u['nome'], 'tipo': 'CATEQUISTA', 'info': 'EQUIPE'})
                 except: pass
-    
     return pd.DataFrame(lista).sort_values(by='dia') if lista else pd.DataFrame()
 
 def obter_aniversariantes_mes(df_cat):
