@@ -266,3 +266,20 @@ def registrar_evento_sacramento_completo(dados_evento, lista_participantes, tipo
         st.cache_data.clear(); return True
     except Exception as e:
         st.error(f"Erro crítico: {e}"); return False
+
+def excluir_tema_cronograma(turma, titulo_tema):
+    """Remove um tema do cronograma após ele ser realizado."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("cronograma")
+            # Busca a linha que contém a turma e o tema
+            celulas = aba.findall(str(titulo_tema))
+            for celula in celulas:
+                # Verifica se na mesma linha a coluna da turma (B=2) coincide
+                if aba.cell(celula.row, 2).value == turma:
+                    aba.delete_rows(celula.row)
+                    st.cache_data.clear()
+                    return True
+        except: pass
+    return False
