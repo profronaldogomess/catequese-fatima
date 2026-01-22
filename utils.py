@@ -408,10 +408,10 @@ def gerar_fichas_turma_completa(nome_turma, df_alunos):
     return finalizar_pdf(pdf)
 
 def gerar_fichas_paroquia_total(df_catequizandos):
-    """Gera um PDF único com as fichas de inscrição de TODOS os catequizandos da paróquia."""
+    """Gera um PDF único contendo as fichas de todos os catequizandos da paróquia."""
     if df_catequizandos.empty: return None
     pdf = FPDF()
-    # Ordenação por Turma e Nome para facilitar a entrega física
+    # Ordena por turma e depois por nome para facilitar a organização física
     df_ordenado = df_catequizandos.sort_values(by=['etapa', 'nome_completo'])
     for _, row in df_ordenado.iterrows():
         pdf.add_page()
