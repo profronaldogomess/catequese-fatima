@@ -115,7 +115,7 @@ from utils import (
     gerar_relatorio_pastoral_interno_pdf, gerar_pdf_perfil_turma,
     gerar_relatorio_sacramentos_tecnico_v2, gerar_relatorio_sacramentos_tecnico_pdf, 
     formatar_data_br, gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, gerar_card_aniversario, gerar_termo_saida_pdf
+    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -429,26 +429,29 @@ if menu == "🏠 Início / Dashboard":
             if "pdf_lote_fichas_geral" in st.session_state:
                 st.download_button("📥 BAIXAR TODAS AS FICHAS (PDF ÚNICO)", st.session_state.pdf_lote_fichas_geral, f"Fichas_Gerais_Fatima_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
-            # --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE (CORRIGIDO) ---
+# --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE (VERSÃO FLEXÍVEL) ---
             if st.button("📊 GERAR TODAS AS AUDITORIAS DE TURMA", use_container_width=True, key="btn_lote_auditoria_geral_v7"):
                 with st.spinner("Analisando cada itinerário de turma..."):
-                    from utils import gerar_auditoria_lote_completa
-                    
-                    # CORREÇÃO CRÍTICA: Carregar a aba NOMINAL (recebidos) e não a de eventos gerais
+                    # 1. Tenta carregar a aba de sacramentos
                     df_sac_nominais = ler_aba("sacramentos_recebidos")
                     
-                    if not df_sac_nominais.empty:
+                    # 2. Se estiver vazia, cria um DataFrame vazio com as colunas necessárias para não dar erro no motor
+                    if df_sac_nominais.empty:
+                        df_sac_nominais = pd.DataFrame(columns=['id_catequizando', 'nome', 'tipo', 'data'])
+                    
+                    try:
+                        # 3. Chama a função do utils.py (que restauramos na resposta anterior)
                         pdf_lote_a = gerar_auditoria_lote_completa(
                             df_turmas, 
                             df_cat, 
                             df_pres, 
-                            df_sac_nominais # Passando a variável correta
+                            df_sac_nominais 
                         )
                         st.session_state.pdf_lote_auditoria_geral = pdf_lote_a
                         st.toast("Dossiê de auditorias concluído!", icon="✅")
                         st.rerun()
-                    else:
-                        st.error("A aba 'sacramentos_recebidos' está vazia ou não foi encontrada.")
+                    except Exception as e:
+                        st.error(f"Erro ao processar lote de auditorias: {e}")
 
             if "pdf_lote_auditoria_geral" in st.session_state:
                 st.download_button(
