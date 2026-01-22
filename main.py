@@ -116,6 +116,7 @@ from utils import (
     gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
     gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
     gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
+    processar_alertas_evasao,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
     gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
@@ -472,18 +473,45 @@ elif menu == "📚 Minha Turma":
 
     st.divider()
 
-    # 5. Revisão do Último Encontro (Apenas para turmas individuais)
+# 5. MOTOR DE ALERTAS: CUIDADO E EVASÃO (RIGOR IVC)
+    st.subheader("🚩 Cuidado e Evasão - Alertas de Caminhada")
+    
     if turma_ativa != "TODAS":
-        st.subheader("🚩 Revisão do Último Encontro")
-        if not minhas_pres.empty:
-            ultima_data = minhas_pres['data_encontro'].max()
-            faltosos = minhas_pres[(minhas_pres['data_encontro'] == ultima_data) & (minhas_pres['status'] == 'AUSENTE')]
-            if not faltosos.empty:
-                st.warning(f"No último encontro ({ultima_data}), os seguintes catequizandos faltaram:")
-                for _, f in faltosos.iterrows(): st.write(f"❌ {f['nome_catequizando']}")
-            else:
-                st.success(f"Parabéns! No último encontro ({ultima_data}), todos estavam presentes! 🎉")
-        st.divider()
+        risco_c, atencao_p = processar_alertas_evasao(minhas_pres)
+        
+        if not risco_c and not atencao_p:
+            st.success("✨ **Caminhada Estável:** Todos os catequizandos estão engajados no itinerário.")
+        else:
+            col_alerta1, col_alerta2 = st.columns(2)
+            
+            with col_alerta1:
+                if risco_c:
+                    st.error(f"🚨 **Risco de Evasão ({len(risco_c)})**\n\nEstes catequizandos possuem 3 ou mais faltas. Recomenda-se visita domiciliar ou contato da coordenação.")
+                    for r in risco_c: st.write(f"• {r}")
+                else:
+                    st.info("✅ Sem riscos críticos de evasão no momento.")
+
+            with col_alerta2:
+                if atencao_p:
+                    st.warning(f"⚠️ **Atenção Pastoral ({len(atencao_p)})**\n\nCatequizandos com 2 faltas acumuladas. Sugere-se uma mensagem de acolhida para o próximo encontro.")
+                    for a in atencao_p: st.write(f"• {a}")
+                else:
+                    st.info("✅ Frequência sob controle.")
+
+        # Revisão específica do último encontro (Mantida e integrada)
+        with st.expander("🔍 Detalhes do Último Encontro"):
+            if not minhas_pres.empty:
+                ultima_data = minhas_pres['data_encontro'].max()
+                faltosos_ultimo = minhas_pres[(minhas_pres['data_encontro'] == ultima_data) & (minhas_pres['status'] == 'AUSENTE')]
+                if not faltosos_ultimo.empty:
+                    st.markdown(f"**Faltaram no encontro de {ultima_data}:**")
+                    for _, f in faltosos_ultimo.iterrows(): st.write(f"❌ {f['nome_catequizando']}")
+                else:
+                    st.success(f"Parabéns! No encontro de {ultima_data}, a comunhão foi total (100% presentes).")
+    else:
+        st.info("Selecione uma turma específica para visualizar os alertas de evasão nominal.")
+
+    st.divider()
 
 # 6. Aniversariantes do Mês (CORREÇÃO DE COLUNA 'NOME')
     st.subheader("🎂 Aniversariantes do Mês")
