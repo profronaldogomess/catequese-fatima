@@ -391,40 +391,32 @@ if menu == "🏠 Início / Dashboard":
                     use_container_width=True
                 )
 
-            # --- BOTÃO 2: RELATÓRIO PASTORAL ---
+# --- BOTÃO 2: RELATÓRIO PASTORAL (VERSÃO NOMINAL SINCRONIZADA) ---
             if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
-                with st.spinner("Processando Relatório Pastoral v3..."):
-                    turmas_detalhadas = []
-                    etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
-                    t_inf, t_adu, soma_freq = 0, 0, 0
-                    
-                    for _, t in df_turmas.iterrows():
-                        alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
-                        bat = len(alunos_t[alunos_t['batizado_sn'] == 'SIM']) if not alunos_t.empty else 0
-                        euc = alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not alunos_t.empty else 0
-                        cri = alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not alunos_t.empty else 0
-                        pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
-                        freq = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
-                        soma_freq += freq
-                        if t['etapa'] in etapas_infantis: t_inf += 1
-                        else: t_adu += 1
-                        
-                        turmas_detalhadas.append({
-                            'nome': t['nome_turma'], 'catequista': t['catequista_responsavel'],
-                            'dia': t.get('dias_semana', 'N/A'), 'local': t.get('local', 'N/A'),
-                            'batizados': bat, 'eucaristia': euc, 'crisma': cri, 'frequencia': round(freq, 1), 'total': len(alunos_t)
-                        })
-                    
-                    totais_gerais = {'total_turmas': total_t, 't_infantil': t_inf, 't_adultos': t_adu, 'freq_geral': round(soma_freq / total_t, 1) if total_t > 0 else 0}
-                    analise_ia = gerar_analise_pastoral(f"Relatório Pastoral: {totais_gerais}")
-                    st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(turmas_detalhadas, totais_gerais, analise_ia)
-                    st.rerun()
+                if "pdf_pastoral" in st.session_state:
+                    del st.session_state.pdf_pastoral
+                
+                with st.spinner("Gerando Dossiê Pastoral Nominal..."):
+                    try:
+                        # A nova função agora faz os cálculos internamente. 
+                        # Passamos apenas os DataFrames brutos.
+                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(
+                            df_turmas, 
+                            df_cat, 
+                            df_pres
+                        )
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao gerar relatório pastoral: {e}")
 
             if "pdf_pastoral" in st.session_state:
-                st.download_button("📥 BAIXAR RELATÓRIO PASTORAL", st.session_state.pdf_pastoral, f"Relatorio_Pastoral_{date.today().year}.pdf", "application/pdf", use_container_width=True)
-
-        with col_lote:
-            st.markdown("##### 📦 Processamento em Lote (Toda a Paróquia)")
+                st.download_button(
+                    label="📥 BAIXAR RELATÓRIO PASTORAL", 
+                    data=st.session_state.pdf_pastoral, 
+                    file_name=f"Relatorio_Pastoral_Nominal_{date.today().year}.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
             
             # --- BOTÃO 3: TODAS AS FICHAS EM LOTE ---
             if st.button("🗂️ GERAR TODAS AS FICHAS (LOTE GERAL)", use_container_width=True, key="btn_lote_fichas_geral"):
