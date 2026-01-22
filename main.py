@@ -737,7 +737,11 @@ elif menu == "📝 Cadastrar Catequizando":
             etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
 
             c4, c5, c6 = st.columns(3)
-            contato = c4.text_input("Telefone/WhatsApp Principal (Catequese)")
+            
+            # AJUSTE CIRÚRGICO: Rótulo dinâmico para o telefone
+            label_fone = "Seu Telefone/WhatsApp (Contato Direto)" if tipo_ficha == "Adulto" else "Telefone/WhatsApp Principal (Catequese)"
+            contato = c4.text_input(label_fone)
+            
             batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
             docs_faltando = c6.text_input("Documentos em Falta").upper()
             endereco = st.text_input("Endereço Completo (Morada)").upper()
@@ -848,97 +852,6 @@ elif menu == "📝 Cadastrar Catequizando":
                     
                     if salvar_lote_catequizandos(registro):
                         st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
-      
-# --- SUBSTITUIÇÃO: ABA tab_csv (CORREÇÃO TERMINOLÓGICA) ---
-    with tab_csv:
-        st.subheader("📂 Importação em Massa (29 Colunas)")
-        st.write("O sistema reconhecerá automaticamente os dados do seu Excel/CSV.")
-        
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_v5_final")
-        
-        if arquivo_csv:
-            try:
-                # Lendo o CSV com tratamento de separador
-                df_import = pd.read_csv(arquivo_csv, encoding='utf-8').fillna("N/A")
-                df_import.columns = [c.strip().lower() for c in df_import.columns]
-                
-                st.markdown("### 🔍 1. Revisão dos Dados Importados")
-                
-                # Mapeamento Inteligente de Colunas para o Preview
-                col_nome = 'nome_completo' if 'nome_completo' in df_import.columns else ('nome' if 'nome' in df_import.columns else None)
-                col_etapa = 'etapa' if 'etapa' in df_import.columns else None
-                col_contato = 'contato_principal' if 'contato_principal' in df_import.columns else ('contato' if 'contato' in df_import.columns else None)
-
-                if not col_nome or not col_etapa:
-                    st.error("❌ Erro: O CSV precisa ter ao menos as colunas 'nome_completo' e 'etapa'.")
-                else:
-                    df_preview = pd.DataFrame()
-                    df_preview['Nome do Catequizando'] = df_import[col_nome].astype(str).str.upper()
-                    df_preview['Turma no CSV'] = df_import[col_etapa].astype(str).str.upper()
-                    df_preview['Contato'] = df_import[col_contato].astype(str) if col_contato else "N/A"
-                    
-                    # Validação de Turmas Existentes
-                    turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
-                    df_preview['Status da Turma'] = df_preview['Turma no CSV'].apply(
-                        lambda x: "✅ Turma Encontrada" if x in turmas_cadastradas else "⏳ Irá para Fila de Espera"
-                    )
-
-                    st.dataframe(df_preview, use_container_width=True, hide_index=True)
-
-                    st.markdown(f"### 📊 2. Resumo da Carga: {len(df_import)} catequizandos")
-                    
-                    st.divider()
-                    
-                    if st.button("🚀 CONFIRMAR E GRAVAR NO BANCO DE DADOS", key="btn_confirmar_import_v5"):
-                        with st.spinner("Processando 29 colunas..."):
-                            lista_final = []
-                            for i, linha in df_import.iterrows():
-                                t_csv = str(linha.get('etapa', 'CATEQUIZANDOS SEM TURMA')).upper()
-                                t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
-                                
-                                # MONTAGEM RIGOROSA DAS 29 COLUNAS (A-AC)
-                                # Se a coluna não existir no CSV, ele preenche com "N/A" ou 0
-                                registro = [
-                                    f"CSV-{int(time.time()) + i}", # A: ID
-                                    t_final,                       # B: Etapa
-                                    str(linha.get(col_nome, 'SEM NOME')).upper(), # C: Nome
-                                    str(linha.get('data_nascimento', '01/01/2000')), # D: Nasc
-                                    str(linha.get('batizado_sn', 'NÃO')).upper(), # E: Batizado
-                                    str(linha.get(col_contato, 'N/A')), # F: Contato
-                                    str(linha.get('endereco_completo', 'N/A')).upper(), # G: Endereço
-                                    str(linha.get('nome_mae', 'N/A')).upper(), # H: Mãe
-                                    str(linha.get('nome_pai', 'N/A')).upper(), # I: Pai
-                                    str(linha.get('nome_responsavel', 'N/A')).upper(), # J: Resp
-                                    str(linha.get('doc_em_falta', 'NADA')).upper(), # K: Docs
-                                    str(linha.get('engajado_grupo', 'N/A')).upper(), # L: Engajado
-                                    "ATIVO", # M: Status
-                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), # N: Med
-                                    str(linha.get('tgo_sn', 'NÃO')).upper(), # O: TGO
-                                    str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(), # P: Est Civil
-                                    str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(), # Q: Sacr
-                                    str(linha.get('profissao_mae', 'N/A')).upper(), # R: Prof M
-                                    str(linha.get('tel_mae', 'N/A')), # S: Tel M
-                                    str(linha.get('profissao_pai', 'N/A')).upper(), # T: Prof P
-                                    str(linha.get('tel_pai', 'N/A')), # U: Tel P
-                                    str(linha.get('est_civil_pais', 'N/A')).upper(), # V: Est Civil P
-                                    str(linha.get('sac_pais', 'N/A')).upper(), # W: Sac P
-                                    str(linha.get('participa_grupo', 'NÃO')).upper(), # X: Part Grupo
-                                    str(linha.get('qual_grupo', 'N/A')).upper(), # Y: Qual Grupo
-                                    str(linha.get('tem_irmaos', 'NÃO')).upper(), # Z: Irmãos
-                                    linha.get('qtd_irmaos', 0), # AA: Qtd Irmãos
-                                    str(linha.get('turno', 'N/A')).upper(), # AB: Turno
-                                    str(linha.get('local_encontro', 'N/A')).upper() # AC: Local
-                                ]
-                                lista_final.append(registro)
-                            
-                            if salvar_lote_catequizandos(lista_final):
-                                st.success(f"✅ Sucesso! {len(lista_final)} catequizandos importados.")
-                                st.balloons()
-                                st.cache_data.clear()
-                                time.sleep(2)
-                                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro ao processar arquivo: {e}")
 
 # ==============================================================================
 # PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO COM STATUS EM DESTAQUE - 30 COLUNAS)
