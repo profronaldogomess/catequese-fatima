@@ -973,6 +973,65 @@ def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
             else: pdf.cell(190, 6, "Nenhum sacramento registrado.", border=1, align='C', ln=True)
     return finalizar_pdf(pdf)
 
+# Evasão da catequese
+def gerar_relatorio_evasao_pdf(df_evasao):
+    """
+    Gera o Relatório de Diagnóstico de Evasão e Transferências.
+    Foco na 30ª coluna (AD) para avaliação da coordenação.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "RELATÓRIO DE DIAGNÓSTICO PASTORAL (EVASÃO)")
+
+    AZUL_P = (65, 123, 153)
+    LARANJA_P = (224, 61, 17)
+    CINZA_F = (245, 245, 245)
+
+    pdf.set_font("helvetica", "I", 10)
+    pdf.multi_cell(0, 5, limpar_texto("Este documento lista os catequizandos que interromperam o itinerário ou foram transferidos. O objetivo é a avaliação das causas para aprimoramento do acolhimento paroquial."))
+    pdf.ln(5)
+
+    # --- TABELA DE EVASÃO ---
+    pdf.set_fill_color(*LARANJA_P)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("LISTA DE CATEQUIZANDOS FORA DE CAMINHADA ATIVA"), ln=True, fill=True, align='C')
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_fill_color(*CINZA_F)
+    pdf.cell(60, 7, "Nome do Catequizando", border=1, fill=True)
+    pdf.cell(30, 7, "Situação", border=1, fill=True, align='C')
+    pdf.cell(40, 7, "Último Itinerário", border=1, fill=True)
+    pdf.cell(60, 7, "Motivo / Obs. Pastoral (Coluna AD)", border=1, fill=True)
+    pdf.ln()
+
+    pdf.set_font("helvetica", "", 8)
+    for _, r in df_evasao.iterrows():
+        nome = str(r['nome_completo'])
+        status = str(r['status'])
+        etapa = str(r['etapa'])
+        obs = str(r.get('obs_pastoral_familia', 'Sem observação registrada.'))
+        if obs == "N/A" or not obs: obs = "Motivo não informado."
+
+        # Cálculo de altura para a observação (multi-line)
+        linhas_obs = pdf.get_string_width(obs) / 58
+        h = max(7, (int(linhas_obs) + 1) * 4)
+
+        curr_x, curr_y = pdf.get_x(), pdf.get_y()
+        
+        pdf.multi_cell(60, h, limpar_texto(nome), border=1, align='L')
+        pdf.set_xy(curr_x + 60, curr_y)
+        pdf.cell(30, h, limpar_texto(status), border=1, align='C')
+        pdf.set_xy(curr_x + 90, curr_y)
+        pdf.cell(40, h, limpar_texto(etapa), border=1)
+        pdf.set_xy(curr_x + 130, curr_y)
+        pdf.multi_cell(60, 4 if h > 7 else h, limpar_texto(obs), border=1, align='L')
+        
+        if pdf.get_y() > 250: pdf.add_page()
+
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
 # ==============================================================================
