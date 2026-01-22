@@ -1811,26 +1811,38 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
     st.title("👨‍👩‍👧‍👦 Gestão Familiar e Igreja Doméstica")
     st.markdown("---")
 
-# --- FUNÇÃO INTERNA: CARD DE CONTATO (CORREÇÃO DEFINITIVA DO 5555) ---
+# --- FUNÇÃO INTERNA: CARD DE CONTATO (VERSÃO SUPER-CLEAN DDD 73) ---
     def exibir_card_contato_pastoral(aluno_row):
         def limpar_whatsapp(tel):
             if not tel or str(tel).strip() in ["N/A", "", "None"]:
                 return None
             
-            # 1. Mantém apenas os números (remove parênteses, traços e espaços)
+            # 1. Mantém apenas os números
             num = "".join(filter(str.isdigit, str(tel)))
             
-            # 2. Se o número começar com '0', remove o zero inicial
+            # 2. Remove o zero inicial se o catequista digitou (ex: 073...)
             if num.startswith("0"):
                 num = num[1:]
             
-            # 3. Lógica do 55:
-            # Se o número já tem 12 ou 13 dígitos e começa com 55, ele já está completo.
-            if num.startswith("55") and len(num) >= 12:
-                return num
+            # 3. Lógica Inteligente de Prefixo:
+            # Se o número começa com 55
+            if num.startswith("55"):
+                sobra = num[2:]
+                # Se o que sobrou tem 10 ou 11 dígitos, já tem DDD. Retorna o número como está.
+                if len(sobra) >= 10:
+                    return num
+                # Se o que sobrou tem 8 ou 9 dígitos, falta o DDD. Coloca o 73 de Itabuna.
+                else:
+                    return f"5573{sobra}"
             
-            # 4. Se tiver 10 ou 11 dígitos (DDD + Número), adicionamos o 55 uma única vez.
-            return f"55{num}"
+            # Se o número NÃO começa com 55
+            else:
+                # Se tem 10 ou 11 dígitos, já tem DDD. Só adiciona o 55.
+                if len(num) >= 10:
+                    return f"55{num}"
+                # Se tem 8 ou 9 dígitos, é número local. Adiciona 55 + 73.
+                else:
+                    return f"5573{num}"
 
         with st.container():
             st.markdown(f"""
@@ -1846,7 +1858,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 st.markdown("**👩‍🦱 MÃE:** " + str(aluno_row['nome_mae']))
                 link_mae = limpar_whatsapp(aluno_row['tel_mae'])
                 if link_mae:
-                    # O link agora usa a variável link_mae que já foi tratada pela função acima
                     st.markdown(f"""<a href="https://wa.me/{link_mae}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:10px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold;">📲 WhatsApp Mãe</button></a>""", unsafe_allow_html=True)
                 else:
                     st.caption("⚠️ Sem telefone")
@@ -1865,7 +1876,7 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 if str(aluno_row['tgo_sn']).upper() == "SIM":
                     st.warning("🧠 TGO / TEA")
             st.markdown("<br>", unsafe_allow_html=True)
-
+            
     if eh_gestor:
         tab_censo, tab_agenda, tab_busca, tab_ia = st.tabs([
             "📊 Censo Familiar", "📞 Agenda de Emergência", "🔍 Localizar e Registrar Visita", "✨ Auditoria IA"
