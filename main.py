@@ -242,11 +242,13 @@ else:
         "✅ Fazer Chamada", "📝 Cadastrar Catequizando"
     ])
 
-# --- PÁGINA 1: DASHBOARD (CORREÇÃO DE CARDS DE HOJE) ---
+# ==============================================================================
+# PÁGINA 1: DASHBOARD (VERSÃO CONSOLIDADA E SINCRONIZADA)
+# ==============================================================================
 if menu == "🏠 Início / Dashboard":
     st.title("📊 Painel de Gestão Pastoral")
     
-    # --- ALERTA DE ANIVERSÁRIO DO DIA ---
+    # --- 1. ALERTA DE ANIVERSÁRIO DO DIA (COM IDENTIFICAÇÃO DE CARGO) ---
     aniversariantes_agora = obter_aniversariantes_hoje(df_cat, df_usuarios)
     
     if aniversariantes_agora:
@@ -285,12 +287,13 @@ if menu == "🏠 Início / Dashboard":
     if df_cat.empty:
         st.info("👋 Bem-vindo! Comece cadastrando turmas e catequizandos.")
     else:
-        # --- SEÇÃO 1: MÉTRICAS PRINCIPAIS ---
+        # --- 2. MÉTRICAS PRINCIPAIS ---
         m1, m2, m3, m4 = st.columns(4)
         total_cat = len(df_cat)
         ativos = len(df_cat[df_cat['status'] == 'ATIVO'])
         total_t = len(df_turmas)
         
+        # Equipe real (Excluindo ADMIN da contagem pastoral)
         equipe_real = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
         total_equipe = len(equipe_real)
         
@@ -301,11 +304,10 @@ if menu == "🏠 Início / Dashboard":
 
         st.divider()
 
-        # --- SEÇÃO 2: DESEMPENHO ---
+        # --- 3. DESEMPENHO E FREQUÊNCIA ---
         st.subheader("📈 Desempenho e Frequência")
-        freq_global = 0.0
         if df_pres.empty:
-            st.info("Ainda não há registros de presença.")
+            st.info("Ainda não há registros de presença para gerar gráficos.")
         else:
             c1, c2 = st.columns([2, 1])
             with c1:
@@ -325,7 +327,7 @@ if menu == "🏠 Início / Dashboard":
 
         st.divider()
 
-# --- SEÇÃO 3: ALERTAS E ANIVERSARIANTES ---
+        # --- 4. ANIVERSARIANTES DO MÊS ---
         col_niver, col_evasao = st.columns(2)
         with col_niver:
             st.subheader("🎂 Aniversariantes do Mês")
@@ -334,7 +336,7 @@ if menu == "🏠 Início / Dashboard":
             if not df_niver_unificado.empty:
                 # --- BOTÃO COLETIVO (TEMPLATE 4) ---
                 if st.button("🖼️ GERAR CARD COLETIVO DO MÊS", use_container_width=True, key="btn_coletivo_mes"):
-                    # Enviamos no formato "DIA | PAPEL | NOME" para o utils processar
+                    # Formato: "DIA | PAPEL | NOME"
                     lista_para_card = [f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_unificado.iterrows()]
                     card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
                     if card_coletivo:
@@ -350,7 +352,6 @@ if menu == "🏠 Início / Dashboard":
                     c_txt.markdown(f"{icone} **Dia {int(niver['dia'])}** - {niver['nome']}")
                     
                     if c_btn.button("🖼️ Card", key=f"btn_indiv_{i}"):
-                        # Enviamos no formato "DIA | PAPEL | NOME"
                         dados_envio = f"{int(niver['dia'])} | {niver['tipo']} | {niver['nome']}"
                         card_indiv = gerar_card_aniversario(dados_envio, tipo="DIA")
                         if card_indiv:
@@ -359,7 +360,7 @@ if menu == "🏠 Início / Dashboard":
             else: 
                 st.write("Nenhum aniversariante este mês.")
 
-# --- SEÇÃO 4: DOCUMENTAÇÃO E AUDITORIA (SISTEMA DE QUATRO BOTÕES - VERSÃO INTEGRAL) ---
+        # --- 5. DOCUMENTAÇÃO E AUDITORIA (SISTEMA DE QUATRO BOTÕES) ---
         st.divider()
         st.subheader("🏛️ Documentação e Auditoria Oficial")
         
@@ -368,8 +369,7 @@ if menu == "🏠 Início / Dashboard":
         with col_paroquial:
             st.markdown("##### 📋 Relatórios de Gestão Paroquial")
             
-# --- BOTÃO 1: RELATÓRIO DIOCESANO (FORÇANDO ATUALIZAÇÃO DO NOVO MODELO) ---
-            # --- BOTÃO 1: RELATÓRIO DIOCESANO (VERSÃO ANALÍTICA) ---
+            # --- BOTÃO 1: RELATÓRIO DIOCESANO ---
             if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_v5"):
                 st.cache_data.clear()
                 if "pdf_diocesano" in st.session_state: 
@@ -377,7 +377,6 @@ if menu == "🏠 Início / Dashboard":
                 
                 with st.spinner("Processando Auditoria Diocesana Analítica..."):
                     try:
-                        # Envia os 3 DataFrames para o novo motor do utils.py
                         st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
                         st.rerun()
                     except Exception as e: 
@@ -392,16 +391,15 @@ if menu == "🏠 Início / Dashboard":
                     use_container_width=True
                 )
 
-            st.write("") # Espaçador visual entre os botões
+            st.write("") 
 
-            # --- BOTÃO 2: RELATÓRIO PASTORAL (VERSÃO NOMINAL COMPLETA) ---
+            # --- BOTÃO 2: RELATÓRIO PASTORAL ---
             if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_v5"):
                 if "pdf_pastoral" in st.session_state: 
                     del st.session_state.pdf_pastoral
                 
                 with st.spinner("Gerando Dossiê Pastoral Nominal..."):
                     try:
-                        # Envia os DataFrames para listar todos os nomes e estatísticas
                         st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres)
                         st.rerun()
                     except Exception as e: 
@@ -415,6 +413,9 @@ if menu == "🏠 Início / Dashboard":
                     mime="application/pdf", 
                     use_container_width=True
                 )
+
+        with col_lote:
+            st.markdown("##### 📦 Processamento em Lote")
             
             # --- BOTÃO 3: TODAS AS FICHAS EM LOTE ---
             if st.button("🗂️ GERAR TODAS AS FICHAS (LOTE GERAL)", use_container_width=True, key="btn_lote_fichas_geral"):
@@ -427,24 +428,19 @@ if menu == "🏠 Início / Dashboard":
             if "pdf_lote_fichas_geral" in st.session_state:
                 st.download_button("📥 BAIXAR TODAS AS FICHAS (PDF ÚNICO)", st.session_state.pdf_lote_fichas_geral, f"Fichas_Gerais_Fatima_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
-# --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE (VERSÃO FLEXÍVEL) ---
+            st.write("")
+
+            # --- BOTÃO 4: TODAS AS AUDITORIAS DE TURMA EM LOTE ---
             if st.button("📊 GERAR TODAS AS AUDITORIAS DE TURMA", use_container_width=True, key="btn_lote_auditoria_geral_v7"):
                 with st.spinner("Analisando cada itinerário de turma..."):
-                    # 1. Tenta carregar a aba de sacramentos
                     df_sac_nominais = ler_aba("sacramentos_recebidos")
                     
-                    # 2. Se estiver vazia, cria um DataFrame vazio com as colunas necessárias para não dar erro no motor
+                    # Flexibilidade: Se estiver vazia, cria DF vazio para não quebrar o motor
                     if df_sac_nominais.empty:
                         df_sac_nominais = pd.DataFrame(columns=['id_catequizando', 'nome', 'tipo', 'data'])
                     
                     try:
-                        # 3. Chama a função do utils.py (que restauramos na resposta anterior)
-                        pdf_lote_a = gerar_auditoria_lote_completa(
-                            df_turmas, 
-                            df_cat, 
-                            df_pres, 
-                            df_sac_nominais 
-                        )
+                        pdf_lote_a = gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_sac_nominais)
                         st.session_state.pdf_lote_auditoria_geral = pdf_lote_a
                         st.toast("Dossiê de auditorias concluído!", icon="✅")
                         st.rerun()
