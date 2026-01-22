@@ -597,84 +597,112 @@ def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
 
 def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_resp):
     """
-    Gera o Termo de Autorização de Saída conforme o padrão oficial da Diocese.
-    Inclui Informativo Complementar e campos de assinatura.
+    Gera o Termo de Autorização de Saída com Rigor Estético Diocesano.
+    Tradução de data manual, linhas de margem a margem e fundo creme.
     """
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. Cabeçalho Diocesano (Brasão e Identificação)
+    # 1. IDENTIDADE VISUAL (Fundo Creme #f8f9f0)
+    pdf.set_fill_color(248, 249, 240)
+    pdf.rect(0, 0, 210, 297, 'F')
+    
+    # 2. CABEÇALHO OFICIAL
     adicionar_cabecalho_diocesano(pdf)
     
-    # 2. Título do Documento
-    pdf.set_font("helvetica", "B", 12)
+    # 3. TÍTULO ESTILIZADO
+    pdf.set_y(45)
+    pdf.set_font("helvetica", "B", 14)
+    pdf.set_text_color(65, 123, 153) # Azul Paroquial
+    pdf.cell(0, 10, limpar_texto("TERMO DE AUTORIZAÇÃO PARA SAÍDA"), ln=True, align='C')
+    pdf.set_font("helvetica", "B", 11)
+    pdf.cell(0, 5, limpar_texto("DO CATEQUIZANDO SEM O RESPONSÁVEL"), ln=True, align='C')
+    pdf.ln(8)
+    
+    # 4. CORPO DO TERMO (TEXTO JUSTIFICADO)
+    pdf.set_font("helvetica", "", 12)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 10, limpar_texto("TERMO DE AUTORIZAÇÃO PARA SAÍDA DO CATEQUIZANDO SEM O RESPONSÁVEL"), ln=True, align='C')
-    pdf.ln(5)
     
-    # 3. Corpo do Termo
-    pdf.set_font("helvetica", "", 11)
-    
-    # Variáveis para preenchimento
-    nome_catequizando = str(dados_cat.get('nome_completo', '________________________________________')).upper()
+    nome_cat = str(dados_cat.get('nome_completo', '________________________________________')).upper()
     etapa = str(dados_turma.get('etapa', '________________')).upper()
     catequistas = str(dados_turma.get('catequista_responsavel', '________________________________________')).upper()
     
     texto_corpo = (
         f"Eu, {nome_resp.upper()}, na condição de responsável legal pelo(a) "
-        f"catequizando(a) {nome_catequizando}, inscrita(o) na {etapa} etapa, com os/as "
+        f"catequizando(a) {nome_cat}, inscrita(o) na {etapa} etapa, com os/as "
         f"catequistas {catequistas}, autorizo a sua saída sozinho(a), no horário de "
         f"encerramento do encontro. Ciente que, assumo quaisquer riscos que possam ocorrer do trajeto "
-        f"________________________________________ até em casa."
+        f"__________________________________________________________________ até em casa."
     )
     
-    pdf.multi_cell(0, 7, limpar_texto(texto_corpo), align='J')
+    pdf.multi_cell(0, 8, limpar_texto(texto_corpo), align='J')
     pdf.ln(10)
     
-    # 4. Data e Assinatura 1
+    # 5. DATA EM PORTUGUÊS (MANUAL PARA EVITAR LOCALE INGLÊS)
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3))
-    pdf.cell(0, 10, limpar_texto(f"Itabuna (BA), {hoje.day:02d} de {hoje.strftime('%B')} de {hoje.year}."), ln=True, align='C')
+    meses_br = {
+        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+    }
+    data_extenso = f"Itabuna (BA), {hoje.day:02d} de {meses_br[hoje.month]} de {hoje.year}."
+    pdf.set_font("helvetica", "I", 11)
+    pdf.cell(0, 10, limpar_texto(data_extenso), ln=True, align='C')
     
+    # 6. PRIMEIRA ASSINATURA
     pdf.ln(15)
-    y_ass1 = pdf.get_y()
-    pdf.line(50, y_ass1, 160, y_ass1)
-    pdf.set_xy(50, y_ass1 + 1)
+    pdf.line(55, pdf.get_y(), 155, pdf.get_y())
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(110, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
+    pdf.cell(0, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
     
-    # 5. Observação Crítica
-    pdf.ln(10)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.write(5, limpar_texto("Obs.: "))
-    pdf.set_font("helvetica", "", 10)
+    # 7. OBSERVAÇÃO (BOX DE DESTAQUE)
+    pdf.ln(8)
+    pdf.set_fill_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 9)
+    pdf.set_text_color(224, 61, 17) # Laranja para Alerta
+    pdf.cell(0, 5, limpar_texto("Obs.:"), ln=True)
+    pdf.set_font("helvetica", "", 9)
+    pdf.set_text_color(0, 0, 0)
     obs_texto = (
         "Lembramos que o (a) catequizando (a) que não tiver o termo de autorização de saída preenchido "
         "só poderá sair do local da catequese com o responsável. Caso haja extravio da autorização, em último caso, "
         "poderá ser enviada pelo WhatsApp do catequista. Não será aceito pela catequese autorização realizada por telefone."
     )
-    pdf.multi_cell(0, 5, limpar_texto(obs_texto))
+    pdf.multi_cell(0, 5, limpar_texto(obs_texto), border=0)
     
-    # 6. Informativo Complementar
-    pdf.ln(10)
+    # 8. INFORMATIVO COMPLEMENTAR (LINHAS ATÉ A MARGEM)
+    pdf.ln(8)
     pdf.set_font("helvetica", "B", 11)
+    pdf.set_text_color(65, 123, 153)
     pdf.cell(0, 10, limpar_texto("INFORMATIVO COMPLEMENTAR"), ln=True, align='C')
     
     pdf.set_font("helvetica", "", 11)
-    pdf.ln(2)
-    pdf.multi_cell(0, 7, limpar_texto(f"No vínculo familiar do catequizando (a) {nome_catequizando} existe alguma restrição a quem não pode pegá-lo (a)?"))
+    pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 7, limpar_texto(f"No vínculo familiar do catequizando (a) {nome_cat} existe alguma restrição a quem não pode pegá-lo (a)?"))
     
-    pdf.ln(5)
-    pdf.cell(0, 7, limpar_texto("Se sim, informe o nome: _________________________________________________ e o vínculo:"), ln=True)
-    pdf.cell(0, 7, limpar_texto("________________________"), ln=True)
+    pdf.ln(4)
+    # Linha do Nome
+    pdf.write(7, limpar_texto("Se sim, informe o nome: "))
+    x_nome = pdf.get_x()
+    pdf.line(x_nome, pdf.get_y() + 5, 200, pdf.get_y() + 5) 
+    pdf.ln(10)
     
-    # 7. Assinatura 2
+    # Linha do Vínculo
+    pdf.write(7, limpar_texto("e o vínculo: "))
+    x_vinculo = pdf.get_x()
+    pdf.line(x_vinculo, pdf.get_y() + 5, 200, pdf.get_y() + 5)
     pdf.ln(15)
-    y_ass2 = pdf.get_y()
-    pdf.line(50, y_ass2, 160, y_ass2)
-    pdf.set_xy(50, y_ass2 + 1)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(110, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
     
+    # 9. SEGUNDA ASSINATURA
+    pdf.line(55, pdf.get_y(), 155, pdf.get_y())
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 5, limpar_texto("Assinatura do Responsável Legal"), align='C', ln=True)
+    
+    # Rodapé LGPD discreto
+    pdf.set_y(280)
+    pdf.set_font("helvetica", "I", 7)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 5, limpar_texto("Documento gerado pelo Sistema Catequese Fátima - Em conformidade com a LGPD e Diretrizes Diocesanas."), align='C')
+
     return finalizar_pdf(pdf)
 
 # ==============================================================================
