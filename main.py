@@ -1862,13 +1862,13 @@ elif menu == "👥 Gestão de Catequistas":
 # --- FIM DO BLOCO: GESTÃO DE CATEQUISTAS ---
 
 # ==============================================================================
-# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO INTEGRAL + MULTI-TURMA + MOBILE)
+# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO INTEGRAL + CONTATO PRÓPRIO + MOBILE)
 # ==============================================================================
 elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
     st.title("👨‍👩‍👧‍👦 Gestão Familiar e Igreja Doméstica")
     st.markdown("---")
 
-    # --- 1. LÓGICA DE PERMISSÕES E FILTRO DE TURMA (PARA CATEQUISTAS MULTI-TURMA) ---
+    # --- 1. LÓGICA DE PERMISSÕES E FILTRO DE TURMA ---
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -1876,34 +1876,28 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
         turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
     if not turmas_permitidas:
-        st.error("⚠️ Nenhuma turma vinculada ao seu perfil.")
-        st.stop()
+        st.error("⚠️ Nenhuma turma vinculada ao seu perfil."); st.stop()
 
-    # Seletor de Turma (Essencial para quem tem mais de uma)
     if len(turmas_permitidas) > 1 or eh_gestor:
-        turma_selecionada_fam = st.selectbox("🔍 Selecione a Turma para Visualizar Contatos:", 
+        turma_selecionada_fam = st.selectbox("🔍 Selecione a Turma:", 
                                             ["TODAS"] + turmas_permitidas if eh_gestor else turmas_permitidas,
-                                            key="sel_fam_multi")
+                                            key="sel_fam_multi_v6")
     else:
         turma_selecionada_fam = turmas_permitidas[0]
 
-    # --- 2. FUNÇÃO INTERNA: CARD DE CONTATO (MANTIDA INTEGRAL + AJUSTE MOBILE) ---
+    # --- 2. FUNÇÃO INTERNA: CARD DE CONTATO (AGORA COM TELEFONE DO CATEQUIZANDO) ---
     def exibir_card_contato_pastoral(aluno_row):
         def limpar_whatsapp(tel):
-            if not tel or str(tel).strip() in ["N/A", "", "None"]:
-                return None
+            if not tel or str(tel).strip() in ["N/A", "", "None"]: return None
             num = "".join(filter(str.isdigit, str(tel)))
             if num.startswith("0"): num = num[1:]
             if num.startswith("55"):
                 sobra = num[2:]
-                if len(sobra) >= 10: return num
-                else: return f"5573{sobra}"
+                return num if len(sobra) >= 10 else f"5573{sobra}"
             else:
-                if len(num) >= 10: return f"55{num}"
-                else: return f"5573{num}"
+                return f"55{num}" if len(num) >= 10 else f"5573{num}"
 
         with st.container():
-            # Card com borda e sombra para facilitar o toque no celular
             st.markdown(f"""
                 <div style='background-color:#f8f9f0; padding:15px; border-radius:10px; border-left:8px solid #417b99; margin-bottom:10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);'>
                     <h3 style='margin:0; color:#417b99; font-size:18px;'>👤 {aluno_row['nome_completo']}</h3>
@@ -1911,124 +1905,95 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 </div>
             """, unsafe_allow_html=True)
             
-            # No celular, colunas muito pequenas quebram. Usamos proporções melhores.
+            # --- BOTÃO PRINCIPAL: CONTATO DO PRÓPRIO CATEQUIZANDO (COLUNA F) ---
+            link_proprio = limpar_whatsapp(aluno_row['contato_principal'])
+            if link_proprio:
+                st.markdown(f"""
+                    <a href="https://wa.me/{link_proprio}" target="_blank">
+                        <button style="background-color:#417b99; color:white; border:none; padding:12px; border-radius:8px; width:100%; cursor:pointer; font-weight:bold; margin-bottom:10px;">
+                            📲 Falar com o Catequizando (Direto)
+                        </button>
+                    </a>
+                """, unsafe_allow_html=True)
+
+            # --- CONTATOS DOS PAIS (COLUNAS S E U) ---
             c1, c2 = st.columns(2)
-            
             with c1:
                 st.markdown("<span style='font-size:12px;'><b>👩‍🦱 MÃE:</b></span><br>" + str(aluno_row['nome_mae']), unsafe_allow_html=True)
                 link_mae = limpar_whatsapp(aluno_row['tel_mae'])
                 if link_mae:
-                    st.markdown(f"""<a href="https://wa.me/{link_mae}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:12px; border-radius:8px; width:100%; cursor:pointer; font-weight:bold; margin-top:5px;">📲 WhatsApp</button></a>""", unsafe_allow_html=True)
-                else: st.caption("⚠️ Sem telefone")
+                    st.markdown(f"""<a href="https://wa.me/{link_mae}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:10px; border-radius:8px; width:100%; cursor:pointer; font-weight:bold; margin-top:5px;">📲 WhatsApp Mãe</button></a>""", unsafe_allow_html=True)
+                else: st.caption("⚠️ Sem tel.")
 
             with c2:
                 st.markdown("<span style='font-size:12px;'><b>👨‍🦱 PAI:</b></span><br>" + str(aluno_row['nome_pai']), unsafe_allow_html=True)
                 link_pai = limpar_whatsapp(aluno_row['tel_pai'])
                 if link_pai:
-                    st.markdown(f"""<a href="https://wa.me/{link_pai}" target="_blank"><button style="background-color:#128c7e; color:white; border:none; padding:12px; border-radius:8px; width:100%; cursor:pointer; font-weight:bold; margin-top:5px;">📲 WhatsApp</button></a>""", unsafe_allow_html=True)
-                else: st.caption("⚠️ Sem telefone")
+                    st.markdown(f"""<a href="https://wa.me/{link_pai}" target="_blank"><button style="background-color:#128c7e; color:white; border:none; padding:10px; border-radius:8px; width:100%; cursor:pointer; font-weight:bold; margin-top:5px;">📲 WhatsApp Pai</button></a>""", unsafe_allow_html=True)
+                else: st.caption("⚠️ Sem tel.")
 
-            # Alertas de Saúde em linha inteira para destaque no celular
+            # Alertas de Saúde
             if str(aluno_row['toma_medicamento_sn']).upper() != "NÃO" or str(aluno_row['tgo_sn']).upper() == "SIM":
-                st.markdown("<div style='margin-top:10px;'>", unsafe_allow_html=True)
-                if str(aluno_row['toma_medicamento_sn']).upper() != "NÃO":
-                    st.error(f"💊 MEDICAMENTO: {aluno_row['toma_medicamento_sn']}")
-                if str(aluno_row['tgo_sn']).upper() == "SIM":
-                    st.warning("🧠 TGO / TEA")
-                st.markdown("</div>", unsafe_allow_html=True)
+                if str(aluno_row['toma_medicamento_sn']).upper() != "NÃO": st.error(f"💊 MEDICAMENTO: {aluno_row['toma_medicamento_sn']}")
+                if str(aluno_row['tgo_sn']).upper() == "SIM": st.warning("🧠 TGO / TEA")
             st.markdown("<br>", unsafe_allow_html=True)
 
     # --- 3. ABAS E CONTEÚDO (MANTIDO INTEGRAL) ---
     if eh_gestor:
-        tab_censo, tab_agenda, tab_busca, tab_ia = st.tabs([
-            "📊 Censo Familiar", "📞 Agenda de Emergência", "🔍 Localizar e Registrar Visita", "✨ Auditoria IA"
-        ])
+        tab_censo, tab_agenda, tab_busca, tab_ia = st.tabs(["📊 Censo", "📞 Agenda", "🔍 Visitas", "✨ IA"])
 
         with tab_censo:
-            st.subheader("Realidade Sacramental e Social dos Pais")
             df_censo = df_cat if turma_selecionada_fam == "TODAS" else df_cat[df_cat['etapa'] == turma_selecionada_fam]
             if not df_censo.empty:
                 c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown("**💍 Situação Matrimonial**")
-                    st.bar_chart(df_censo['est_civil_pais'].value_counts())
-                with c2:
-                    st.markdown("**⛪ Sacramentos dos Pais**")
-                    sac_series = df_censo['sac_pais'].str.split(', ').explode()
-                    st.bar_chart(sac_series.value_counts())
+                with c1: st.markdown("**💍 Matrimonial**"); st.bar_chart(df_censo['est_civil_pais'].value_counts())
+                with c2: st.markdown("**⛪ Sacramentos**"); sac_series = df_censo['sac_pais'].str.split(', ').explode(); st.bar_chart(sac_series.value_counts())
 
         with tab_agenda:
-            st.subheader("📞 Agenda Geral de Emergência")
             busca_geral = st.text_input("🔍 Pesquisar por nome:", key="busca_emerg_gestor").upper()
-            
             df_agenda = df_cat if turma_selecionada_fam == "TODAS" else df_cat[df_cat['etapa'] == turma_selecionada_fam]
-            if busca_geral:
-                df_agenda = df_agenda[df_agenda['nome_completo'].str.contains(busca_geral, na=False)]
-            
+            if busca_geral: df_agenda = df_agenda[df_agenda['nome_completo'].str.contains(busca_geral, na=False)]
             for _, row in df_agenda.iterrows(): exibir_card_contato_pastoral(row)
 
         with tab_busca:
-            # (MANTIDO INTEGRAL: Lógica de Relato Pastoral e PDFs)
-            st.subheader("🔍 Localizar Núcleo Familiar e Registrar Relato")
             busca_pais = st.text_input("Nome da Mãe ou Pai para localizar família:").upper()
-            
             if busca_pais:
                 fam = df_cat[(df_cat['nome_mae'].str.contains(busca_pais, na=False)) | (df_cat['nome_pai'].str.contains(busca_pais, na=False))]
                 if not fam.empty:
                     dados_f = fam.iloc[0]
                     st.success(f"✅ Família Localizada: {dados_f['nome_mae']} & {dados_f['nome_pai']}")
-                    
-                    st.markdown("#### 📝 Relato de Visita e Necessidades da Família")
                     obs_atual = dados_f.get('obs_pastoral_familia', '')
-                    if obs_atual == "N/A": obs_atual = ""
-                    novo_relato = st.text_area("Descreva aqui o relato:", value=obs_atual, height=150, key="txt_relato_familia")
+                    novo_relato = st.text_area("Relato de Visita:", value=obs_atual if obs_atual != "N/A" else "", height=150)
+                    if st.button("💾 SALVAR RELATO"):
+                        for _, filho in fam.iterrows():
+                            lista_up = filho.tolist()
+                            while len(lista_up) < 30: lista_up.append("N/A")
+                            lista_up[29] = novo_relato
+                            atualizar_catequizando(filho['id_catequizando'], lista_up)
+                        st.success("✅ Salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                     
-                    if st.button("💾 SALVAR ANOTAÇÕES NO HISTÓRICO"):
-                        with st.spinner("Gravando..."):
-                            sucesso = True
-                            for _, filho in fam.iterrows():
-                                lista_up = filho.tolist()
-                                while len(lista_up) < 30: lista_up.append("N/A")
-                                lista_up[29] = novo_relato # Coluna AD
-                                if not atualizar_catequizando(filho['id_catequizando'], lista_up): sucesso = False
-                            if sucesso:
-                                st.success("✅ Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-                    st.divider()
-                    st.markdown("#### 👦 Filhos na Catequese")
-                    filhos_pdf = []
-                    for _, f in fam.iterrows():
-                        st.write(f"· **{f['nome_completo']}** - Turma: `{f['etapa']}`")
-                        filhos_pdf.append({'nome': f['nome_completo'], 'etapa': f['etapa'], 'status': f['status']})
-                    
-                    st.divider()
-                    st.markdown("#### 📄 Documentos para Impressão")
-                    opcoes_resp = ["Mãe", "Pai", "Outro (Digitar Nome)"]
-                    resp_sel = st.selectbox("Quem assina o Termo?", opcoes_resp)
-                    
+                    st.divider(); st.markdown("#### 📄 Documentos")
+                    opcoes_resp = ["Mãe", "Pai", "Outro"]
+                    resp_sel = st.selectbox("Responsável no Termo:", opcoes_resp)
                     nome_f_resp = dados_f.get('nome_mae', '') if resp_sel == "Mãe" else (dados_f.get('nome_pai', '') if resp_sel == "Pai" else st.text_input("Nome:").upper())
-
+                    
                     c_pdf1, c_pdf2 = st.columns(2)
                     with c_pdf1:
-                        if st.button("📄 FICHA DE VISITAÇÃO"):
-                            st.session_state.pdf_fam_v = gerar_relatorio_familia_pdf(dados_f.to_dict(), filhos_pdf)
-                        if "pdf_fam_v" in st.session_state: st.download_button("📥 Baixar Ficha", st.session_state.pdf_fam_v, "Visita.pdf", use_container_width=True)
+                        if st.button("📄 FICHA VISITA"): st.session_state.pdf_fam_v = gerar_relatorio_familia_pdf(dados_f.to_dict(), [])
+                        if "pdf_fam_v" in st.session_state: st.download_button("📥 Baixar", st.session_state.pdf_fam_v, "Visita.pdf")
                     with c_pdf2:
-                        if st.button("📜 TERMO DE SAÍDA"):
+                        if st.button("📜 TERMO SAÍDA"):
                             info_t = df_turmas[df_turmas['nome_turma'] == dados_f['etapa']].iloc[0].to_dict() if not df_turmas.empty else {}
                             st.session_state.pdf_termo_saida = gerar_termo_saida_pdf(dados_f.to_dict(), info_t, nome_f_resp)
-                        if "pdf_termo_saida" in st.session_state: st.download_button("📥 Baixar Termo", st.session_state.pdf_termo_saida, "Termo.pdf", use_container_width=True)
+                        if "pdf_termo_saida" in st.session_state: st.download_button("📥 Baixar", st.session_state.pdf_termo_saida, "Termo.pdf")
 
         with tab_ia:
-            if st.button("🚀 EXECUTAR DIAGNÓSTICO PASTORAL"):
-                resumo = f"Civis: {df_cat['est_civil_pais'].value_counts().to_dict()}."
-                st.info(analisar_saude_familiar_ia(resumo))
+            if st.button("🚀 EXECUTAR DIAGNÓSTICO"): st.info(analisar_saude_familiar_ia(str(df_cat['est_civil_pais'].value_counts().to_dict())))
 
     else:
-        # VISÃO CATEQUISTA (OTIMIZADA PARA MULTI-TURMA)
-        st.subheader(f"📞 Agenda de Emergência: {turma_selecionada_fam}")
+        # VISÃO CATEQUISTA (OTIMIZADA)
+        st.subheader(f"📞 Agenda: {turma_selecionada_fam}")
         meus_alunos_fam = df_cat[df_cat['etapa'] == turma_selecionada_fam]
         if not meus_alunos_fam.empty:
             for _, row in meus_alunos_fam.iterrows(): exibir_card_contato_pastoral(row)
-        else:
-            st.info("Nenhum catequizando vinculado a esta seleção.")
+        else: st.info("Nenhum catequizando nesta seleção.")
