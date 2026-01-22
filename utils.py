@@ -904,6 +904,30 @@ def obter_aniversariantes_mes(df_cat):
     """Versão para painéis de turma (apenas catequizandos)."""
     return obter_aniversariantes_mes_unificado(df_cat, None)
 
+# utils.py - ADICIONAR AO FINAL DA SEÇÃO 9 OU 10
+def processar_alertas_evasao(df_pres_turma):
+    """
+    Analisa o histórico de presença da turma para identificar catequizandos 
+    que precisam de visita ou contato pastoral.
+    """
+    if df_pres_turma.empty:
+        return [], []
+
+    # Agrupa faltas por catequizando
+    faltas_por_id = df_pres_turma[df_pres_turma['status'] == 'AUSENTE'].groupby('id_catequizando').size()
+    
+    risco_critico = [] # 3 ou mais faltas
+    atencao_pastoral = [] # 2 faltas
+    
+    for id_cat, qtd in faltas_por_id.items():
+        nome = df_pres_turma[df_pres_turma['id_catequizando'] == id_cat]['nome_catequizando'].iloc[0]
+        if qtd >= 3:
+            risco_critico.append(f"{nome} ({qtd} faltas)")
+        elif qtd == 2:
+            atencao_pastoral.append(f"{nome} ({qtd} faltas)")
+            
+    return risco_critico, atencao_pastoral
+
 # ==============================================================================
 # 10. PROCESSAMENTO LOCAL E AUDITORIA INTEGRAL (DOSSIÊS)
 # ==============================================================================
