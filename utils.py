@@ -701,7 +701,7 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_responsavel_escolhido):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL) - VERSÃO FINAL
+# 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL) - VERSÃO INTEGRAL
 # ==============================================================================
 
 def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
@@ -736,7 +736,10 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
     def eh_infantil(row):
         nome = str(row['nome_turma']).upper()
         etapa = str(row['etapa']).upper()
-        return any(termo in nome or termo in etapa for termo in termos_infantis) and "ADULTO" not in nome
+        # PRÉ é sempre infantil. Se tiver ADULTO, não é infantil.
+        if "PRÉ" in nome or "PRÉ" in etapa: return True
+        if "ADULTO" in nome or "ADULTO" in etapa: return False
+        return any(termo in nome or termo in etapa for termo in termos_infantis)
 
     if not df_turmas.empty:
         mask_infantil = df_turmas.apply(eh_infantil, axis=1)
@@ -744,7 +747,7 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
         t_adultos = df_turmas[~mask_infantil]
     else: t_infantil = t_adultos = pd.DataFrame()
 
-    # --- FUNÇÃO INTERNA: DESENHAR TABELAS DE ITINERÁRIOS ---
+    # --- FUNÇÃO INTERNA: DESENHAR TABELAS DE ITINERÁRIOS COM QUEBRA DE LINHA ---
     def desenhar_tabela_itinerarios(titulo, df_alvo):
         pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
         pdf.cell(190, 8, limpar_texto(f"{titulo} ({len(df_alvo)} turmas)"), ln=True, fill=True, align='C')
@@ -765,17 +768,17 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
             nome_t = str(t['nome_turma'])
             cats_limpos = formatar_nome_curto(t['catequista_responsavel'])
             
-            # Cálculo de altura dinâmica para evitar cortes
+            # Cálculo de altura dinâmica para evitar cortes (Multi-line)
             linhas_cat = cats_limpos.count('\n') + 1
             linhas_turma = 1 if len(nome_t) < 30 else 2
             h = max(linhas_cat, linhas_turma) * 5
             if h < 7: h = 7
 
             curr_x, curr_y = pdf.get_x(), pdf.get_y()
-            # Coluna Turma
+            # Coluna Turma (com suporte a 2 linhas)
             pdf.multi_cell(55, h/linhas_turma if linhas_turma > 1 else h, limpar_texto(nome_t), border=1, align='L')
             pdf.set_xy(curr_x + 55, curr_y)
-            # Coluna Catequista
+            # Coluna Catequista (com suporte a N linhas)
             pdf.multi_cell(70, h/linhas_cat, limpar_texto(cats_limpos), border=1, align='L')
             pdf.set_xy(curr_x + 125, curr_y)
             # Colunas Numéricas
@@ -985,17 +988,43 @@ def gerar_relatorio_local_turma_v2(nome_turma, metricas, listas, analise_ia):
 def gerar_auditoria_lote_completa(df_turmas, df_cat, df_pres, df_recebidos):
     """Gera um Dossiê Paroquial contendo a auditoria completa de cada turma."""
     pdf = FPDF(); col_id_cat = 'id_catequizando'
+    AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
     for _, t in df_turmas.iterrows():
         t_nome = t['nome_turma']; alunos_t = df_cat[df_cat['etapa'] == t_nome]
         if not alunos_t.empty:
             pdf.add_page(); adicionar_cabecalho_diocesano(pdf, f"AUDITORIA INTEGRAL: {t_nome}")
             pres_t = df_pres[df_pres['id_turma'] == t_nome] if not df_pres.empty else pd.DataFrame()
             freq_g = round(pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0).mean() * 100, 1) if not pres_t.empty else 0
-            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-            pdf.cell(190, 8, limpar_texto("INDICADORES"), ln=True, fill=True, align='C')
+            pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+            pdf.cell(190, 8, limpar_texto("1. INDICADORES ESTRUTURAIS"), ln=True, fill=True, align='C')
             pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
             desenhar_campo_box(pdf, "Catequizandos", str(len(alunos_t)), 10, y, 90)
             desenhar_campo_box(pdf, "Frequência", f"{freq_g}%", 110, y, 90); pdf.ln(18)
+            pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255)
+            pdf.cell(190, 8, limpar_texto("2. LISTA NOMINAL E ALERTA DE EVASÃO"), ln=True, fill=True, align='C')
+            pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(*CINZA_F)
+            pdf.cell(120, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(70, 7, "Status / Faltas", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 8)
+            for _, r in alunos_t.iterrows():
+                faltas = len(pres_t[(pres_t[col_id_cat] == r[col_id_cat]) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty and col_id_cat in pres_t.columns else 0
+                if faltas >= 2: pdf.set_text_color(*LARANJA_P)
+                else: pdf.set_text_color(0, 0, 0)
+                pdf.cell(120, 6, limpar_texto(r['nome_completo']), border=1)
+                pdf.cell(70, 6, f"ATIVO ({faltas} faltas)", border=1, align='C'); pdf.ln()
+            pdf.ln(5); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255)
+            pdf.cell(190, 8, limpar_texto("3. SACRAMENTOS RECEBIDOS"), ln=True, fill=True, align='C')
+            pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(*CINZA_F)
+            pdf.cell(80, 7, "Nome", border=1, fill=True); pdf.cell(50, 7, "Sacramento", border=1, fill=True, align='C'); pdf.cell(60, 7, "Data", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 8)
+            if not df_recebidos.empty and col_id_cat in df_recebidos.columns:
+                sac_turma = df_recebidos[df_recebidos[col_id_cat].isin(alunos_t['id_catequizando'].tolist())]
+                if not sac_turma.empty:
+                    for _, s in sac_turma.iterrows():
+                        pdf.cell(80, 6, limpar_texto(s.get('nome', 'N/A')), border=1)
+                        pdf.cell(50, 6, limpar_texto(s.get('tipo', 'N/A')), border=1, align='C')
+                        pdf.cell(60, 6, formatar_data_br(s.get('data', 'N/A')), border=1, align='C'); pdf.ln()
+                else: pdf.cell(190, 6, "Nenhum sacramento registrado.", border=1, align='C', ln=True)
+            else: pdf.cell(190, 6, "Nenhum sacramento registrado.", border=1, align='C', ln=True)
     return finalizar_pdf(pdf)
 
 # ==============================================================================
