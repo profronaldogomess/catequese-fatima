@@ -1626,32 +1626,71 @@ elif menu == "👥 Gestão de Catequistas":
                     else:
                         st.info("Nenhuma formação registrada para este catequista.")
 
-                with col_edit:
-                    with st.form(f"form_edit_cat_{u['email']}"):
-                        c1, c2, c3 = st.columns(3)
-                        ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
-                        ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
-                        ed_tel = c3.text_input("Telefone", value=str(u.get('telefone', '')))
-                        
-                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                        ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t for t in str(u.get('turma_vinculada', '')).split(", ") if t in lista_t_nomes])
-                        
-                        st.markdown("**Datas Sacramentais e Início:**")
-                        d1, d2, d3, d4, d5 = st.columns(5)
-                        dt_ini = d1.text_input("Início Catequese", value=str(u.get('data_inicio_catequese', '')))
-                        dt_bat = d2.text_input("Data Batismo", value=str(u.get('data_batismo', '')))
-                        dt_euc = d3.text_input("Data Eucaristia", value=str(u.get('data_eucaristia', '')))
-                        dt_cri = d4.text_input("Data Crisma", value=str(u.get('data_crisma', '')))
-                        dt_min = d5.text_input("Data Ministério", value=str(u.get('data_ministerio', '')))
+        with col_edit:
+            with st.form(f"form_edit_cat_{u['email']}"):
+                c1, c2, c3 = st.columns(3)
+                ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+                ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
+                ed_tel = c3.text_input("Telefone", value=str(u.get('telefone', '')))
+                
+                lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                # Turmas que ele tem acesso agora
+                ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t for t in str(u.get('turma_vinculada', '')).split(", ") if t in lista_t_nomes])
+                
+                st.markdown("**Datas Sacramentais e Início:**")
+                d1, d2, d3, d4, d5 = st.columns(5)
+                dt_ini = d1.text_input("Início Catequese", value=str(u.get('data_inicio_catequese', '')))
+                dt_bat = d2.text_input("Data Batismo", value=str(u.get('data_batismo', '')))
+                dt_euc = d3.text_input("Data Eucaristia", value=str(u.get('data_eucaristia', '')))
+                dt_cri = d4.text_input("Data Crisma", value=str(u.get('data_crisma', '')))
+                dt_min = d5.text_input("Data Ministério", value=str(u.get('data_ministerio', '')))
 
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                            dados_up = [
-                                ed_nome, u['email'], ed_senha, str(u.get('papel', 'CATEQUISTA')), 
-                                ", ".join(ed_turmas), ed_tel, str(u.get('data_nascimento', '')),
-                                dt_ini, dt_bat, dt_euc, dt_cri, dt_min
-                            ]
-                            if atualizar_usuario(u['email'], dados_up):
-                                st.success("Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR TURMAS"):
+                    with st.spinner("Sincronizando perfil e turmas..."):
+                        # 1. Atualiza a aba 'usuarios'
+                        dados_up = [
+                            ed_nome, u['email'], ed_senha, str(u.get('papel', 'CATEQUISTA')), 
+                            ", ".join(ed_turmas), ed_tel, str(u.get('data_nascimento', '')),
+                            dt_ini, dt_bat, dt_euc, dt_cri, dt_min
+                        ]
+                        
+                        if atualizar_usuario(u['email'], dados_up):
+                            # 2. SINCRONIZAÇÃO REVERSA: Atualiza a aba 'turmas'
+                            planilha = conectar_google_sheets()
+                            aba_t = planilha.worksheet("turmas")
+                            
+                            # Percorre todas as turmas do banco para ajustar os nomes dos responsáveis
+                            for _, t_row in df_turmas.iterrows():
+                                t_nome = t_row['nome_turma']
+                                # Lista atual de catequistas daquela turma na planilha
+                                cats_na_turma = [c.strip() for c in str(t_row['catequista_responsavel']).split(',') if c.strip()]
+                                
+                                mudou_turma = False
+                                if t_nome in ed_turmas:
+                                    # O catequista deve estar nesta turma
+                                    if ed_nome not in cats_na_turma:
+                                        cats_na_turma.append(ed_nome)
+                                        mudou_turma = True
+                                else:
+                                    # O catequista NÃO deve estar nesta turma (Remoção)
+                                    if ed_nome in cats_na_turma:
+                                        cats_na_turma.remove(ed_nome)
+                                        mudou_turma = True
+                                    # Remove também o nome antigo caso tenha sido alterado nesta edição
+                                    if u['nome'] in cats_na_turma:
+                                        cats_na_turma.remove(u['nome'])
+                                        mudou_turma = True
+                                
+                                if mudou_turma:
+                                    # Localiza a linha da turma e atualiza a Coluna E (5) - catequista_responsavel
+                                    celula_t = aba_t.find(str(t_row['id_turma']))
+                                    if celula_t:
+                                        aba_t.update_cell(celula_t.row, 5, ", ".join(cats_na_turma))
+                            
+                            st.success("✅ Perfil e Turmas sincronizados com sucesso!")
+                            st.cache_data.clear()
+                            time.sleep(1)
+                            st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
