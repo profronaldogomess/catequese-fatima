@@ -358,26 +358,35 @@ if menu == "🏠 Início / Dashboard":
         with col_paroquial:
             st.markdown("##### 📋 Relatórios de Gestão Paroquial")
             
-# --- BOTÃO 1: RELATÓRIO DIOCESANO (VERSÃO ANALÍTICA SINCRONIZADA) ---
+# --- BOTÃO 1: RELATÓRIO DIOCESANO (FORÇANDO ATUALIZAÇÃO DO NOVO MODELO) ---
             if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_final"):
-                with st.spinner("Processando Auditoria Diocesana Analítica..."):
-                    # A nova função no utils.py agora faz todos os cálculos internamente
-                    # Passamos apenas os 3 DataFrames principais
+                # 1. Limpa qualquer versão antiga da memória para não repetir o erro
+                if "pdf_diocesano" in st.session_state:
+                    del st.session_state.pdf_diocesano
+                
+                with st.spinner("Renderizando Novo Modelo Analítico 2026..."):
                     try:
-                        st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(
+                        # 2. Chama a nova função do utils.py (aquela com as tabelas e listas nominais)
+                        novo_pdf = gerar_relatorio_diocesano_v4(
                             df_turmas, 
                             df_cat, 
                             df_usuarios
                         )
-                        st.rerun()
+                        
+                        # 3. Salva o novo arquivo na sessão
+                        st.session_state.pdf_diocesano = novo_pdf
+                        st.toast("Relatório Analítico Gerado!", icon="✅")
+                        time.sleep(1)
+                        st.rerun() # Força a tela a atualizar para mostrar o botão de baixar
                     except Exception as e:
-                        st.error(f"Erro ao gerar relatório: {e}")
+                        st.error(f"Erro ao processar tabelas: {e}")
 
+            # Exibição do botão de download (aparece após a geração)
             if "pdf_diocesano" in st.session_state:
                 st.download_button(
-                    label="📥 BAIXAR RELATÓRIO DIOCESANO", 
+                    label="📥 BAIXAR RELATÓRIO DIOCESANO (NOVO MODELO)", 
                     data=st.session_state.pdf_diocesano, 
-                    file_name=f"Relatorio_Diocesano_{date.today().year}.pdf", 
+                    file_name=f"Relatorio_Diocesano_Analitico_{date.today().year}.pdf", 
                     mime="application/pdf", 
                     use_container_width=True
                 )
