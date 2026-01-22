@@ -836,7 +836,7 @@ elif menu == "📝 Cadastrar Catequizando":
                 st.error(f"❌ Erro ao processar arquivo: {e}")
 
 # ==============================================================================
-# PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO COM PRÉVIA DE CUIDADO E 29 COLUNAS)
+# PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO COM STATUS AMPLIADO E 30 COLUNAS)
 # ==============================================================================
 elif menu == "👤 Perfil Individual":
     st.title("👤 Perfil e Ficha do Catequizando")
@@ -846,9 +846,9 @@ elif menu == "👤 Perfil Individual":
     else:
         # 1. ÁREA DE BUSCA E FILTRAGEM
         c1, c2 = st.columns([2, 1])
-        busca = c1.text_input("🔍 Pesquisar por nome:", key="busca_perfil_v3").upper()
+        busca = c1.text_input("🔍 Pesquisar por nome:", key="busca_perfil_v4").upper()
         lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-        filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil_v3")
+        filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil_v4")
 
         df_f = df_cat.copy()
         if busca: 
@@ -860,24 +860,27 @@ elif menu == "👤 Perfil Individual":
         
         # 2. SELEÇÃO DO CATEQUIZANDO
         df_f['display_select'] = df_f['nome_completo'] + " (" + df_f['etapa'] + ")"
-        escolha_display = st.selectbox("Selecione para VER PRÉVIA, EDITAR ou gerar PDF:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil_v3")
+        escolha_display = st.selectbox("Selecione para VER PRÉVIA, EDITAR ou gerar PDF:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil_v4")
 
         if escolha_display:
             nome_sel = escolha_display.split(" (")[0]
             turma_sel = escolha_display.split(" (")[1].replace(")", "")
             dados = df_cat[(df_cat['nome_completo'] == nome_sel) & (df_cat['etapa'] == turma_sel)].iloc[0]
             
-            # ==================================================================
-            # 🖼️ NOVA SEÇÃO: PRÉVIA DE CUIDADO PASTORAL (RESUMO VISUAL)
-            # ==================================================================
+            # --- PRÉVIA DE CUIDADO PASTORAL (RESUMO VISUAL) ---
             st.markdown("---")
             col_status, col_detalhes = st.columns([1, 4])
             
             with col_status:
-                # Ícone visual de Status
-                cor_status = "🟢" if dados['status'] == "ATIVO" else "🔴"
-                st.markdown(f"<h1 style='text-align: center; font-size: 50px;'>{cor_status}</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; font-weight: bold;'>{dados['status']}</p>", unsafe_allow_html=True)
+                # Lógica de Cores por Status
+                status_atual = str(dados['status']).upper()
+                if status_atual == "ATIVO": icone, cor_txt = "🟢", "green"
+                elif status_atual == "TRANSFERIDO": icone, cor_txt = "🔵", "blue"
+                elif status_atual == "DESISTENTE": icone, cor_txt = "🔴", "red"
+                else: icone, cor_txt = "⚪", "gray"
+                
+                st.markdown(f"<h1 style='text-align: center; font-size: 60px;'>{icone}</h1>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; font-weight: bold; color: {cor_txt};'>{status_atual}</p>", unsafe_allow_html=True)
 
             with col_detalhes:
                 st.markdown(f"### {dados['nome_completo']}")
@@ -885,22 +888,15 @@ elif menu == "👤 Perfil Individual":
                 p1.write(f"**🏫 Turma:**\n{dados['etapa']}")
                 p2.write(f"**🎂 Idade:**\n{calcular_idade(dados['data_nascimento'])} anos")
                 p3.write(f"**📱 Contato:**\n{dados['contato_principal']}")
-                
-                # Destaque para Sacramentos e Saúde
                 st.markdown(f"**🕊️ Itinerário Sacramental:** {dados['sacramentos_ja_feitos'] if dados['sacramentos_ja_feitos'] else 'Nenhum registrado'}")
-                
-                if str(dados['toma_medicamento_sn']).upper() != "NÃO":
-                    st.error(f"💊 **ALERTA DE SAÚDE:** {dados['toma_medicamento_sn']}")
-                if str(dados['tgo_sn']).upper() == "SIM":
-                    st.warning("🧠 **CUIDADO ESPECIAL:** Catequizando com TGO/TEA")
 
             st.markdown("---")
 
-            # 3. ABAS DE AÇÃO (EDIÇÃO E DOCUMENTAÇÃO)
+            # 3. ABAS DE AÇÃO
             tab_edit, tab_doc = st.tabs(["✏️ Editar Cadastro Completo", "📄 Documentação PDF"])
             
             with tab_edit:
-                with st.form("form_edicao_29_colunas_v_final"):
+                with st.form("form_edicao_30_colunas_v_final"):
                     st.subheader("📍 Identificação e Endereço")
                     c1, c2, c3 = st.columns([2, 1, 1])
                     ed_nome = c1.text_input("Nome Completo", value=dados['nome_completo']).upper()
@@ -910,11 +906,16 @@ elif menu == "👤 Perfil Individual":
                     c4, c5, c6 = st.columns(3)
                     ed_contato = c4.text_input("WhatsApp/Telefone", value=dados['contato_principal'])
                     ed_batizado = c5.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
-                    ed_status = c6.selectbox("Status", ["ATIVO", "INATIVO", "TRANSFERIDO"], index=0)
+                    
+                    # --- CAMPO DE STATUS ATUALIZADO ---
+                    opcoes_status = ["ATIVO", "TRANSFERIDO", "DESISTENTE", "INATIVO"]
+                    idx_status = opcoes_status.index(status_atual) if status_atual in opcoes_status else 0
+                    ed_status = c6.selectbox("Status Pastoral", opcoes_status, index=idx_status)
+                    
                     ed_end = st.text_input("Endereço Completo", value=dados['endereco_completo']).upper()
 
                     st.divider()
-                    st.subheader("👪 Filiação e Contatos dos Pais")
+                    st.subheader("👪 Filiação e Contatos")
                     f1, f2, f3 = st.columns(3)
                     ed_mae = f1.text_input("Nome da Mãe", value=dados['nome_mae']).upper()
                     ed_pai = f2.text_input("Nome do Pai", value=dados['nome_pai']).upper()
@@ -934,35 +935,33 @@ elif menu == "👤 Perfil Individual":
                     ed_doc = o3.text_input("Docs em Falta", value=dados['doc_em_falta']).upper()
 
                     if st.form_submit_button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS"):
-                        # MONTAGEM RIGOROSA DAS 29 COLUNAS PARA O DATABASE.PY
+                        # MONTAGEM RIGOROSA DAS 30 COLUNAS (A até AD)
                         lista_up = [
                             dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, ed_contato, ed_end,
                             ed_mae, ed_pai, ed_resp, ed_doc, dados['engajado_grupo'], ed_status,
                             ed_med, ed_tgo, dados['estado_civil_pais_ou_proprio'], dados['sacramentos_ja_feitos'],
                             ed_prof_m, ed_tel_m, ed_prof_p, ed_tel_p, dados.get('est_civil_pais', 'N/A'), dados.get('sac_pais', 'N/A'),
                             dados.get('participa_grupo', 'NÃO'), dados.get('qual_grupo', 'N/A'), dados.get('tem_irmaos', 'NÃO'), 
-                            dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), dados.get('local_encontro', 'N/A')
+                            dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), dados.get('local_encontro', 'N/A'),
+                            dados.get('obs_pastoral_familia', '') # 30ª Coluna preservada
                         ]
                         if atualizar_catequizando(dados['id_catequizando'], lista_up):
-                            st.success("✅ Cadastro atualizado com sucesso!"); time.sleep(1); st.rerun()
+                            st.success("✅ Cadastro e Status atualizados com sucesso!"); time.sleep(1); st.rerun()
 
             with tab_doc:
                 st.subheader("📄 Documentação Oficial")
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if st.button("📑 Gerar Ficha de Inscrição PDF", key="btn_pdf_perfil_final", use_container_width=True):
-                        with st.spinner("Gerando documento..."):
-                            st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
+                if st.button("📑 Gerar Ficha de Inscrição PDF", key="btn_pdf_perfil_v4", use_container_width=True):
+                    with st.spinner("Gerando documento..."):
+                        st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
                 
                 if "pdf_catequizando" in st.session_state:
-                    with col_btn2:
-                        st.download_button(
-                            label="📥 BAIXAR FICHA PDF", 
-                            data=st.session_state.pdf_catequizando, 
-                            file_name=f"Ficha_{nome_sel.replace(' ', '_')}.pdf", 
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
+                    st.download_button(
+                        label="📥 BAIXAR FICHA PDF", 
+                        data=st.session_state.pdf_catequizando, 
+                        file_name=f"Ficha_{nome_sel.replace(' ', '_')}.pdf", 
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
 # --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) ---
 elif menu == "🏫 Gestão de Turmas":
