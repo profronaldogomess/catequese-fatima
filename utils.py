@@ -698,227 +698,133 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_responsavel_escolhido):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL) - VERSÃO ANALÍTICA
+# 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL)
 # ==============================================================================
 
 def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
     """
-    Gera o Relatório Diocesano Detalhado com listas nominais e estatísticas por turma.
-    Substitui o parecer de IA por tabelas técnicas de acompanhamento.
+    Versão Analítica Completa: Itinerários, Equipe, Censo de Cobertura 
+    e Lista Nominal de Sacramentos do Ano Vigente.
     """
+    from database import ler_aba 
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO E PASTORAL DIOCESANO")
 
-    # Definição de Etapas para Filtro
-    etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
-    
-    # --- SEÇÃO 1: CATEQUESE INFANTIL / JUVENIL ---
-    t_infantil = df_turmas[df_turmas['etapa'].str.upper().str.contains('|'.join(etapas_infantis))] if not df_turmas.empty else pd.DataFrame()
-    
-    pdf.set_fill_color(65, 123, 153) # Azul
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 11)
-    pdf.cell(190, 9, limpar_texto(f"1. ITINERÁRIOS DE CATEQUESE INFANTIL / JUVENIL (Total: {len(t_infantil)} turmas)"), ln=True, fill=True, align='C')
-    
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_fill_color(245, 245, 245) # Cinza claro
-    
-    # Cabeçalho da Tabela Infantil
-    pdf.cell(55, 7, "Nome da Turma", border=1, fill=True)
-    pdf.cell(65, 7, "Catequista Responsável", border=1, fill=True)
-    pdf.cell(25, 7, "Batizados", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Eucaristia", border=1, fill=True, align='C')
-    pdf.cell(20, 7, "Total Cat.", border=1, fill=True, align='C')
-    pdf.ln()
+    AZUL_P = (65, 123, 153)
+    LARANJA_P = (224, 61, 17)
+    CINZA_F = (245, 245, 245)
+    ANO_ATUAL = 2026 
 
+    # --- 1. ITINERÁRIOS (INFANTIL E ADULTO) ---
+    etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
+    t_infantil = df_turmas[df_turmas['etapa'].str.upper().str.contains('|'.join(etapas_infantis))] if not df_turmas.empty else pd.DataFrame()
+    t_adultos = df_turmas[~df_turmas['etapa'].str.upper().str.contains('|'.join(etapas_infantis))] if not df_turmas.empty else pd.DataFrame()
+
+    # Tabela Infantil
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto(f"1. ITINERÁRIOS INFANTIL / JUVENIL ({len(t_infantil)} turmas)"), ln=True, fill=True, align='C')
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+    pdf.cell(60, 7, "Nome da Turma", border=1, fill=True); pdf.cell(65, 7, "Catequista Responsável", border=1, fill=True)
+    pdf.cell(22, 7, "Batizados", border=1, fill=True, align='C'); pdf.cell(22, 7, "Eucaristia", border=1, fill=True, align='C'); pdf.cell(21, 7, "Total", border=1, fill=True, align='C'); pdf.ln()
     pdf.set_font("helvetica", "", 8)
     for _, t in t_infantil.iterrows():
-        # Cálculo em tempo real por turma
         alunos = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
         bat = len(alunos[alunos['batizado_sn'] == 'SIM'])
         euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-        
-        pdf.cell(55, 7, limpar_texto(t['nome_turma']), border=1)
-        pdf.cell(65, 7, limpar_texto(t['catequista_responsavel']), border=1)
-        pdf.cell(25, 7, str(bat), border=1, align='C')
-        pdf.cell(25, 7, str(euc), border=1, align='C')
-        pdf.cell(20, 7, str(len(alunos)), border=1, align='C')
-        pdf.ln()
+        pdf.cell(60, 7, limpar_texto(t['nome_turma']), border=1); pdf.cell(65, 7, limpar_texto(t['catequista_responsavel']), border=1)
+        pdf.cell(22, 7, str(bat), border=1, align='C'); pdf.cell(22, 7, str(euc), border=1, align='C'); pdf.cell(21, 7, str(len(alunos)), border=1, align='C'); pdf.ln()
 
-    pdf.ln(10)
-
-    # --- SEÇÃO 2: CATEQUESE DE JOVENS E ADULTOS ---
-    t_adultos = df_turmas[~df_turmas['etapa'].str.upper().str.contains('|'.join(etapas_infantis))] if not df_turmas.empty else pd.DataFrame()
-    
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 11)
-    pdf.cell(190, 9, limpar_texto(f"2. ITINERÁRIOS DE JOVENS E ADULTOS (Total: {len(t_adultos)} turmas)"), ln=True, fill=True, align='C')
-    
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_fill_color(245, 245, 245)
-    
-    # Cabeçalho da Tabela Adultos
-    pdf.cell(55, 7, "Nome da Turma", border=1, fill=True)
-    pdf.cell(65, 7, "Catequista Responsável", border=1, fill=True)
-    pdf.cell(25, 7, "Batizados", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Eucaristia", border=1, fill=True, align='C')
-    pdf.cell(20, 7, "Total Cat.", border=1, fill=True, align='C')
-    pdf.ln()
-
+    # Tabela Adultos
+    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto(f"2. ITINERÁRIOS DE JOVENS E ADULTOS ({len(t_adultos)} turmas)"), ln=True, fill=True, align='C')
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+    pdf.cell(60, 7, "Nome da Turma", border=1, fill=True); pdf.cell(65, 7, "Catequista Responsável", border=1, fill=True)
+    pdf.cell(22, 7, "Batizados", border=1, fill=True, align='C'); pdf.cell(22, 7, "Eucaristia", border=1, fill=True, align='C'); pdf.cell(21, 7, "Total", border=1, fill=True, align='C'); pdf.ln()
     pdf.set_font("helvetica", "", 8)
     for _, t in t_adultos.iterrows():
         alunos = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
         bat = len(alunos[alunos['batizado_sn'] == 'SIM'])
         euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-        
-        pdf.cell(55, 7, limpar_texto(t['nome_turma']), border=1)
-        pdf.cell(65, 7, limpar_texto(t['catequista_responsavel']), border=1)
-        pdf.cell(25, 7, str(bat), border=1, align='C')
-        pdf.cell(25, 7, str(euc), border=1, align='C')
-        pdf.cell(20, 7, str(len(alunos)), border=1, align='C')
-        pdf.ln()
+        pdf.cell(60, 7, limpar_texto(t['nome_turma']), border=1); pdf.cell(65, 7, limpar_texto(t['catequista_responsavel']), border=1)
+        pdf.cell(22, 7, str(bat), border=1, align='C'); pdf.cell(22, 7, str(euc), border=1, align='C'); pdf.cell(21, 7, str(len(alunos)), border=1, align='C'); pdf.ln()
 
-    pdf.ln(10)
-
-    # --- SEÇÃO 3: EQUIPE CATEQUÉTICA E QUALIFICAÇÃO ---
-    pdf.set_fill_color(224, 61, 17) # Laranja
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 11)
-    pdf.cell(190, 9, limpar_texto(f"3. EQUIPE CATEQUÉTICA (Total: {len(df_usuarios)} membros)"), ln=True, fill=True, align='C')
+    # --- 2. CENSO DE COBERTURA SACRAMENTAL ---
+    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("3. CENSO DE COBERTURA SACRAMENTAL (MATRICULADOS)"), ln=True, fill=True, align='C')
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 9); pdf.ln(2)
     
-    # Cálculos de Equipe
-    cat_infantil, cat_adulto, aptos = 0, 0, 0
-    for _, u in df_usuarios.iterrows():
-        vinculo = str(u.get('turma_vinculada', '')).upper()
-        if any(etapa in vinculo for etapa in etapas_infantis): cat_infantil += 1
-        else: cat_adulto += 1
-        
-        status, _ = verificar_status_ministerial(
-            u.get('data_inicio_catequese', ''), u.get('data_batismo', ''),
-            u.get('data_eucaristia', ''), u.get('data_crisma', ''), u.get('data_ministerio', '')
-        )
-        if status in ["APTO", "MINISTRO"]: aptos += 1
-
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "B", 9)
-    pdf.ln(2)
-    pdf.cell(63, 8, limpar_texto(f"Atuantes no Infantil: {cat_infantil}"), border=1, align='C')
-    pdf.cell(63, 8, limpar_texto(f"Atuantes no Adulto: {cat_adulto}"), border=1, align='C')
-    pdf.cell(64, 8, limpar_texto(f"Aptos para o Ministério: {aptos}"), border=1, align='C', fill=True)
-    pdf.ln(10)
-
-    # Lista Nominal de Catequistas
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(0, 7, "Lista Nominal da Equipe:", ln=True)
-    pdf.set_font("helvetica", "", 8)
+    df_cat['idade_temp'] = df_cat['data_nascimento'].apply(calcular_idade)
+    df_k = df_cat[df_cat['idade_temp'] < 18]; df_a = df_cat[df_cat['idade_temp'] >= 18]
     
-    nomes_equipe = df_usuarios['nome'].tolist()
-    for i, nome in enumerate(nomes_equipe):
+    for label, df_grupo in [("Público Infantil/Juvenil", df_k), ("Público Jovens/Adultos", df_a)]:
+        if not df_grupo.empty:
+            total = len(df_grupo); bat = len(df_grupo[df_grupo['batizado_sn'] == 'SIM'])
+            perc = (bat/total)*100
+            pdf.cell(95, 10, limpar_texto(f"{label}: {bat} / {total}"), border=1, align='C')
+            pdf.cell(95, 10, limpar_texto(f"Cobertura: {perc:.1f}% Batizados"), border=1, align='C', ln=True)
+
+    # --- 3. FRUTOS DA EVANGELIZAÇÃO 2026 (LISTA NOMINAL) ---
+    df_rec = ler_aba("sacramentos_recebidos")
+    if not df_rec.empty:
+        df_rec['data_dt'] = pd.to_datetime(df_rec['data'], errors='coerce')
+        df_ano = df_rec[df_rec['data_dt'].dt.year == ANO_ATUAL].sort_values(by='data_dt')
+        
+        pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+        pdf.cell(190, 8, limpar_texto(f"4. FRUTOS DA EVANGELIZAÇÃO {ANO_ATUAL} (LISTA NOMINAL)"), ln=True, fill=True, align='C')
+        
+        if not df_ano.empty:
+            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+            pdf.cell(100, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(50, 7, "Sacramento", border=1, fill=True, align='C'); pdf.cell(40, 7, "Data", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 8)
+            for _, r in df_ano.iterrows():
+                pdf.cell(100, 6, limpar_texto(r['nome']), border=1)
+                pdf.cell(50, 6, limpar_texto(r['tipo']), border=1, align='C')
+                pdf.cell(40, 6, formatar_data_br(r['data']), border=1, align='C'); pdf.ln()
+        else:
+            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "I", 9)
+            pdf.cell(0, 10, "Nenhum sacramento registrado no sistema para o ano de 2026.", ln=True)
+
+    # --- 4. EQUIPE CATEQUÉTICA ---
+    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto(f"5. EQUIPE CATEQUÉTICA (Total: {len(df_usuarios)} membros)"), ln=True, fill=True, align='C')
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 8); pdf.ln(2)
+    nomes = df_usuarios['nome'].tolist()
+    for i, nome in enumerate(nomes):
         pdf.cell(63, 6, limpar_texto(f" - {nome}"), border=0)
         if (i + 1) % 3 == 0: pdf.ln()
     
-    if len(nomes_equipe) % 3 != 0: pdf.ln()
-
-    # Qualificação Sacramental da Equipe
-    pdf.ln(5)
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(0, 7, "Qualificação Sacramental da Equipe:", ln=True)
-    
-    pdf.set_fill_color(245, 245, 245)
-    pdf.cell(70, 7, "Sacramento", border=1, fill=True)
-    pdf.cell(60, 7, "Quantidade", border=1, fill=True, align='C')
-    pdf.cell(60, 7, "Percentual", border=1, fill=True, align='C')
-    pdf.ln()
-    
-    total_e = len(df_usuarios) if len(df_usuarios) > 0 else 1
-    stats = [
-        ("Batismo", df_usuarios['data_batismo'].apply(lambda x: str(x).strip() != "" and str(x) != "None").sum()),
-        ("Eucaristia", df_usuarios['data_eucaristia'].apply(lambda x: str(x).strip() != "" and str(x) != "None").sum()),
-        ("Crisma", df_usuarios['data_crisma'].apply(lambda x: str(x).strip() != "" and str(x) != "None").sum())
-    ]
-
-    pdf.set_font("helvetica", "", 9)
-    for sac, qtd in stats:
-        perc = (qtd / total_e) * 100
-        pdf.cell(70, 7, f" {sac}", border=1)
-        pdf.cell(60, 7, str(qtd), border=1, align='C')
-        pdf.cell(60, 7, f"{perc:.1f}%", border=1, align='C')
-        pdf.ln()
-
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_pastoral_v3(turmas_detalhadas, totais_gerais, analise_ia):
-    # (Mantém a função original conforme solicitado, sem alterações)
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL ANALÍTICO")
-    
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 10)
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto("DESEMPENHO POR TURMA E ETAPA"), ln=True, fill=True, align='C')
-    
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(70, 7, "Turma", border=1, fill=True)
-    pdf.cell(25, 7, "Batizados", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Eucaristia", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Crisma", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Freq.", border=1, fill=True, align='C')
-    pdf.cell(20, 7, "Total", border=1, fill=True, align='C')
-    pdf.ln()
-    
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(70, 7, "Turma", border=1, fill=True); pdf.cell(25, 7, "Batizados", border=1, fill=True, align='C'); pdf.cell(25, 7, "Eucaristia", border=1, fill=True, align='C'); pdf.cell(25, 7, "Crisma", border=1, fill=True, align='C'); pdf.cell(25, 7, "Freq.", border=1, fill=True, align='C'); pdf.cell(20, 7, "Total", border=1, fill=True, align='C'); pdf.ln()
     pdf.set_font("helvetica", "", 8)
     for t in turmas_detalhadas:
-        pdf.cell(70, 7, limpar_texto(t['nome']), border=1)
-        pdf.cell(25, 7, str(t['batizados']), border=1, align='C')
-        pdf.cell(25, 7, str(t['eucaristia']), border=1, align='C')
-        pdf.cell(25, 7, str(t['crisma']), border=1, align='C')
-        pdf.cell(25, 7, f"{t['frequencia']}%", border=1, align='C')
-        pdf.cell(20, 7, str(t['total']), border=1, align='C')
-        pdf.ln()
-        
-    pdf.ln(5)
-    pdf.set_fill_color(224, 61, 17)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("ANÁLISE DE ENGAJAMENTO E EVASÃO"), ln=True, fill=True, align='C')
-    pdf.ln(2)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 10)
-    pdf.multi_cell(190, 6, limpar_texto(analise_ia))
-    
+        pdf.cell(70, 7, limpar_texto(t['nome']), border=1); pdf.cell(25, 7, str(t['batizados']), border=1, align='C'); pdf.cell(25, 7, str(t['eucaristia']), border=1, align='C'); pdf.cell(25, 7, str(t['crisma']), border=1, align='C'); pdf.cell(25, 7, f"{t['frequencia']}%", border=1, align='C'); pdf.cell(20, 7, str(t['total']), border=1, align='C'); pdf.ln()
+    pdf.ln(5); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("ANÁLISE DE ENGAJAMENTO"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedimentos_lista, analise_ia):
-    # (Mantém a função original conforme solicitado, sem alterações)
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "AUDITORIA SACRAMENTAL E CENSO DE IVC")
-    
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 10)
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto("1. QUADRO GERAL DE SACRAMENTALIZAÇÃO"), ln=True, fill=True, align='C')
-    
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(50, 7, "Sacramento", border=1, fill=True)
-    pdf.cell(70, 7, "Infantil / Juvenil", border=1, fill=True, align='C')
-    pdf.cell(70, 7, "Jovens / Adultos", border=1, fill=True, align='C')
-    pdf.ln()
-    
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(230, 230, 230)
+    pdf.cell(50, 7, "Sacramento", border=1, fill=True); pdf.cell(70, 7, "Infantil / Juvenil", border=1, fill=True, align='C'); pdf.cell(70, 7, "Jovens / Adultos", border=1, fill=True, align='C'); pdf.ln()
     pdf.set_font("helvetica", "", 9)
-    for n, k, a in [("BATISMO", stats_gerais['bat_k'], stats_gerais['bat_a']), 
-                    ("EUCARISTIA", stats_gerais['euca_k'], stats_gerais['euca_a']), 
-                    ("CRISMA", "N/A", stats_gerais['crisma_a'])]:
-        pdf.cell(50, 7, f" {n}", border=1)
-        pdf.cell(70, 7, str(k), border=1, align='C')
+    for n, k, a in [("BATISMO", stats_gerais['bat_k'], stats_gerais['bat_a']), ("EUCARISTIA", stats_gerais['euca_k'], stats_gerais['euca_a']), ("CRISMA", "N/A", stats_gerais['crisma_a'])]:
+        pdf.cell(50, 7, f" {n}", border=1); pdf.cell(70, 7, str(k), border=1, align='C'); pdf.cell(70, 7, str(a), border=1, align='C'); pdf.ln()
+    pdf.ln(5); pdf.set_fill_color(224, 61, 17); pdf.set_text_color(255, 255, 255); pdf.cell(190, 8, limpar_texto("2. PARECER DO AUDITOR"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
+    return finalizar_pdf(pdf)
 
 # ==============================================================================
 # 9. UTILITÁRIOS PASTORAIS E CENSO (ANIVERSARIANTES E STATUS)
