@@ -120,3 +120,25 @@ def gerar_mensagem_reacolhida_ia(nome_catequizando, nome_turma):
         return response.text
     except:
         return f"Olá! Sentimos muito a sua falta em nosso último encontro da catequese. A turma {nome_turma} não é a mesma sem você! Esperamos te ver no próximo encontro para continuarmos nossa caminhada de fé. Deus abençoe!"
+
+def gerar_mensagem_cobranca_doc_ia(nome, docs, turma, is_adulto):
+    """Gera mensagem diplomática para regularização de documentos."""
+    try:
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        destinatario = "você" if is_adulto else "seu(sua) filho(a)"
+        prompt = f"""
+        Você é o Secretário da Catequese da Paróquia Nossa Senhora de Fátima.
+        Escreva uma mensagem curta e gentil para {nome}, da turma {turma}, 
+        solicitando a entrega dos seguintes documentos pendentes: {docs}.
+        
+        REGRAS:
+        1. Explique que os documentos são essenciais para completar o registro da caminhada.
+        2. Se for adulto, fale diretamente com ele. Se for criança, fale com os pais.
+        3. Use tom de acolhida, não de cobrança fria.
+        4. NÃO use asteriscos (**) para negrito.
+        5. Termine com 'Deus abençoe'.
+        """
+        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
+        return response.text
+    except:
+        return f"Paz e Bem! Notamos que ainda faltam alguns documentos ({docs}) para completar a inscrição de {nome} na turma {turma}. Poderia nos entregar no próximo encontro? Deus abençoe!"
