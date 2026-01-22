@@ -993,31 +993,103 @@ elif menu == "🏫 Gestão de Turmas":
 
     with t2:
         st.subheader("➕ Cadastrar Nova Turma")
-        with st.form("form_criar_t_v9"):
-            n_t = st.text_input("Nome da Turma").upper()
-            e_t = st.selectbox("Etapa Base", etapas_lista)
-            ano = st.number_input("Ano Letivo", value=2026)
+        with st.form("form_criar_t_v12"):
+            c1, c2 = st.columns(2)
+            n_t = c1.text_input("Nome da Turma (Ex: PRÉ ETAPA 2026)").upper()
+            e_t = c1.selectbox("Etapa Base", etapas_lista)
+            ano = c2.number_input("Ano Letivo", value=2026)
             n_dias = st.multiselect("Dias de Encontro", dias_opcoes)
-            cats_selecionados = st.multiselect("Catequistas", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [])
+            
+            st.markdown("---")
+            c3, c4 = st.columns(2)
+            turno_t = c3.selectbox("Turno do Encontro", ["MANHÃ", "TARDE", "NOITE"])
+            local_t = c4.text_input("Local/Sala do Encontro", value="SALA").upper()
+            
+            cats_selecionados = st.multiselect("Catequistas Responsáveis", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [])
             
             if st.form_submit_button("🚀 SALVAR NOVA TURMA"):
-                if n_t and cats_selecionados:
+                if n_t and cats_selecionados and n_dias:
                     try:
                         planilha = conectar_google_sheets()
-                        nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", "MANHÃ", "SALA"]
-                        planilha.worksheet("turmas").append_row(nova_t)
-                        
-                        aba_u = planilha.worksheet("usuarios")
-                        for c_nome in cats_selecionados:
-                            celula = aba_u.find(c_nome, in_column=1)
-                            if celula:
-                                v_atual = aba_u.cell(celula.row, 5).value or ""
-                                v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                if n_t not in v_list:
-                                    v_list.append(n_t)
-                                    aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                        st.success("✅ Turma criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Erro: {e}")
+                        if planilha:
+                            # 1. Grava na aba 'turmas' (10 colunas: ID, Nome, Etapa, Ano, Catequistas, Dias, Euca, Crisma, Turno, Local)
+                            nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
+                            planilha.worksheet("turmas").append_row(nova_t)
+                            
+                            # 2. Sincroniza Perfis dos Catequistas (Coluna E / 5)
+                            aba_u = planilha.worksheet("usuarios")
+                            for c_nome in cats_selecionados:
+                                celula = aba_u.find(c_nome, in_column=1)
+                                if celula:
+                                    v_atual = aba_u.cell(celula.row, 5).value or ""
+                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                    if n_t not in v_list:
+                                        v_list.append(n_t)
+                                        aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                            
+                            st.success(f"✅ Turma '{n_t}' salva e vinculada com sucesso!")
+                            st.cache_data.clear()
+                            time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Erro ao salvar: {e}")
+                else: st.warning("⚠️ Preencha Nome, Dias e selecione os Catequistas.")
+
+    with t3:
+        st.subheader("✏️ Detalhes e Edição da Turma")
+        if not df_turmas.empty:
+            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_v12")
+            if sel_t:
+                d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
+                nome_turma_original = str(d['nome_turma'])
+                
+                c1, c2 = st.columns(2)
+                en = c1.text_input("Nome da Turma", value=d['nome_turma']).upper()
+                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0)
+                ea = c2.number_input("Ano Letivo", value=int(d['ano']))
+                
+                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
+                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
+                
+                st.markdown("---")
+                c3, c4 = st.columns(2)
+                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
+                turno_atual = str(d.get('turno', 'MANHÃ')).upper()
+                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0)
+                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA')).upper()
+                
+                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''))
+                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''))
+                
+                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
+                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
+                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats])
+                
+                if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR TUDO"):
+                    with st.spinner("Processando atualizações..."):
+                        # 1. Atualiza a aba 'turmas'
+                        lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
+                        if atualizar_turma(d['id_turma'], lista_up):
+                            # 2. Sincroniza Perfis (Adiciona para novos, remove para quem saiu)
+                            planilha = conectar_google_sheets()
+                            aba_u = planilha.worksheet("usuarios")
+                            for _, cat_row in equipe_tecnica.iterrows():
+                                c_nome = cat_row['nome']
+                                celula = aba_u.find(c_nome, in_column=1)
+                                if celula:
+                                    v_atual = aba_u.cell(celula.row, 5).value or ""
+                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                    mudou = False
+                                    if c_nome in ed_cats:
+                                        if en not in v_list: v_list.append(en); mudou = True
+                                        if nome_turma_original in v_list and en != nome_turma_original:
+                                            v_list.remove(nome_turma_original); mudou = True
+                                    else:
+                                        if en in v_list: v_list.remove(en); mudou = True
+                                        if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
+                                    if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                            
+                            st.success("✅ Turma e perfis sincronizados com sucesso!")
+                            st.cache_data.clear()
+                            time.sleep(1); st.rerun()
 
     with t3:
         st.subheader("✏️ Detalhes e Edição da Turma")
