@@ -993,74 +993,74 @@ elif menu == "👤 Perfil Individual":
             else:
                 st.error("❌ Erro ao localizar dados do catequizando. Tente atualizar a página.")
 
-        # --- NOVO BLOCO: DASHBOARD DE PENDÊNCIAS DE DOCUMENTOS ---
-                st.divider()
-                st.subheader("🚩 Auditoria de Documentação")
+# --- NOVO BLOCO: DASHBOARD DE PENDÊNCIAS DE DOCUMENTOS ---
+        st.divider()
+        st.subheader("🚩 Auditoria de Documentação")
+        
+        tab_lista_p, tab_auditoria_geral = st.tabs(["📋 Pendências da Turma", "📊 Resumo por Etapa"])
+
+        with tab_lista_p:
+            # Filtra apenas quem tem algo escrito na Coluna K (doc_em_falta)
+            # E que não seja "NADA", "N/A" ou vazio.
+            df_pendentes = df_f[
+                (df_f['doc_em_falta'].str.len() > 2) & 
+                (~df_f['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO']))
+            ]
+
+            if df_pendentes.empty:
+                st.success("🎉 Todos os catequizandos desta seleção estão com a documentação em dia!")
+            else:
+                st.warning(f"Existem {len(df_pendentes)} inscrições com pendências de documentos.")
                 
-                tab_lista_p, tab_auditoria_geral = st.tabs(["📋 Pendências da Turma", "📊 Resumo por Etapa"])
-
-                with tab_lista_p:
-                    # Filtra apenas quem tem algo escrito na Coluna K (doc_em_falta)
-                    # E que não seja "NADA", "N/A" ou vazio.
-                    df_pendentes = df_f[
-                        (df_f['doc_em_falta'].str.len() > 2) & 
-                        (~df_f['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO']))
-                    ]
-
-                    if df_pendentes.empty:
-                        st.success("🎉 Todos os catequizandos desta seleção estão com a documentação em dia!")
-                    else:
-                        st.warning(f"Existem {len(df_pendentes)} inscrições com pendências de documentos.")
+                for _, p in df_pendentes.iterrows():
+                    with st.container():
+                        # Identifica se é adulto para a IA
+                        idade = calcular_idade(p['data_nascimento'])
+                        is_adulto = idade >= 18
                         
-                        for _, p in df_pendentes.iterrows():
-                            with st.container():
-                                # Identifica se é adulto para a IA
-                                idade = calcular_idade(p['data_nascimento'])
-                                is_adulto = idade >= 18
-                                
-                                st.markdown(f"""
-                                    <div style='background-color:#fff5f5; padding:10px; border-radius:8px; border-left:5px solid #e03d11; margin-bottom:5px;'>
-                                        <b style='color:#e03d11;'>{p['nome_completo']}</b><br>
-                                        <span style='font-size:12px;'>📄 Faltando: {p['doc_em_falta']}</span>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                                
-                                c_p1, c_p2 = st.columns([3, 1])
-                                
-                                # Lógica de Contato (Adulto vs Pais)
-                                if is_adulto:
-                                    link_zap = p['contato_principal']
-                                    label_zap = "📲 Zap (Próprio)"
-                                else:
-                                    # Tenta Mãe, se não tiver tenta Pai
-                                    link_zap = p['tel_mae'] if str(p['tel_mae']) != "N/A" else p['tel_pai']
-                                    label_zap = "📲 Zap (Responsável)"
+                        st.markdown(f"""
+                            <div style='background-color:#fff5f5; padding:10px; border-radius:8px; border-left:5px solid #e03d11; margin-bottom:5px;'>
+                                <b style='color:#e03d11;'>{p['nome_completo']}</b><br>
+                                <span style='font-size:12px;'>📄 Faltando: {p['doc_em_falta']}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        c_p1, c_p2 = st.columns([3, 1])
+                        
+                        # Lógica de Contato (Adulto vs Pais)
+                        if is_adulto:
+                            link_zap = p['contato_principal']
+                            label_zap = "📲 Zap (Próprio)"
+                        else:
+                            # Tenta Mãe, se não tiver tenta Pai
+                            link_zap = p['tel_mae'] if str(p['tel_mae']) != "N/A" else p['tel_pai']
+                            label_zap = "📲 Zap (Responsável)"
 
-                                if c_p1.button(f"✨ Gerar Mensagem de Cobrança", key=f"msg_doc_{p['id_catequizando']}"):
-                                    msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], is_adulto)
-                                    st.info(f"**Copie e envie:**\n\n{msg_doc}")
-                                
-                                # Botão direto para o WhatsApp se houver número
-                                from utils import limpar_whatsapp_v5 # Usando a função que já temos
-                                zap_limpo = limpar_whatsapp_v5(link_zap)
-                                if zap_limpo:
-                                    c_p2.markdown(f'<a href="https://wa.me/{zap_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">{label_zap}</div></a>', unsafe_allow_html=True)
-                                else:
-                                    c_p2.caption("Sem Tel.")
-                                st.markdown("<br>", unsafe_allow_html=True)
+                        if c_p1.button(f"✨ Gerar Mensagem de Cobrança", key=f"msg_doc_{p['id_catequizando']}"):
+                            msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], is_adulto)
+                            st.info(f"**Copie e envie:**\n\n{msg_doc}")
+                        
+                        # Botão direto para o WhatsApp se houver número
+                        from utils import limpar_whatsapp_v5 # Usando a função que já temos
+                        zap_limpo = limpar_whatsapp_v5(link_zap)
+                        if zap_limpo:
+                            c_p2.markdown(f'<a href="https://wa.me/{zap_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">{label_zap}</div></a>', unsafe_allow_html=True)
+                        else:
+                            c_p2.caption("Sem Tel.")
+                        st.markdown("<br>", unsafe_allow_html=True)
 
-                with tab_auditoria_geral:
-                    st.write("📊 **Distribuição de Pendências por Turma:**")
-                    # Gráfico de barras mostrando quais turmas têm mais documentos faltando
-                    df_all_pendentes = df_cat[
-                        (df_cat['doc_em_falta'].str.len() > 2) & 
-                        (~df_cat['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO']))
-                    ]
-                    if not df_all_pendentes.empty:
-                        chart_data = df_all_pendentes['etapa'].value_counts()
-                        st.bar_chart(chart_data)
-                    else:
-                        st.write("Nenhuma pendência registrada no sistema.")
+        with tab_auditoria_geral:
+            st.write("📊 **Distribuição de Pendências por Turma:**")
+            # Gráfico de barras mostrando quais turmas têm mais documentos faltando
+            df_all_pendentes = df_cat[
+                (df_cat['doc_em_falta'].str.len() > 2) & 
+                (~df_cat['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO']))
+            ]
+            if not df_all_pendentes.empty:
+                chart_data = df_all_pendentes['etapa'].value_counts()
+                st.bar_chart(chart_data)
+            else:
+                st.write("Nenhuma pendência registrada no sistema.")
                 
 
 # --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) ---
