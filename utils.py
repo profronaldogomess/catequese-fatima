@@ -844,20 +844,32 @@ def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_min
     except: return "EM_CAMINHADA", 0
 
 def obter_aniversariantes_hoje(df_cat, df_usuarios):
+    """Retorna lista estruturada: 'DIA | PAPEL | NOME' para os aniversariantes de hoje."""
     hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
     niver = []
+    
+    # Busca nos Catequizandos
     if not df_cat.empty:
         for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
             d = formatar_data_br(r['data_nascimento'])
             if d != "N/A":
                 dt = datetime.strptime(d, "%d/%m/%Y")
-                if dt.day == hoje.day and dt.month == hoje.month: niver.append(f"😇 Catequizando: **{r['nome_completo']}**")
+                if dt.day == hoje.day and dt.month == hoje.month:
+                    # Formato compatível com o motor de cards: DIA | PAPEL | NOME
+                    niver.append(f"{hoje.day} | CATEQUIZANDO | {r['nome_completo']}")
+                    
+    # Busca nos Catequistas (Equipe)
     if not df_usuarios.empty:
-        for _, u in df_usuarios.drop_duplicates(subset=['nome']).iterrows():
+        # Filtra apenas quem não é ADMIN para a contagem pastoral
+        df_equipe = df_usuarios[df_usuarios['papel'] != 'ADMIN']
+        for _, u in df_equipe.drop_duplicates(subset=['nome']).iterrows():
             d = formatar_data_br(u.get('data_nascimento', ''))
             if d != "N/A":
                 dt = datetime.strptime(d, "%d/%m/%Y")
-                if dt.day == hoje.day and dt.month == hoje.month: niver.append(f"🛡️ Catequista: **{u['nome']}**")
+                if dt.day == hoje.day and dt.month == hoje.month:
+                    # Formato compatível com o motor de cards: DIA | PAPEL | NOME
+                    niver.append(f"{hoje.day} | CATEQUISTA | {u['nome']}")
+                    
     return niver
 
 def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
