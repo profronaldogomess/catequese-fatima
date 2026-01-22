@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 5.2.0 - REFINAMENTO FINAL E HOMOLOGAÇÃO (INTEGRIDADE TOTAL)
+# VERSÃO: 5.4.0 - REFINAMENTO FINAL E HOMOLOGAÇÃO (INTEGRIDADE TOTAL)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # LEI INVIOLÁVEL: PROIBIDO REDUZIR, RESUMIR OU OMITIR FUNÇÕES.
 # ==============================================================================
@@ -98,6 +98,18 @@ def marcar_opcao(pdf, texto, condicao, x, y):
     pdf.set_font("helvetica", "", 9)
     mark = "X" if condicao else " "
     pdf.cell(0, 5, limpar_texto(f"{texto} ( {mark} )"), ln=0)
+
+def formatar_nome_curto(nome_bruto):
+    """Mantém apenas os dois primeiros nomes e remove partículas (de, da, dos)."""
+    if not nome_bruto or str(nome_bruto).strip() in ["", "N/A"]: return ""
+    partes_cats = str(nome_bruto).split(',')
+    nomes_final = []
+    particulas = ['de', 'da', 'do', 'das', 'dos']
+    for p_cat in partes_cats:
+        palavras = [p for p in p_cat.strip().split() if p.lower() not in particulas]
+        # Mantém os dois primeiros nomes significativos
+        nomes_final.append(" ".join(palavras[:2]).upper())
+    return "\n".join(nomes_final)
 
 # ==============================================================================
 # 2. INTERFACE DE MANUTENÇÃO (GATEKEEPER)
@@ -590,13 +602,13 @@ def gerar_termo_saida_pdf(dados_cat, dados_turma, nome_resp):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL)
+# 8. RELATÓRIOS EXECUTIVOS (DIOCESANO, PASTORAL E SACRAMENTAL) - INTEGRADO
 # ==============================================================================
 
 def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
     """
-    Versão Analítica Final: Itinerários, Censo de Cobertura, 
-    Frutos Nominais 2026, Qualificação da Equipe e CENSO DE EVASÃO.
+    Versão Analítica Final Integrada: Itinerários (Ativos), Censo de Cobertura, 
+    Censo de Evasão, Frutos Nominais 2026 e Equipe (Sem ADMIN).
     """
     from database import ler_aba 
     pdf = FPDF()
@@ -606,36 +618,72 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
     ANO_ATUAL = 2026 
 
+    # --- FUNÇÃO INTERNA: LIMPEZA DE NOMES (2 NOMES, SEM PARTÍCULAS) ---
+    def formatar_nome_curto_local(nome_bruto):
+        if not nome_bruto or str(nome_bruto).strip() in ["", "N/A"]: return ""
+        partes_cats = str(nome_bruto).split(',')
+        nomes_final = []
+        particulas = ['de', 'da', 'do', 'das', 'dos']
+        for p_cat in partes_cats:
+            palavras = [p for p in p_cat.strip().split() if p.lower() not in particulas]
+            nomes_final.append(" ".join(palavras[:2]).upper())
+        return "\n".join(nomes_final)
+
     # --- 1. SEPARAÇÃO DE TURMAS ---
     termos_infantis = ["PRÉ", "ETAPA", "PERSEVERANÇA"]
     def eh_infantil(row):
         nome = str(row['nome_turma']).upper()
         etapa = str(row['etapa']).upper()
-        return any(termo in nome or termo in etapa for termo in termos_infantis) and "ADULTO" not in nome
+        if "PRÉ" in nome or "PRÉ" in etapa: return True
+        if "ADULTO" in nome or "ADULTO" in etapa: return False
+        return any(termo in nome or termo in etapa for termo in termos_infantis)
 
     if not df_turmas.empty:
         mask_infantil = df_turmas.apply(eh_infantil, axis=1)
         t_infantil = df_turmas[mask_infantil]; t_adultos = df_turmas[~mask_infantil]
     else: t_infantil = t_adultos = pd.DataFrame()
 
-    for titulo, df_t in [("1. ITINERÁRIOS INFANTIL / JUVENIL", t_infantil), ("2. ITINERÁRIOS DE JOVENS E ADULTOS", t_adultos)]:
+    # --- TABELAS DE ITINERÁRIOS (ATIVOS) ---
+    def desenhar_tabela_itinerarios_local(titulo, df_alvo):
         pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-        pdf.cell(190, 8, limpar_texto(f"{titulo} ({len(df_t)} turmas)"), ln=True, fill=True, align='C')
+        pdf.cell(190, 8, limpar_texto(f"{titulo} ({len(df_alvo)} turmas)"), ln=True, fill=True, align='C')
+        
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-        pdf.cell(60, 7, "Nome da Turma", border=1, fill=True); pdf.cell(65, 7, "Catequista Responsável", border=1, fill=True)
-        pdf.cell(22, 7, "Batizados", border=1, fill=True, align='C'); pdf.cell(22, 7, "Eucaristia", border=1, fill=True, align='C'); pdf.cell(21, 7, "Total Ativos", border=1, fill=True, align='C'); pdf.ln()
+        pdf.cell(55, 7, "Nome da Turma", border=1, fill=True)
+        pdf.cell(70, 7, "Catequista Responsável", border=1, fill=True)
+        pdf.cell(22, 7, "Batizados", border=1, fill=True, align='C')
+        pdf.cell(22, 7, "Eucaristia", border=1, fill=True, align='C')
+        pdf.cell(21, 7, "Total Ativos", border=1, fill=True, align='C'); pdf.ln()
+
         pdf.set_font("helvetica", "", 8)
-        for _, t in df_t.iterrows():
-            # Conta apenas os ATIVOS para o censo de itinerário
+        for _, t in df_alvo.iterrows():
+            # Filtra apenas ATIVOS para o censo de itinerário
             alunos = df_cat[(df_cat['etapa'] == t['nome_turma']) & (df_cat['status'] == 'ATIVO')]
             bat = len(alunos[alunos['batizado_sn'] == 'SIM'])
             euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-            pdf.cell(60, 7, limpar_texto(t['nome_turma']), border=1); pdf.cell(65, 7, limpar_texto(t['catequista_responsavel']), border=1)
-            pdf.cell(22, 7, str(bat), border=1, align='C'); pdf.cell(22, 7, str(euc), border=1, align='C'); pdf.cell(21, 7, str(len(alunos)), border=1, align='C'); pdf.ln()
-        pdf.ln(5)
+            
+            nome_t = str(t['nome_turma'])
+            cats_limpos = formatar_nome_curto_local(t['catequista_responsavel'])
+            linhas_cat = cats_limpos.count('\n') + 1
+            linhas_turma = 1 if len(nome_t) < 30 else 2
+            h = max(linhas_cat, linhas_turma) * 5
+            if h < 7: h = 7
+
+            curr_x, curr_y = pdf.get_x(), pdf.get_y()
+            pdf.multi_cell(55, h/linhas_turma if linhas_turma > 1 else h, limpar_texto(nome_t), border=1, align='L')
+            pdf.set_xy(curr_x + 55, curr_y)
+            pdf.multi_cell(70, h/linhas_cat, limpar_texto(cats_limpos), border=1, align='L')
+            pdf.set_xy(curr_x + 125, curr_y)
+            pdf.cell(22, h, str(bat), border=1, align='C')
+            pdf.cell(22, h, str(euc), border=1, align='C')
+            pdf.cell(21, h, str(len(alunos)), border=1, align='C'); pdf.ln(h)
+
+    desenhar_tabela_itinerarios_local("1. ITINERÁRIOS INFANTIL / JUVENIL", t_infantil)
+    pdf.ln(5)
+    desenhar_tabela_itinerarios_local("2. ITINERÁRIOS DE JOVENS E ADULTOS", t_adultos)
 
     # --- 2. CENSO DE COBERTURA (ATIVOS) ---
-    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto("3. CENSO DE COBERTURA SACRAMENTAL (CATEQUIZANDOS ATIVOS)"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 9); pdf.ln(2)
     df_ativos = df_cat[df_cat['status'] == 'ATIVO']
@@ -661,18 +709,42 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
         pdf.cell(60, 7, str(qtd), border=1, align='C')
         pdf.cell(60, 7, f"{perc:.1f}%", border=1, align='C'); pdf.ln()
 
-    # --- 4. EQUIPE CATEQUÉTICA ---
-    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto(f"5. EQUIPE CATEQUÉTICA E QUALIFICAÇÃO (Total: {len(df_usuarios)} membros)"), ln=True, fill=True, align='C')
+    # --- 4. FRUTOS DA EVANGELIZAÇÃO 2026 (LISTA NOMINAL) ---
+    df_rec = ler_aba("sacramentos_recebidos")
+    if not df_rec.empty:
+        df_rec['data_dt'] = pd.to_datetime(df_rec['data'], errors='coerce')
+        df_ano = df_rec[df_rec['data_dt'].dt.year == ANO_ATUAL].sort_values(by='data_dt')
+        if not df_ano.empty:
+            pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+            pdf.cell(190, 8, limpar_texto(f"5. FRUTOS DA EVANGELIZAÇÃO {ANO_ATUAL} (LISTA NOMINAL)"), ln=True, fill=True, align='C')
+            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+            pdf.cell(100, 7, "Nome do Catequizando", border=1, fill=True); pdf.cell(50, 7, "Sacramento", border=1, fill=True, align='C'); pdf.cell(40, 7, "Data", border=1, fill=True, align='C'); pdf.ln()
+            pdf.set_font("helvetica", "", 8)
+            for _, r in df_ano.iterrows():
+                pdf.cell(100, 6, limpar_texto(r['nome']), border=1)
+                pdf.cell(50, 6, limpar_texto(r['tipo']), border=1, align='C')
+                pdf.cell(40, 6, formatar_data_br(r['data']), border=1, align='C'); pdf.ln()
+
+    # --- 5. EQUIPE CATEQUÉTICA (SEM ADMIN + COR LARANJA) ---
+    df_equipe_real = df_usuarios[df_usuarios['papel'].str.upper() != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
+    total_e = len(df_equipe_real) if not df_equipe_real.empty else 1
+    pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto(f"6. EQUIPE CATEQUÉTICA E QUALIFICAÇÃO (Total: {len(df_equipe_real)} membros)"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
     pdf.cell(100, 7, "Indicador de Fé (Equipe)", border=1, fill=True); pdf.cell(45, 7, "Quantidade", border=1, fill=True, align='C'); pdf.cell(45, 7, "Percentual", border=1, fill=True, align='C'); pdf.ln()
-    total_e = len(df_usuarios) if len(df_usuarios) > 0 else 1
-    bat_e = df_usuarios['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-    euc_e = df_usuarios['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-    cri_e = df_usuarios['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+    bat_e = df_equipe_real['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+    euc_e = df_equipe_real['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+    cri_e = df_equipe_real['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
     pdf.set_font("helvetica", "", 8)
     for desc, qtd in [("Batismo", bat_e), ("Eucaristia", euc_e), ("Crisma", cri_e)]:
         pdf.cell(100, 6, f" {desc}", border=1); pdf.cell(45, 6, str(qtd), border=1, align='C'); pdf.cell(45, 6, f"{(qtd/total_e)*100:.1f}%", border=1, align='C'); pdf.ln()
+    
+    # Lista Nominal da Equipe
+    pdf.ln(2); pdf.set_font("helvetica", "B", 8); pdf.cell(0, 5, "Lista Nominal da Equipe (Catequistas):", ln=True)
+    pdf.set_font("helvetica", "", 7); nomes_equipe = df_equipe_real['nome'].tolist()
+    for i, nome in enumerate(nomes_equipe):
+        pdf.cell(63, 5, limpar_texto(f" - {nome}"), border=0)
+        if (i + 1) % 3 == 0: pdf.ln()
     
     return finalizar_pdf(pdf)
 
@@ -725,10 +797,98 @@ def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedim
     pdf.set_font("helvetica", "", 9)
     for sac, k, a in [("BATISMO", stats_gerais.get('bat_k', 0), stats_gerais.get('bat_a', 0)), ("EUCARISTIA", stats_gerais.get('euca_k', 0), stats_gerais.get('euca_a', 0)), ("CRISMA", "N/A", stats_gerais.get('crisma_a', 0))]:
         pdf.cell(50, 7, f" {sac}", border=1); pdf.cell(70, 7, str(k), border=1, align='C'); pdf.cell(70, 7, str(a), border=1, align='C'); pdf.ln()
+    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("2. DIAGNÓSTICO DE IMPEDIMENTOS"), ln=True, fill=True, align='C')
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+    pdf.cell(70, 7, "Catequizando", border=1, fill=True); pdf.cell(50, 7, "Turma", border=1, fill=True); pdf.cell(70, 7, "Situação", border=1, fill=True); pdf.ln()
+    pdf.set_font("helvetica", "", 8)
+    if impedimentos_lista:
+        for imp in impedimentos_lista:
+            pdf.cell(70, 6, limpar_texto(imp.get('nome', 'N/A')), border=1); pdf.cell(50, 6, limpar_texto(imp.get('turma', 'N/A')), border=1); pdf.cell(70, 6, limpar_texto(imp.get('situacao', 'N/A')), border=1); pdf.ln()
+    else: pdf.cell(190, 7, "Nenhum impedimento registrado.", border=1, align='C', ln=True)
     pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("2. PARECER TÉCNICO DA AUDITORIA"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("3. PARECER TÉCNICO DA AUDITORIA"), ln=True, fill=True, align='C')
     pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     return finalizar_pdf(pdf)
+
+# ==============================================================================
+# 9. UTILITÁRIOS PASTORAIS E CENSO (ANIVERSARIANTES E STATUS)
+# ==============================================================================
+
+def sugerir_etapa(data_nascimento):
+    idade = calcular_idade(data_nascimento)
+    if idade <= 6: return "PRÉ"
+    elif idade <= 8: return "PRIMEIRA ETAPA"
+    elif idade <= 10: return "SEGUNDA ETAPA"
+    elif idade <= 13: return "TERCEIRA ETAPA"
+    return "ADULTOS"
+
+def eh_aniversariante_da_semana(data_nasc_str):
+    try:
+        d_str = formatar_data_br(data_nasc_str)
+        if d_str == "N/A": return False
+        nasc = datetime.strptime(d_str, "%d/%m/%Y").date()
+        hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+        nasc_este_ano = nasc.replace(year=hoje.year)
+        diff = (nasc_este_ano - hoje).days
+        return 0 <= diff <= 7
+    except: return False
+
+def converter_para_data(valor_str):
+    if not valor_str or str(valor_str).strip() in ["None", "", "N/A"]: return date.today()
+    try: return datetime.strptime(formatar_data_br(valor_str), "%d/%m/%Y").date()
+    except: return date.today()
+
+def verificar_status_ministerial(data_inicio, d_batismo, d_euca, d_crisma, d_ministerio):
+    if d_ministerio and str(d_ministerio).strip() not in ["", "N/A", "None"]: return "MINISTRO", 0 
+    try:
+        hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+        inicio = datetime.strptime(formatar_data_br(data_inicio), "%d/%m/%Y").date()
+        anos = hoje.year - inicio.year
+        tem_s = all([str(x).strip() not in ["", "N/A", "None"] for x in [d_batismo, d_euca, d_crisma]])
+        if anos >= 5 and tem_s: return "APTO", anos
+        return "EM_CAMINHADA", anos
+    except: return "EM_CAMINHADA", 0
+
+def obter_aniversariantes_hoje(df_cat, df_usuarios):
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    niver = []
+    if not df_cat.empty:
+        for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
+            d = formatar_data_br(r['data_nascimento'])
+            if d != "N/A":
+                dt = datetime.strptime(d, "%d/%m/%Y")
+                if dt.day == hoje.day and dt.month == hoje.month:
+                    niver.append(f"{hoje.day} | CATEQUIZANDO | {r['nome_completo']}")
+    if not df_usuarios.empty:
+        df_e = df_usuarios[df_usuarios['papel'] != 'ADMIN']
+        for _, u in df_e.drop_duplicates(subset=['nome']).iterrows():
+            d = formatar_data_br(u.get('data_nascimento', ''))
+            if d != "N/A":
+                dt = datetime.strptime(d, "%d/%m/%Y")
+                if dt.day == hoje.day and dt.month == hoje.month:
+                    niver.append(f"{hoje.day} | CATEQUISTA | {u['nome']}")
+    return niver
+
+def obter_aniversariantes_mes_unificado(df_cat, df_usuarios):
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    lista = []
+    if not df_cat.empty:
+        for _, r in df_cat.drop_duplicates(subset=['nome_completo']).iterrows():
+            d = formatar_data_br(r['data_nascimento'])
+            if d != "N/A":
+                dt = datetime.strptime(d, "%d/%m/%Y")
+                if dt.month == hoje.month: lista.append({'dia': dt.day, 'nome': r['nome_completo'], 'tipo': 'CATEQUIZANDO'})
+    if not df_usuarios.empty:
+        for _, u in df_usuarios.drop_duplicates(subset=['nome']).iterrows():
+            d = formatar_data_br(u.get('data_nascimento', ''))
+            if d != "N/A":
+                dt = datetime.strptime(d, "%d/%m/%Y")
+                if dt.month == hoje.month: lista.append({'dia': dt.day, 'nome': u['nome'], 'tipo': 'CATEQUISTA'})
+    return pd.DataFrame(lista).sort_values(by='dia') if lista else pd.DataFrame()
+
+def obter_aniversariantes_mes(df_cat):
+    return obter_aniversariantes_mes_unificado(df_cat, None)
 
 # ==============================================================================
 # 10. PROCESSAMENTO LOCAL E AUDITORIA INTEGRAL (DOSSIÊS)
