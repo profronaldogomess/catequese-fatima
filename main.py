@@ -993,82 +993,87 @@ elif menu == "👤 Perfil Individual":
             else:
                 st.error("❌ Erro ao localizar dados do catequizando. Tente atualizar a página.")
 
-# --- BLOCO: AUDITORIA DE DOCUMENTAÇÃO (VERSÃO CORRIGIDA E INTEGRAL) ---
+# --- BLOCO: AUDITORIA DE DOCUMENTAÇÃO POR TURMA (VERSÃO GESTÃO TOTAL) ---
         st.divider()
-        st.subheader("🚩 Auditoria de Documentação")
+        st.subheader("🚩 Auditoria de Documentação por Turma")
         
-        tab_lista_p, tab_auditoria_geral = st.tabs(["📋 Pendências da Turma", "📊 Resumo por Etapa"])
+        # 1. SELETOR DE TURMA PARA AUDITORIA
+        lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
+        turma_auditoria = st.selectbox("🔍 Selecione a Turma para Diagnóstico:", lista_turmas_auditoria, key="sel_auditoria_doc_turma")
 
-        with tab_lista_p:
-            # Filtro de pendências (Coluna K - doc_em_falta)
-            df_pendentes = df_f[
-                (df_f['doc_em_falta'].str.len() > 2) & 
-                (~df_f['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
+        if turma_auditoria:
+            # Filtra dados da turma selecionada
+            df_turma_focal = df_cat[df_cat['etapa'] == turma_auditoria]
+            
+            # Lógica de pendência (Coluna K)
+            df_pendentes_turma = df_turma_focal[
+                (df_turma_focal['doc_em_falta'].str.len() > 2) & 
+                (~df_turma_focal['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
             ]
 
-            if df_pendentes.empty:
-                st.success("🎉 Todos os catequizandos desta seleção estão com a documentação em dia!")
+            # 2. MÉTRICAS DA TURMA
+            c_met1, c_met2, c_met3 = st.columns(3)
+            total_t = len(df_turma_focal)
+            pendentes_t = len(df_pendentes_turma)
+            em_dia_t = total_t - pendentes_t
+            
+            c_met1.metric("Total na Turma", total_t)
+            c_met2.metric("Pendentes", pendentes_t, delta=f"{pendentes_t} faltam docs", delta_color="inverse")
+            c_met3.metric("Em Dia", em_dia_t)
+
+            st.markdown("---")
+
+            # 3. LISTA NOMINAL DE PENDÊNCIAS
+            if df_pendentes_turma.empty:
+                st.success(f"✅ **Excelente!** Todos os {total_t} catequizandos da turma **{turma_auditoria}** estão com a documentação completa.")
             else:
-                st.warning(f"Existem {len(df_pendentes)} inscrições com pendências de documentos.")
+                st.markdown(f"#### 📋 Lista de Pendências: {turma_auditoria}")
                 
-                for _, p in df_pendentes.iterrows():
+                for _, p in df_pendentes_turma.iterrows():
                     with st.container():
                         idade_p = calcular_idade(p['data_nascimento'])
                         is_adulto_p = idade_p >= 18
                         
+                        # Card Estilizado
                         st.markdown(f"""
-                            <div style='background-color:#fff5f5; padding:10px; border-radius:8px; border-left:5px solid #e03d11; margin-bottom:5px;'>
-                                <b style='color:#e03d11;'>{p['nome_completo']}</b><br>
-                                <span style='font-size:12px;'>📄 Faltando: {p['doc_em_falta']}</span>
+                            <div style='background-color:#fff5f5; padding:15px; border-radius:10px; border-left:8px solid #e03d11; margin-bottom:10px;'>
+                                <b style='color:#e03d11; font-size:16px;'>{p['nome_completo']}</b><br>
+                                <span style='font-size:13px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span>
                             </div>
                         """, unsafe_allow_html=True)
                         
-                        c_p1, c_p2, c_p3 = st.columns([2, 1, 1])
+                        col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
                         
-                        # 1. Botão de Mensagem IA
-                        if c_p1.button(f"✨ Gerar Cobrança", key=f"msg_doc_v7_{p['id_catequizando']}"):
+                        # AÇÃO 1: GERAR MENSAGEM IA
+                        if col_p1.button(f"✨ IA: Cobrar Documento", key=f"msg_aud_{p['id_catequizando']}"):
                             msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], is_adulto_p)
-                            st.info(f"**Sugestão:**\n\n{msg_doc}")
+                            st.info(f"**Mensagem para copiar:**\n\n{msg_doc}")
                         
-                        # 2. Botão Marcar como Entregue (Ação Direta no Banco)
-                        if c_p2.button("✅ Entregue", key=f"btn_ok_{p['id_catequizando']}", use_container_width=True):
+                        # AÇÃO 2: MARCAR COMO ENTREGUE (LIMPA COLUNA K)
+                        if col_p2.button("✅ Entregue", key=f"btn_ok_aud_{p['id_catequizando']}", use_container_width=True):
                             lista_up = p.tolist()
+                            # Garante integridade das 30 colunas
                             while len(lista_up) < 30: lista_up.append("N/A")
-                            lista_up[10] = "COMPLETO" # Coluna K (Documentos)
+                            lista_up[10] = "COMPLETO" # Coluna K
                             if atualizar_catequizando(p['id_catequizando'], lista_up):
-                                st.success("Regularizado!"); time.sleep(0.5); st.rerun()
+                                st.success("Atualizado!"); time.sleep(0.5); st.rerun()
 
-                        # 3. Botão WhatsApp (Lógica Local para evitar ImportError)
+                        # AÇÃO 3: WHATSAPP DIRETO (LÓGICA MOBILE)
                         contato_alvo = p['contato_principal'] if is_adulto_p else (p['tel_mae'] if str(p['tel_mae']) != "N/A" else p['tel_pai'])
-                        
-                        # Lógica de limpeza local
                         num_limpo = "".join(filter(str.isdigit, str(contato_alvo)))
                         if num_limpo:
                             if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
                             if not num_limpo.startswith("55"):
-                                if len(num_limpo) <= 9: num_limpo = f"5573{num_limpo}"
-                                else: num_limpo = f"55{num_limpo}"
+                                num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
                             
-                            c_p3.markdown(f'''
+                            col_p3.markdown(f'''
                                 <a href="https://wa.me/{num_limpo}" target="_blank" style="text-decoration:none;">
                                     <div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">📲 WhatsApp</div>
                                 </a>
                             ''', unsafe_allow_html=True)
                         else:
-                            c_p3.caption("Sem Tel.")
+                            col_p3.caption("Sem Tel.")
                         st.markdown("<br>", unsafe_allow_html=True)
-
-        with tab_auditoria_geral:
-            st.write("📊 **Distribuição de Pendências por Turma:**")
-            df_all_pendentes = df_cat[
-                (df_cat['doc_em_falta'].str.len() > 2) & 
-                (~df_cat['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
-            ]
-            if not df_all_pendentes.empty:
-                chart_data = df_all_pendentes['etapa'].value_counts()
-                st.bar_chart(chart_data)
-            else:
-                st.write("Nenhuma pendência registrada.")
                 
 
 # --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) ---
