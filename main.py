@@ -140,8 +140,8 @@ def mostrar_logo_login():
 
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
 
-# A. Auto-Login via Cookies
-if not st.session_state.logado:
+# A. Auto-Login via Cookies (COM BLOQUEIO DE REENTRADA)
+if not st.session_state.logado and not st.session_state.get('logout_em_curso', False):
     auth_cookie = cookie_manager.get("fatima_auth_v2")
     if auth_cookie:
         user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
@@ -167,6 +167,10 @@ if st.session_state.logado:
 
 # C. Tela de Login Manual
 if not st.session_state.logado:
+    # Se ele chegou na tela de login, resetamos a flag de logout para permitir novos logins
+    if st.session_state.get('logout_em_curso'):
+        st.session_state.logout_em_curso = False
+        
     st.container()
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
@@ -224,9 +228,18 @@ if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_99x"):
     st.cache_data.clear(); st.toast("Dados atualizados!", icon="✅"); time.sleep(1); st.rerun()
 
 if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_99x"):
+    # 1. Ativa flag para impedir que o auto-login te conecte de volta no próximo ciclo
+    st.session_state.logout_em_curso = True
+    
+    # 2. Deleta o cookie no navegador
     cookie_manager.delete("fatima_auth_v2")
+    
+    # 3. Limpa o estado da sessão atual
     st.session_state.logado = False
     st.session_state.session_id = None
+    st.session_state.usuario = None
+    
+    # 4. Força o reinício para a tela de login
     st.rerun()
 
 papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
