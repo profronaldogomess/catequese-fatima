@@ -1273,56 +1273,69 @@ elif menu == "🏫 Gestão de Turmas":
                                 st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
                         else: st.error("Selecione um destino válido e ao menos um catequizando.")
 
-# --- BLOCO REFINADO: GESTÃO DE SACRAMENTOS (MANTENDO SEUS DETALHES E CORRIGINDO LOOP) ---
+# ==============================================================================
+# BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (CORREÇÃO DE CENSO E AUDITORIA)
+# ==============================================================================
 elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
     tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
     
     with tab_dash:
-        # 1. Inicialização de Variáveis e Censo de Batismos do Ano
-        k_bat, a_bat, total_batismos_ano = 0, 0, 0
+        # 1. Censo de Batismos realizados NO SISTEMA (Aba sacramentos_recebidos)
+        total_batismos_ano = 0
         df_recebidos = ler_aba("sacramentos_recebidos")
         
         if not df_recebidos.empty:
-            cols_rec = df_recebidos.columns.tolist()
-            c_tipo = 'tipo_sacramento' if 'tipo_sacramento' in cols_rec else None
-            c_data = 'data_recebimento' if 'data_recebimento' in cols_rec else ('data' if 'data' in cols_rec else None)
-            if c_tipo and c_data:
-                try:
-                    df_recebidos['data_dt'] = pd.to_datetime(df_recebidos[c_data], errors='coerce')
-                    total_batismos_ano = len(df_recebidos[
-                        (df_recebidos[c_tipo].str.upper() == 'BATISMO') & 
-                        (df_recebidos['data_dt'].dt.year == date.today().year)
-                    ])
-                except: pass
+            try:
+                # Tenta identificar a coluna de data (pode ser 'data' ou 'data_recebimento')
+                col_dt = 'data' if 'data' in df_recebidos.columns else 'data_recebimento'
+                df_recebidos['data_dt'] = pd.to_datetime(df_recebidos[col_dt], errors='coerce')
+                # Filtra batismos do ano atual (2026 conforme seu sistema)
+                total_batismos_ano = len(df_recebidos[
+                    (df_recebidos['tipo'].str.upper().str.contains('BATISMO')) & 
+                    (df_recebidos['data_dt'].dt.year == 2026)
+                ])
+            except: pass
 
         st.markdown(f"""
             <div style='background-color:#f8f9f0; padding:20px; border-radius:10px; border:1px solid #e03d11; text-align:center; margin-bottom:20px;'>
-                <h3 style='margin:0; color:#e03d11;'>🕊️ Frutos da Evangelização {date.today().year}</h3>
-                <p style='font-size:22px; color:#417b99; margin:5px 0;'><b>{total_batismos_ano} Batismos realizados</b></p>
-                <p style='font-size:14px; color:#666;'>Total de novos cristãos inseridos na comunidade este ano.</p>
+                <h3 style='margin:0; color:#e03d11;'>🕊️ Frutos da Evangelização 2026</h3>
+                <p style='font-size:22px; color:#417b99; margin:5px 0;'><b>{total_batismos_ano} Batismos realizados este ano</b></p>
+                <p style='font-size:14px; color:#666;'>Registros de novos sacramentos efetuados através do sistema.</p>
             </div>
         """, unsafe_allow_html=True)
 
-        # 2. Segmentação de Público (Kids vs Adultos)
-        df_kids = df_cat[df_cat['estado_civil_pais_ou_proprio'] == 'N/A'] if not df_cat.empty else pd.DataFrame()
-        df_adults = df_cat[df_cat['estado_civil_pais_ou_proprio'] != 'N/A'] if not df_cat.empty else pd.DataFrame()
+        # 2. Segmentação de Público por IDADE (Correção do Denominador)
+        if not df_cat.empty:
+            # Criamos uma cópia para não afetar o DF global e calculamos a idade real
+            df_censo = df_cat.copy()
+            df_censo['idade_real'] = df_censo['data_nascimento'].apply(calcular_idade)
+            
+            df_kids = df_censo[df_censo['idade_real'] < 18]
+            df_adults = df_censo[df_censo['idade_real'] >= 18]
+            
+            st.subheader("📊 Quadro Geral de Sacramentos (Censo Paroquial)")
+            col_k, col_a = st.columns(2)
+            
+            with col_k:
+                st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
+                total_k = len(df_kids)
+                if total_k > 0:
+                    k_bat = len(df_kids[df_kids['batizado_sn'].str.upper() == 'SIM'])
+                    perc_k = (k_bat / total_k) * 100
+                    st.metric("Batizados (Kids)", f"{k_bat} / {total_k}", f"{perc_k:.1f}% batizados")
+                else: st.write("Nenhum registro infantil.")
 
-        st.subheader("📊 Quadro Geral de Sacramentos")
-        col_k, col_a = st.columns(2)
-        with col_k:
-            st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
-            if not df_kids.empty:
-                k_bat = len(df_kids[df_kids['batizado_sn'] == 'SIM'])
-                st.metric("Batizados (Kids)", f"{k_bat}/{len(df_kids)}")
-            else: st.write("Nenhum registro infantil.")
-
-        with col_a:
-            st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
-            if not df_adults.empty:
-                a_bat = len(df_adults[df_adults['batizado_sn'] == 'SIM'])
-                st.metric("Batizados (Adultos)", f"{a_bat}/{len(df_adults)}")
-            else: st.write("Nenhum registro de adultos.")
+            with col_a:
+                st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
+                total_a = len(df_adults)
+                if total_a > 0:
+                    a_bat = len(df_adults[df_adults['batizado_sn'].str.upper() == 'SIM'])
+                    perc_a = (a_bat / total_a) * 100
+                    st.metric("Batizados (Adultos)", f"{a_bat} / {total_a}", f"{perc_a:.1f}% batizados")
+                else: st.write("Nenhum registro de adultos.")
+        else:
+            st.warning("Base de catequizandos vazia.")
 
         st.divider()
         st.subheader("🏫 Auditoria Nominal e Pastoral por Turma")
@@ -1330,25 +1343,26 @@ elif menu == "🕊️ Gestão de Sacramentos":
         analise_detalhada_ia = []
         if not df_turmas.empty:
             for _, t in df_turmas.iterrows():
-                alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
+                # Filtro robusto: remove espaços extras e converte para maiúsculo
+                nome_t = str(t['nome_turma']).strip().upper()
+                alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
+                
                 if not alunos_t.empty:
                     pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
                     freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
                     
                     idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
-                    impedimentos = len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL'])])
+                    # Impedimentos baseados em situação matrimonial (para adultos)
+                    impedimentos = len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM'])])
                     
-                    batizados_list = alunos_t[alunos_t['batizado_sn'] == 'SIM']
-                    pendentes_list = alunos_t[alunos_t['batizado_sn'] != 'SIM']
-                    
-                    p_euca = t.get('previsao_eucaristia', 'N/A')
-                    p_cris = t.get('previsao_crisma', 'N/A')
+                    batizados_list = alunos_t[alunos_t['batizado_sn'].str.upper() == 'SIM']
+                    pendentes_list = alunos_t[alunos_t['batizado_sn'].str.upper() != 'SIM']
                     
                     with st.expander(f"📍 {t['nome_turma']} ({t['etapa']}) - Frequência: {freq_media:.1f}%"):
                         col_p1, col_p2 = st.columns([2, 1])
                         with col_p1:
                             st.write(f"**Faixa Etária:** {min(idades)} a {max(idades)} anos")
-                            if impedimentos > 0: 
+                            if impedimentos > 0 and min(idades) >= 18: 
                                 st.warning(f"⚠️ {impedimentos} adultos com situação matrimonial a regularizar.")
                             
                             st.markdown("---")
@@ -1362,10 +1376,9 @@ elif menu == "🕊️ Gestão de Sacramentos":
                         
                         with col_p2:
                             st.markdown("**Previsões:**")
-                            st.write(f"Eucaristia: `{p_euca}`")
-                            st.write(f"Crisma: `{p_cris}`")
+                            st.write(f"Eucaristia: `{t.get('previsao_eucaristia', 'N/A')}`")
+                            st.write(f"Crisma: `{t.get('previsao_crisma', 'N/A')}`")
 
-                    # Guardando dados ricos para a IA e para o PDF
                     analise_detalhada_ia.append({
                         "turma": t['nome_turma'], "etapa": t['etapa'], "freq": f"{freq_media:.1f}%",
                         "batizados": len(batizados_list), "pendentes": len(pendentes_list),
@@ -1374,11 +1387,8 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     })
 
         st.divider()
-        
-        # --- 3. LÓGICA DE GERAÇÃO CORRIGIDA (SEM LOOP) ---
         st.subheader("🏛️ Relatório Oficial de Auditoria")
         
-        # Se o PDF já existe, mostra o botão de download
         if "pdf_sac_tecnico" in st.session_state:
             st.success("✅ Auditoria Diocesana pronta para download!")
             st.download_button(
@@ -1386,91 +1396,53 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 data=st.session_state.pdf_sac_tecnico,
                 file_name=f"Auditoria_Pastoral_Fatima_{date.today().year}.pdf",
                 mime="application/pdf",
-                key="btn_download_sac_v_final",
                 use_container_width=True
             )
             if st.button("🔄 Gerar Novo Relatório (Atualizar)"):
                 del st.session_state.pdf_sac_tecnico
                 st.rerun()
         else:
-            # Se não existe, mostra o botão para gerar
-            # --- NO main.py: LÓGICA DA AUDITORIA SACRAMENTAL V2 (CORRIGIDA) ---
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
                 with st.spinner("O Auditor IA está sincronizando os dados reais..."):
                     try:
-                        # 1. SEGMENTAÇÃO POR IDADE (MAIS PRECISO QUE POR NOME DE TURMA)
-                        # Criamos uma coluna temporária de idade para o cálculo do Censo
-                        df_cat['idade_temp'] = df_cat['data_nascimento'].apply(calcular_idade)
+                        # Recalcula estatísticas para o PDF usando a lógica de idade
+                        df_censo_pdf = df_cat.copy()
+                        df_censo_pdf['idade_real'] = df_censo_pdf['data_nascimento'].apply(calcular_idade)
                         
-                        df_kids_censo = df_cat[df_cat['idade_temp'] < 18] if not df_cat.empty else pd.DataFrame()
-                        df_adults_censo = df_cat[df_cat['idade_temp'] >= 18] if not df_cat.empty else pd.DataFrame()
+                        df_k_pdf = df_censo_pdf[df_censo_pdf['idade_real'] < 18]
+                        df_a_pdf = df_censo_pdf[df_censo_pdf['idade_real'] >= 18]
 
-                        # 2. QUADRO GERAL (CENSO REAL)
                         stats_gerais = {
-                            'bat_k': len(df_kids_censo[df_kids_censo['batizado_sn'] == 'SIM']) if not df_kids_censo.empty else 0,
-                            'bat_a': len(df_adults_censo[df_adults_censo['batizado_sn'] == 'SIM']) if not df_adults_censo.empty else 0,
-                            'total_k': len(df_kids_censo),
-                            'total_a': len(df_adults_censo),
-                            'euca_k': df_kids_censo['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_kids_censo.empty else 0,
-                            'euca_a': df_adults_censo['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum() if not df_adults_censo.empty else 0,
-                            'crisma_a': df_adults_censo['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum() if not df_adults_censo.empty else 0
+                            'bat_k': len(df_k_pdf[df_k_pdf['batizado_sn'].str.upper() == 'SIM']),
+                            'bat_a': len(df_a_pdf[df_a_pdf['batizado_sn'].str.upper() == 'SIM']),
+                            'total_k': len(df_k_pdf),
+                            'total_a': len(df_a_pdf),
+                            'euca_k': df_k_pdf['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum(),
+                            'euca_a': df_a_pdf['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum(),
+                            'crisma_a': df_a_pdf['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
                         }
 
-                        # 3. AUDITORIA POR TURMA (NOMINAL)
-                        analise_turmas = []
-                        for _, t in df_turmas.iterrows():
-                            alunos_t = df_cat[df_cat['etapa'] == t['nome_turma']] if not df_cat.empty else pd.DataFrame()
-                            if not alunos_t.empty:
-                                analise_turmas.append({
-                                    'turma': t['nome_turma'],
-                                    'batizados': len(alunos_t[alunos_t['batizado_sn'] == 'SIM']),
-                                    'pendentes': len(alunos_t[alunos_t['batizado_sn'] != 'SIM']),
-                                    'p_euca': t.get('previsao_eucaristia', 'N/A'),
-                                    'p_cris': t.get('previsao_crisma', 'N/A')
-                                })
-
-                        # 4. MAPEAMENTO DE IMPEDIMENTOS (SITUAÇÃO MATRIMONIAL)
-                        impedimentos_lista = []
-                        # Filtramos quem não é casado na igreja ou tem situações a regularizar
-                        situacoes_alerta = ['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM', 'UNIÃO DE FACTO']
-                        df_imp = df_cat[df_cat['est_civil_pais'].isin(situacoes_alerta) | df_cat['estado_civil_pais_ou_proprio'].isin(situacoes_alerta)]
-                        
-                        for _, row in df_imp.iterrows():
-                            impedimentos_lista.append({
-                                'nome': row['nome_completo'],
-                                'turma': row['etapa'],
-                                'situacao': row['est_civil_pais'] if row['est_civil_pais'] != "N/A" else row['estado_civil_pais_ou_proprio']
-                            })
-
-                        # 5. IA E GERAÇÃO DO PDF
-                        resumo_ia = {
-                            "censo": stats_gerais,
-                            "turmas": analise_turmas,
-                            "impedimentos_qtd": len(impedimentos_lista)
-                        }
-                        analise_ia_sac = gerar_relatorio_sacramentos_ia(str(resumo_ia))
-                        
-                        # Chamada do motor v2 no utils.py
+                        analise_ia_sac = gerar_relatorio_sacramentos_ia(str(stats_gerais))
                         st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v2(
-                            stats_gerais, analise_turmas, impedimentos_lista, analise_ia_sac
+                            stats_gerais, analise_detalhada_ia, [], analise_ia_sac
                         )
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro na sincronização: {e}")
 
-    # --- ABAS DE REGISTRO E HISTÓRICO (MANTIDAS IGUAIS AO SEU ORIGINAL) ---
+    # --- ABAS DE REGISTRO E HISTÓRICO ---
     with tab_reg:
         st.subheader("✍️ Registro de Sacramento")
-        modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True, key="modo_reg_sac_v_final")
+        modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True)
         
         if modo_reg == "Individual (Busca por Nome)":
-            nome_busca = st.text_input("🔍 Digite o nome do catequizando:", key="busca_sac_ind_v_final").upper()
+            nome_busca = st.text_input("🔍 Digite o nome do catequizando:").upper()
             if nome_busca:
                 sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
                 if not sugestoes.empty:
-                    escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist(), key="sel_sac_ind_v_final")
+                    escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist())
                     dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
-                    with st.form("form_sac_individual_v_final"):
+                    with st.form("form_sac_individual"):
                         st.write(f"Registrando para: **{escolhido}**")
                         c1, c2 = st.columns(2)
                         tipo_s = c1.selectbox("Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
@@ -1481,9 +1453,9 @@ elif menu == "🕊️ Gestão de Sacramentos":
                                 st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                 else: st.warning("Não encontrado.")
         else:
-            turmas_s = st.multiselect("Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [], key="sel_turmas_lote_v_final")
+            turmas_s = st.multiselect("Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
             if turmas_s:
-                with st.form("form_sac_lote_v_final"):
+                with st.form("form_sac_lote"):
                     tipo_s = st.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
                     data_s = st.date_input("Data da Celebração", date.today())
                     alunos_f = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
@@ -1492,7 +1464,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                         cols = st.columns(2)
                         for i, (_, r) in enumerate(alunos_f.iterrows()):
                             with cols[i % 2]:
-                                if st.checkbox(f"{r['nome_completo']}", key=f"lote_chk_v_final_{r['id_catequizando']}"): sel_ids.append(r)
+                                if st.checkbox(f"{r['nome_completo']}", key=f"chk_sac_{r['id_catequizando']}"): sel_ids.append(r)
                     if st.form_submit_button("💾 SALVAR EM LOTE"):
                         id_ev = f"SAC-{int(time.time())}"
                         lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in sel_ids]
@@ -1500,9 +1472,10 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_hist:
-        st.subheader("📜 Histórico")
-        if not df_sac_eventos.empty:
-            st.dataframe(df_sac_eventos.sort_values(by=df_sac_eventos.columns[2], ascending=False), use_container_width=True, hide_index=True)
+        st.subheader("📜 Histórico de Eventos")
+        df_eventos = ler_aba("sacramentos_eventos")
+        if not df_eventos.empty:
+            st.dataframe(df_eventos.sort_values(by=df_eventos.columns[2], ascending=False), use_container_width=True, hide_index=True)
         else: st.info("Nenhum evento registrado.")
 
 # --- INÍCIO DO BLOCO INTEGRAL: FAZER CHAMADA (VERSÃO INTELIGENTE E SINCRONIZADA) ---
