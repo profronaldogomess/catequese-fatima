@@ -358,37 +358,29 @@ if menu == "🏠 Início / Dashboard":
         with col_paroquial:
             st.markdown("##### 📋 Relatórios de Gestão Paroquial")
             
-            # --- BOTÃO 1: RELATÓRIO DIOCESANO ---
+# --- BOTÃO 1: RELATÓRIO DIOCESANO (VERSÃO ANALÍTICA SINCRONIZADA) ---
             if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_final"):
-                with st.spinner("Processando Auditoria Diocesana v4..."):
-                    etapas_infantis = ["PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", "PERSEVERANÇA"]
-                    turmas_inf = df_turmas[df_turmas['etapa'].isin(etapas_infantis)] if not df_turmas.empty else pd.DataFrame()
-                    turmas_adu = df_turmas[~df_turmas['etapa'].isin(etapas_infantis)] if not df_turmas.empty else pd.DataFrame()
-                    
-                    equipe_stats = {'bat': 0, 'euca': 0, 'crisma': 0, 'ministros': 0, 'aptos': 0}
-                    for _, row in equipe_tecnica.iterrows():
-                        if str(row.get('data_batismo', '')).strip() not in ["", "N/A", "None"]: equipe_stats['bat'] += 1
-                        if str(row.get('data_eucaristia', '')).strip() not in ["", "N/A", "None"]: equipe_stats['euca'] += 1
-                        if str(row.get('data_crisma', '')).strip() not in ["", "N/A", "None"]: equipe_stats['crisma'] += 1
-                        if str(row.get('data_ministerio', '')).strip() not in ["", "N/A", "None"]: equipe_stats['ministros'] += 1
-
-                    logistica_lista = []
-                    if not df_turmas.empty:
-                        log_grp = df_turmas.groupby(['dias_semana', 'local'])['nome_turma'].apply(lambda x: ", ".join(x)).reset_index()
-                        for _, row in log_grp.iterrows():
-                            logistica_lista.append({'dia': row['dias_semana'], 'local': row['local'], 'turmas': row['nome_turma']})
-
-                    resumo_ia = f"Censo: {total_cat} catequizandos. Equipe: {total_equipe}. Turmas: {total_t}."
-                    analise_tecnica = gerar_analise_pastoral(resumo_ia) 
-                    
-                    st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(
-                        {'total_cat': total_cat, 't_infantil': len(turmas_inf), 't_adultos': len(turmas_adu), 'total_equipe': total_equipe},
-                        equipe_stats, {}, {}, logistica_lista, [], analise_tecnica
-                    )
-                    st.rerun()
+                with st.spinner("Processando Auditoria Diocesana Analítica..."):
+                    # A nova função no utils.py agora faz todos os cálculos internamente
+                    # Passamos apenas os 3 DataFrames principais
+                    try:
+                        st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(
+                            df_turmas, 
+                            df_cat, 
+                            df_usuarios
+                        )
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao gerar relatório: {e}")
 
             if "pdf_diocesano" in st.session_state:
-                st.download_button("📥 BAIXAR RELATÓRIO DIOCESANO", st.session_state.pdf_diocesano, f"Relatorio_Diocesano_{date.today().year}.pdf", "application/pdf", use_container_width=True)
+                st.download_button(
+                    label="📥 BAIXAR RELATÓRIO DIOCESANO", 
+                    data=st.session_state.pdf_diocesano, 
+                    file_name=f"Relatorio_Diocesano_{date.today().year}.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
 
             # --- BOTÃO 2: RELATÓRIO PASTORAL ---
             if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
