@@ -361,44 +361,43 @@ if menu == "🏠 Início / Dashboard":
             st.markdown("##### 📋 Relatórios de Gestão Paroquial")
             
 # --- BOTÃO 1: RELATÓRIO DIOCESANO (FORÇANDO ATUALIZAÇÃO DO NOVO MODELO) ---
-            # --- BOTÃO 1: RELATÓRIO DIOCESANO (NOVA ASSINATURA) ---
-            if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_final"):
+            # --- BOTÃO 1: RELATÓRIO DIOCESANO (VERSÃO ANALÍTICA) ---
+            if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_v5"):
                 st.cache_data.clear()
-                if "pdf_diocesano" in st.session_state: del st.session_state.pdf_diocesano
+                if "pdf_diocesano" in st.session_state: 
+                    del st.session_state.pdf_diocesano
+                
                 with st.spinner("Processando Auditoria Diocesana Analítica..."):
                     try:
-                        # Agora enviamos apenas os 3 DataFrames principais
+                        # Envia os 3 DataFrames para o novo motor do utils.py
                         st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
                         st.rerun()
-                    except Exception as e: st.error(f"Erro: {e}")
+                    except Exception as e: 
+                        st.error(f"Erro no Relatório Diocesano: {e}")
 
-            # --- BOTÃO 2: RELATÓRIO PASTORAL (NOVA ASSINATURA) ---
-            if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
-                if "pdf_pastoral" in st.session_state: del st.session_state.pdf_pastoral
-                with st.spinner("Gerando Dossiê Pastoral Nominal..."):
-                    try:
-                        # Agora enviamos os DataFrames para listar todos os nomes
-                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres)
-                        st.rerun()
-                    except Exception as e: st.error(f"Erro: {e}")
+            if "pdf_diocesano" in st.session_state:
+                st.download_button(
+                    label="📥 BAIXAR RELATÓRIO DIOCESANO", 
+                    data=st.session_state.pdf_diocesano, 
+                    file_name=f"Relatorio_Diocesano_{date.today().year}.pdf", 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
 
-# --- BOTÃO 2: RELATÓRIO PASTORAL (VERSÃO NOMINAL SINCRONIZADA) ---
-            if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
-                if "pdf_pastoral" in st.session_state:
+            st.write("") # Espaçador visual entre os botões
+
+            # --- BOTÃO 2: RELATÓRIO PASTORAL (VERSÃO NOMINAL COMPLETA) ---
+            if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_v5"):
+                if "pdf_pastoral" in st.session_state: 
                     del st.session_state.pdf_pastoral
                 
                 with st.spinner("Gerando Dossiê Pastoral Nominal..."):
                     try:
-                        # A nova função agora faz os cálculos internamente. 
-                        # Passamos apenas os DataFrames brutos.
-                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(
-                            df_turmas, 
-                            df_cat, 
-                            df_pres
-                        )
+                        # Envia os DataFrames para listar todos os nomes e estatísticas
+                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres)
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao gerar relatório pastoral: {e}")
+                    except Exception as e: 
+                        st.error(f"Erro no Relatório Pastoral: {e}")
 
             if "pdf_pastoral" in st.session_state:
                 st.download_button(
