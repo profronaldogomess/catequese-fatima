@@ -114,10 +114,11 @@ from utils import (
     formatar_data_br, gerar_relatorio_familia_pdf,
     gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
     gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
-    gerar_fichas_paroquia_total, gerar_relatorio_diocesano_pdf,
-    gerar_relatorio_diocesano_v2, gerar_relatorio_pastoral_v2,
-    gerar_relatorio_pastoral_interno_pdf, gerar_pdf_perfil_turma,
-    gerar_relatorio_sacramentos_tecnico_pdf, gerar_relatorio_local_turma_pdf
+    gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf, # Adicionada aqui
+    gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
+    gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
+    gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
+    gerar_relatorio_local_turma_pdf
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
