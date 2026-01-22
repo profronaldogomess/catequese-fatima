@@ -938,7 +938,7 @@ elif menu == "👤 Perfil Individual":
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia.")
     else:
-        # --- 1. ÁREA DE BUSCA E FILTRAGEM (VERSÃO BLINDADA) ---
+# --- 1. ÁREA DE BUSCA E FILTRAGEM (VERSÃO BLINDADA) ---
         c1, c2 = st.columns([2, 1])
         busca = c1.text_input("🔍 Pesquisar por nome:", key="busca_perfil_v6").upper()
         lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
