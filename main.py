@@ -462,21 +462,23 @@ if menu == "🏠 Início / Dashboard":
                     use_container_width=True
                 )
 
-# --- PÁGINA: MINHA TURMA (VERSÃO COM FILTRO UNIVERSAL E OPÇÃO 'TODAS') ---
+# --- PÁGINA: MINHA TURMA (VERSÃO CORRIGIDA COM EMOJI 📚 E SUPORTE A MULTI-TURMAS) ---
 elif menu == "📚 Minha Turma":
-    # 1. Definir o Escopo de Turmas Permitidas
-    if eh_gestor:
-        # Gestores podem ver todas as turmas cadastradas
+    # 1. Identificação Robusta de Turmas Permitidas
+    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).upper()
+    
+    if eh_gestor or vinculo_raw == "TODAS":
+        # Se for gestor ou tiver "TODAS" no cadastro, expande para a lista real de turmas
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
     else:
-        # Catequistas veem apenas as suas turmas vinculadas
-        turmas_permitidas = [t.strip() for t in str(st.session_state.usuario.get('turma_vinculada', '')).split(',') if t.strip()]
+        # Se for catequista com turmas específicas (ex: "1ª ETAPA, 2ª ETAPA")
+        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
     if not turmas_permitidas:
         st.warning("⚠️ Nenhuma turma vinculada ao seu perfil. Contate a coordenação.")
         st.stop()
 
-    # 2. Interface do Filtro (Aparece para todos, com opção 'TODAS')
+    # 2. Interface do Filtro (Aparece para todos que têm acesso a mais de uma turma)
     opcoes_filtro = ["TODAS"] + turmas_permitidas
     turma_ativa = st.selectbox("🔍 Selecione o Itinerário / Turma:", opcoes_filtro, key="filtro_universal_minha_turma")
 
@@ -486,9 +488,11 @@ elif menu == "📚 Minha Turma":
     df_cron = ler_aba("cronograma")
     
     if turma_ativa == "TODAS":
+        # Pega todos os alunos que pertencem a QUALQUER uma das turmas permitidas para este usuário
         meus_alunos = df_cat[df_cat['etapa'].isin(turmas_permitidas)] if not df_cat.empty else pd.DataFrame()
         minhas_pres = df_pres[df_pres['id_turma'].isin(turmas_permitidas)] if not df_pres.empty else pd.DataFrame()
     else:
+        # Filtra apenas a turma selecionada no selectbox
         meus_alunos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
         minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
 
@@ -523,13 +527,12 @@ elif menu == "📚 Minha Turma":
             st.info("Ainda não houve encontros registrados para esta turma.")
         st.divider()
 
-    # 6. Aniversariantes do Mês (Consolidado ou Individual)
+    # 6. Aniversariantes do Mês
     st.subheader("🎂 Aniversariantes do Mês")
     df_niver_mes = obter_aniversariantes_mes(meus_alunos)
     
     if not df_niver_mes.empty:
-        label_card = f"GERAR CARD COLETIVO: {turma_ativa}"
-        if st.button(f"🖼️ {label_card}", use_container_width=True, key=f"btn_col_{turma_ativa}"):
+        if st.button(f"🖼️ GERAR CARD COLETIVO: {turma_ativa}", use_container_width=True, key=f"btn_col_{turma_ativa}"):
             with st.spinner("Renderizando card..."):
                 lista_para_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome_completo']}" for _, row in df_niver_mes.iterrows()]
                 card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
@@ -1474,90 +1477,96 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.dataframe(df_eventos.sort_values(by=df_eventos.columns[2], ascending=False), use_container_width=True, hide_index=True)
         else: st.info("Nenhum evento registrado.")
 
-# --- INÍCIO DO BLOCO INTEGRAL: FAZER CHAMADA (VERSÃO INTELIGENTE E SINCRONIZADA) ---
+# --- INÍCIO DO BLOCO INTEGRAL: FAZER CHAMADA (VERSÃO MULTI-TURMA SINCRONIZADA) ---
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
     
-    # 1. Seleção de Turma (Com trava de segurança)
-    if eh_gestor:
-        lista_t = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-        idx_sugerido = lista_t.index(turma_do_catequista) if turma_do_catequista in lista_t else 0
-        turma_selecionada = st.selectbox("Selecione a Turma para a Chamada:", lista_t, index=idx_sugerido, key="sel_turma_chamada_v6")
-    else:
-        turma_selecionada = turma_do_catequista
-        st.subheader(f"Turma: {turma_selecionada}")    
+    # 1. Identificação Robusta de Turmas Permitidas
+    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).upper()
     
-    if not turma_selecionada or df_cat.empty:
-        st.warning("⚠️ Certifique-se de ter turmas e catequizandos cadastrados.")
+    if eh_gestor or vinculo_raw == "TODAS":
+        # Se for gestor ou tiver "TODAS", carrega a lista completa do banco
+        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
     else:
-        # 2. Configuração do Encontro (Fora do form para atualização dinâmica do tema)
-        c1, c2 = st.columns(2)
-        data_encontro = c1.date_input("Data do Encontro", date.today(), min_value=MIN_DATA, max_value=MAX_DATA, key="data_chamada_v6")
-        
-        # Busca automática do tema no banco de dados (Cronograma ou Encontros anteriores)
-        tema_encontrado = buscar_encontro_por_data(turma_selecionada, data_encontro)
-        tema_dia = c2.text_input("Tema do Encontro (Confirme ou altere):", value=tema_encontrado if tema_encontrado else "", key="tema_chamada_v6").upper()
-        
-        # Exibição da data formatada para conferência
-        st.caption(f"📅 Chamada referente ao dia: **{data_encontro.strftime('%d/%m/%Y')}**")
+        # Se for catequista, separa as turmas por vírgula
+        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
-        # 3. Filtro de Catequizandos Ativos
-        lista_chamada = df_cat[(df_cat['etapa'] == turma_selecionada) & (df_cat['status'] == 'ATIVO')]
-        
-        if lista_chamada.empty:
-            st.info(f"Nenhum catequizando ativo na turma {turma_selecionada}.")
-        else:
-            st.divider()
-            
-            # --- LÓGICA DE SELEÇÃO EM MASSA (SINCRONIZADA) ---
-            def toggle_presenca_total():
-                for _, row in lista_chamada.iterrows():
-                    # Força o estado de cada checkbox individual baseado no checkbox mestre
-                    st.session_state[f"pres_v6_{row['id_catequizando']}_{data_encontro}"] = st.session_state.chk_marcar_todos_v6
+    if not turmas_permitidas:
+        st.error("❌ Você não possui turmas vinculadas para realizar chamada. Contate a coordenação.")
+        st.stop()
 
-            st.checkbox("✅ MARCAR TODOS COMO PRESENTES", key="chk_marcar_todos_v6", on_change=toggle_presenca_total)
+    # 2. Seleção da Turma Ativa para a Chamada
+    if len(turmas_permitidas) > 1:
+        # Se tiver mais de uma, permite escolher
+        turma_selecionada = st.selectbox("Selecione a Turma para a Chamada:", turmas_permitidas, key="sel_turma_chamada_v6")
+    else:
+        # Se tiver apenas uma, fixa nela
+        turma_selecionada = turmas_permitidas[0]
+        st.info(f"📋 Realizando chamada para: **{turma_selecionada}**")
+
+    # 3. Configuração do Encontro
+    c1, c2 = st.columns(2)
+    data_encontro = c1.date_input("Data do Encontro", date.today(), min_value=MIN_DATA, max_value=MAX_DATA, key="data_chamada_v6")
+    
+    # Busca automática do tema no banco de dados
+    tema_encontrado = buscar_encontro_por_data(turma_selecionada, data_encontro)
+    tema_dia = c2.text_input("Tema do Encontro (Confirme ou altere):", value=tema_encontrado if tema_encontrado else "", key="tema_chamada_v6").upper()
+    
+    st.caption(f"📅 Chamada referente ao dia: **{data_encontro.strftime('%d/%m/%Y')}**")
+
+    # 4. Filtro de Catequizandos Ativos da Turma Selecionada
+    lista_chamada = df_cat[(df_cat['etapa'] == turma_selecionada) & (df_cat['status'] == 'ATIVO')]
+    
+    if lista_chamada.empty:
+        st.warning(f"Nenhum catequizando ativo encontrado na turma {turma_selecionada}.")
+    else:
+        st.divider()
+        
+        # --- LÓGICA DE SELEÇÃO EM MASSA ---
+        def toggle_presenca_total():
+            for _, row in lista_chamada.iterrows():
+                st.session_state[f"pres_v6_{row['id_catequizando']}_{data_encontro}"] = st.session_state.chk_marcar_todos_v6
+
+        st.checkbox("✅ MARCAR TODOS COMO PRESENTES", key="chk_marcar_todos_v6", on_change=toggle_presenca_total)
+        
+        st.subheader(f"Lista de Presença - {len(lista_chamada)} Catequizandos")
+        
+        # 5. Formulário de Chamada
+        with st.form("form_chamada_v6_final"):
+            registros_presenca = []
             
-            st.subheader(f"Lista de Presença - {len(lista_chamada)} Catequizandos")
+            for _, row in lista_chamada.iterrows():
+                col_nome, col_check, col_niver = st.columns([3, 1, 2])
+                col_nome.write(row['nome_completo'])
+                
+                # Checkbox individual com chave única por data e ID
+                presente = col_check.checkbox("P", key=f"pres_v6_{row['id_catequizando']}_{data_encontro}")
+                
+                # Alerta de Aniversário
+                if eh_aniversariante_da_semana(row['data_nascimento']):
+                    col_niver.success("🎂 NIVER NA SEMANA!")
+                
+                registros_presenca.append([
+                    str(data_encontro), 
+                    row['id_catequizando'], 
+                    row['nome_completo'], 
+                    turma_selecionada, 
+                    "PRESENTE" if presente else "AUSENTE", 
+                    tema_dia, 
+                    st.session_state.usuario['nome']
+                ])
             
-            # 4. Formulário de Chamada (Para envio em lote)
-            with st.form("form_chamada_v6_final"):
-                registros_presenca = []
-                
-                for _, row in lista_chamada.iterrows():
-                    col_nome, col_check, col_niver = st.columns([3, 1, 2])
-                    
-                    col_nome.write(row['nome_completo'])
-                    
-                    # Checkbox individual (Padrão: Desmarcado / False)
-                    # A chave contém a data para evitar conflitos se mudar o dia sem recarregar
-                    presente = col_check.checkbox("P", key=f"pres_v6_{row['id_catequizando']}_{data_encontro}")
-                    
-                    # Alerta de Aniversário (Usa a função do utils.py)
-                    if eh_aniversariante_da_semana(row['data_nascimento']):
-                        col_niver.success("🎂 NIVER NA SEMANA!")
-                    
-                    # Prepara o dado para salvar
-                    registros_presenca.append([
-                        str(data_encontro), 
-                        row['id_catequizando'], 
-                        row['nome_completo'], 
-                        turma_selecionada, 
-                        "PRESENTE" if presente else "AUSENTE", 
-                        tema_dia, 
-                        st.session_state.usuario['nome']
-                    ])
-                
-                st.markdown("---")
-                if st.form_submit_button("🚀 FINALIZAR CHAMADA E SALVAR NO DIÁRIO"):
-                    if not tema_dia:
-                        st.error("⚠️ Por favor, informe o TEMA do encontro antes de salvar.")
-                    else:
-                        with st.spinner("Salvando presenças..."):
-                            if salvar_presencas(registros_presenca):
-                                st.success(f"✅ Chamada da turma {turma_selecionada} salva com sucesso!")
-                                st.balloons()
-                                time.sleep(1)
-                                st.rerun()
+            st.markdown("---")
+            if st.form_submit_button("🚀 FINALIZAR CHAMADA E SALVAR NO DIÁRIO"):
+                if not tema_dia:
+                    st.error("⚠️ Por favor, informe o TEMA do encontro antes de salvar.")
+                else:
+                    with st.spinner("Salvando presenças..."):
+                        if salvar_presencas(registros_presenca):
+                            st.success(f"✅ Chamada da turma {turma_selecionada} salva com sucesso!")
+                            st.balloons()
+                            time.sleep(1)
+                            st.rerun()
 # --- FIM DO BLOCO: FAZER CHAMADA ---
 
 # --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE CATEQUISTAS (VERSÃO AUDITORIA COM LOTE) ---
