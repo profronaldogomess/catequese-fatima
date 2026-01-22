@@ -359,37 +359,26 @@ if menu == "🏠 Início / Dashboard":
             st.markdown("##### 📋 Relatórios de Gestão Paroquial")
             
 # --- BOTÃO 1: RELATÓRIO DIOCESANO (FORÇANDO ATUALIZAÇÃO DO NOVO MODELO) ---
+            # --- BOTÃO 1: RELATÓRIO DIOCESANO (NOVA ASSINATURA) ---
             if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_final"):
-                # 1. Limpa qualquer versão antiga da memória para não repetir o erro
-                if "pdf_diocesano" in st.session_state:
-                    del st.session_state.pdf_diocesano
-                
-                with st.spinner("Renderizando Novo Modelo Analítico 2026..."):
+                st.cache_data.clear()
+                if "pdf_diocesano" in st.session_state: del st.session_state.pdf_diocesano
+                with st.spinner("Processando Auditoria Diocesana Analítica..."):
                     try:
-                        # 2. Chama a nova função do utils.py (aquela com as tabelas e listas nominais)
-                        novo_pdf = gerar_relatorio_diocesano_v4(
-                            df_turmas, 
-                            df_cat, 
-                            df_usuarios
-                        )
-                        
-                        # 3. Salva o novo arquivo na sessão
-                        st.session_state.pdf_diocesano = novo_pdf
-                        st.toast("Relatório Analítico Gerado!", icon="✅")
-                        time.sleep(1)
-                        st.rerun() # Força a tela a atualizar para mostrar o botão de baixar
-                    except Exception as e:
-                        st.error(f"Erro ao processar tabelas: {e}")
+                        # Agora enviamos apenas os 3 DataFrames principais
+                        st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
+                        st.rerun()
+                    except Exception as e: st.error(f"Erro: {e}")
 
-            # Exibição do botão de download (aparece após a geração)
-            if "pdf_diocesano" in st.session_state:
-                st.download_button(
-                    label="📥 BAIXAR RELATÓRIO DIOCESANO (NOVO MODELO)", 
-                    data=st.session_state.pdf_diocesano, 
-                    file_name=f"Relatorio_Diocesano_Analitico_{date.today().year}.pdf", 
-                    mime="application/pdf", 
-                    use_container_width=True
-                )
+            # --- BOTÃO 2: RELATÓRIO PASTORAL (NOVA ASSINATURA) ---
+            if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
+                if "pdf_pastoral" in st.session_state: del st.session_state.pdf_pastoral
+                with st.spinner("Gerando Dossiê Pastoral Nominal..."):
+                    try:
+                        # Agora enviamos os DataFrames para listar todos os nomes
+                        st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres)
+                        st.rerun()
+                    except Exception as e: st.error(f"Erro: {e}")
 
 # --- BOTÃO 2: RELATÓRIO PASTORAL (VERSÃO NOMINAL SINCRONIZADA) ---
             if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_final"):
