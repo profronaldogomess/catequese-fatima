@@ -1112,7 +1112,10 @@ elif menu == "🏫 Gestão de Turmas":
             if not alunos_t.empty:
                 # --- MÉTRICAS ---
                 m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Catequistas", len(str(info_t['catequista_responsavel']).split(',')))
+                
+                # Cálculo real de catequistas para a tela e para o PDF
+                qtd_cats_real = len(str(info_t['catequista_responsavel']).split(','))
+                m1.metric("Catequistas", qtd_cats_real)
                 m2.metric("Catequizandos", len(alunos_t))
                 
                 freq_global = 0.0
@@ -1133,8 +1136,11 @@ elif menu == "🏫 Gestão de Turmas":
                     except: pass
                 
                 m3.metric("Frequência Global", f"{freq_global}%")
+                
+                # Cálculo real da idade média para a tela e para o PDF
                 idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
-                m4.metric("Idade Média", f"{round(sum(idades)/len(idades), 1) if idades else 0} anos")
+                idade_media_val = round(sum(idades)/len(idades), 1) if idades else 0
+                m4.metric("Idade Média", f"{idade_media_val} anos")
 
                 st.divider()
                 
@@ -1161,11 +1167,18 @@ elif menu == "🏫 Gestão de Turmas":
                             if not df_recebidos.empty and 'id_catequizando' in df_recebidos.columns:
                                 sac_t = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())]
                                 for _, s in sac_t.iterrows():
-                                    lista_sac.append({'nome': s['nome'], 'tipo': s['tipo'], 'data': s['data']})
+                                    lista_sac.append({'nome': s.get('nome',''), 'tipo': s.get('tipo',''), 'data': s.get('data','')})
 
+                            # CORREÇÃO APLICADA AQUI: Passando qtd_cats_real e idade_media_val
                             st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v2(
                                 t_alvo, 
-                                {'qtd_catequistas': 1, 'qtd_cat': len(alunos_t), 'freq_global': freq_global, 'idade_media': 0, 'freq_mensal': lista_freq_mensal}, 
+                                {
+                                    'qtd_catequistas': qtd_cats_real, 
+                                    'qtd_cat': len(alunos_t), 
+                                    'freq_global': freq_global, 
+                                    'idade_media': idade_media_val, 
+                                    'freq_mensal': lista_freq_mensal
+                                }, 
                                 {'geral': lista_geral, 'sac_recebidos': lista_sac}, 
                                 parecer_ia
                             )
