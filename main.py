@@ -1053,40 +1053,69 @@ elif menu == "🏫 Gestão de Turmas":
                 pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="edit_pe_v15")
                 pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="edit_pc_v15")
                 
-                # Catequistas podem ser removidos todos, a turma continuará existindo
                 lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
                 cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
                 ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_v15")
                 
-                if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15"):
-                    with st.spinner("Processando atualizações..."):
-                        # 1. Atualiza a aba 'turmas' (Sempre salva, mesmo sem catequista)
-                        lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
-                        
-                        if atualizar_turma(d['id_turma'], lista_up):
-                            # 2. SINCRONIZAÇÃO NOS PERFIS (Limpa quem saiu, adiciona quem entrou)
+                col_btn_save, col_btn_del = st.columns([3, 1])
+                
+                with col_btn_save:
+                    if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15", use_container_width=True):
+                        with st.spinner("Processando atualizações..."):
+                            lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
+                            if atualizar_turma(d['id_turma'], lista_up):
+                                planilha = conectar_google_sheets()
+                                aba_u = planilha.worksheet("usuarios")
+                                for _, cat_row in equipe_tecnica.iterrows():
+                                    c_nome = cat_row['nome']
+                                    celula = aba_u.find(c_nome, in_column=1)
+                                    if celula:
+                                        v_atual = aba_u.cell(celula.row, 5).value or ""
+                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                        mudou = False
+                                        if c_nome in ed_cats:
+                                            if en not in v_list: v_list.append(en); mudou = True
+                                            if nome_turma_original in v_list and en != nome_turma_original:
+                                                v_list.remove(nome_turma_original); mudou = True
+                                        else:
+                                            if en in v_list: v_list.remove(en); mudou = True
+                                            if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
+                                        if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                                st.success("✅ Sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+                # --- NOVO MECANISMO: EXCLUIR TURMA ---
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
+                    st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
+                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_t")
+                    
+                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
+                        with st.spinner("Movendo catequizandos e excluindo itinerário..."):
+                            # 1. Localiza e move catequizandos para a Fila de Espera
+                            alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
+                            if not alunos_da_turma.empty:
+                                ids_para_mover = alunos_da_turma['id_catequizando'].tolist()
+                                mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
+                            
+                            # 2. Remove vínculo dos catequistas na aba usuarios
                             planilha = conectar_google_sheets()
                             aba_u = planilha.worksheet("usuarios")
-                            
                             for _, cat_row in equipe_tecnica.iterrows():
-                                c_nome = cat_row['nome']
-                                celula = aba_u.find(c_nome, in_column=1)
-                                if celula:
-                                    v_atual = aba_u.cell(celula.row, 5).value or ""
+                                v_atual = str(cat_row.get('turma_vinculada', ''))
+                                if sel_t in v_atual:
                                     v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                    mudou = False
-                                    if c_nome in ed_cats:
-                                        if en not in v_list: v_list.append(en); mudou = True
-                                        if nome_turma_original in v_list and en != nome_turma_original:
-                                            v_list.remove(nome_turma_original); mudou = True
-                                    else:
-                                        if en in v_list: v_list.remove(en); mudou = True
-                                        if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
-                                    if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                                    if sel_t in v_list:
+                                        v_list.remove(sel_t)
+                                        celula_u = aba_u.find(cat_row['nome'], in_column=1)
+                                        if celula_u:
+                                            aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
                             
-                            st.success("✅ Dados da turma atualizados!")
-                            st.cache_data.clear()
-                            time.sleep(1); st.rerun()
+                            # 3. Exclui a turma da aba turmas
+                            if excluir_turma(d['id_turma']):
+                                st.success(f"Turma excluída! {len(alunos_da_turma)} catequizandos movidos para a Fila de Espera.")
+                                st.cache_data.clear()
+                                time.sleep(2)
+                                st.rerun()
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
