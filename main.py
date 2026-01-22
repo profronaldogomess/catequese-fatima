@@ -1280,9 +1280,17 @@ elif menu == "🏫 Gestão de Turmas":
                 
                 with col_btn_save:
                     if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15", use_container_width=True):
-                        with st.spinner("Processando atualizações..."):
+                        with st.spinner("Processando atualizações e movendo catequizandos..."):
+                            # 1. Atualiza os dados da Turma
                             lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
+                            
                             if atualizar_turma(d['id_turma'], lista_up):
+                                # 2. SE O NOME MUDOU: Sincroniza os catequizandos (Cascata)
+                                if en != nome_turma_original:
+                                    from database import sincronizar_renomeacao_turma_catequizandos
+                                    sincronizar_renomeacao_turma_catequizandos(nome_turma_original, en)
+                                
+                                # 3. Sincroniza Perfis dos Catequistas (Lógica original mantida)
                                 planilha = conectar_google_sheets()
                                 aba_u = planilha.worksheet("usuarios")
                                 for _, cat_row in equipe_tecnica.iterrows():
@@ -1300,7 +1308,11 @@ elif menu == "🏫 Gestão de Turmas":
                                             if en in v_list: v_list.remove(en); mudou = True
                                             if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
                                         if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                                st.success("✅ Sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                
+                                st.success(f"✅ Turma e Catequizandos atualizados para '{en}'!")
+                                st.cache_data.clear()
+                                time.sleep(1)
+                                st.rerun()
 
                 # --- NOVO MECANISMO: EXCLUIR TURMA ---
                 st.markdown("<br><br>", unsafe_allow_html=True)
