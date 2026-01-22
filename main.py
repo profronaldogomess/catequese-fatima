@@ -561,52 +561,110 @@ elif menu == "📚 Minha Turma":
     with st.expander("👥 Ver Lista Completa de Contatos"):
         st.dataframe(meus_alunos[['nome_completo', 'contato_principal', 'etapa', 'status']], use_container_width=True, hide_index=True)
 
-# --- PÁGINA: DIÁRIO DE ENCONTROS ---
+# ==============================================================================
+# PÁGINA: 📖 DIÁRIO DE ENCONTROS (VERSÃO INTEGRADA E MULTI-TURMA)
+# ==============================================================================
 elif menu == "📖 Diário de Encontros":
-    st.title("📖 Gestão de Temas e Encontros")
-    tab_registro, tab_planejamento = st.tabs(["✅ Registrar Encontro Realizado", "📅 Planejar Próximos Temas"])
+    st.title("📖 Central de Itinerário e Encontros")
+    
+    # 1. LÓGICA DE FILTRO DE TURMA (SUPORTE A MULTI-TURMA)
+    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
+    if eh_gestor or vinculo_raw == "TODAS":
+        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
+    else:
+        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
-    with tab_registro:
-        st.info("Use esta aba para confirmar o que foi trabalhado hoje.")
-        with st.form("form_encontro_realizado"):
-            data_e = st.date_input("Data", date.today(), min_value=MIN_DATA, max_value=MAX_DATA)
-            tema_e = st.text_input("Tema do Encontro Realizado").upper()
-            obs_e = st.text_area("Observações / Ocorrências")
-            
-            if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
-                if tema_e:
-                    p = conectar_google_sheets()
-                    p.worksheet("encontros").append_row([str(data_e), turma_do_catequista, tema_e, st.session_state.usuario['nome'], obs_e])
-                    st.success("Encontro registrado!"); st.balloons()
-                else:
-                    st.warning("Informe o tema.")
+    if not turmas_permitidas:
+        st.error("⚠️ Você não possui turmas vinculadas para gerenciar encontros.")
+        st.stop()
 
-    with tab_planejamento:
-        st.subheader("📝 Meu Planejamento")
-        st.write("Cadastre aqui os temas que você recebeu da coordenação para as próximas semanas.")
-        
-        with st.form("form_planejar_tema"):
-            novo_tema = st.text_input("Título do Próximo Tema (Ex: A EUCARISTIA)").upper()
-            detalhes_tema = st.text_area("Breve resumo ou objetivo (Opcional)")
+    # Seletor de Turma Focal
+    c_filt1, c_filt2 = st.columns([2, 2])
+    with c_filt1:
+        turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas, key="sel_turma_diario")
+    
+    st.divider()
+
+    # 2. LAYOUT INTEGRADO: PLANEJAMENTO (ESQUERDA) E REGISTRO (DIREITA)
+    col_plan, col_reg = st.columns([1, 1])
+
+    with col_plan:
+        st.subheader("📅 Planejar Próximos Temas")
+        st.caption(f"Adicione temas ao cronograma da turma: {turma_focal}")
+        with st.form("form_novo_planejamento_integrado", clear_on_submit=True):
+            novo_tema = st.text_input("Título do Tema (Ex: A EUCARISTIA)").upper()
+            detalhes_tema = st.text_area("Breve resumo ou objetivo (Opcional)", height=100)
             
-            if st.form_submit_button("📌 ADICIONAR AO MEU CRONOGRAMA"):
+            if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA", use_container_width=True):
                 if novo_tema:
-                    dados_planejamento = [f"PLAN-{int(time.time())}", turma_do_catequista, novo_tema, detalhes_tema]
+                    dados_planejamento = [f"PLAN-{int(time.time())}", turma_focal, novo_tema, detalhes_tema]
                     if salvar_tema_cronograma(dados_planejamento):
-                        st.success(f"Tema '{novo_tema}' adicionado ao seu planejamento!")
+                        st.success(f"Tema '{novo_tema}' planejado!")
+                        st.cache_data.clear()
+                        time.sleep(1)
                         st.rerun()
                 else:
-                    st.warning("Digite o título do tema.")
+                    st.warning("O título do tema é obrigatório.")
+
+    with col_reg:
+        st.subheader("✅ Registrar Encontro Realizado")
+        st.caption(f"Confirme a realização do encontro para: {turma_focal}")
         
-        st.divider()
-        st.write("📋 **Meus Temas Planejados:**")
-        df_cron = ler_aba("cronograma")
-        if not df_cron.empty:
-            meu_cron = df_cron[df_cron['etapa'] == turma_do_catequista]
-            if not meu_cron.empty:
-                st.table(meu_cron[['titulo_tema', 'descricao_base']])
+        # Busca temas planejados para facilitar o preenchimento
+        df_cron_local = ler_aba("cronograma")
+        temas_sugeridos = [""]
+        if not df_cron_local.empty:
+            temas_sugeridos += df_cron_local[df_cron_local['etapa'] == turma_focal]['titulo_tema'].tolist()
+
+        with st.form("form_registro_encontro_integrado", clear_on_submit=True):
+            data_e = st.date_input("Data do Encontro", date.today())
+            
+            # Se houver temas no cronograma, permite selecionar um para agilizar
+            tema_selecionado = st.selectbox("Selecionar do Cronograma (Opcional):", temas_sugeridos)
+            tema_manual = st.text_input("Ou digite o Tema Realizado:", value=tema_selecionado).upper()
+            
+            obs_e = st.text_area("Observações / Ocorrências do Encontro", height=68)
+            
+            if st.form_submit_button("💾 SALVAR NO DIÁRIO OFICIAL", use_container_width=True):
+                if tema_manual:
+                    # Ordem: Data, Turma, Tema, Catequista, Obs
+                    dados_enc = [str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]
+                    if salvar_encontro(dados_enc):
+                        st.success("Encontro registrado com sucesso!")
+                        st.balloons()
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.warning("Informe o tema do encontro.")
+
+    st.divider()
+
+    # 3. VISUALIZAÇÃO DO CRONOGRAMA ATIVO (O QUE VEM PELA FRENTE)
+    st.subheader(f"📋 Cronograma de Itinerário: {turma_focal}")
+    df_cron_view = ler_aba("cronograma")
+    if not df_cron_view.empty:
+        meu_cron = df_cron_view[df_cron_view['etapa'] == turma_focal]
+        if not meu_cron.empty:
+            # Exibe de forma elegante
+            for _, row in meu_cron.iterrows():
+                with st.expander(f"📌 {row['titulo_tema']}"):
+                    st.write(f"**Objetivo:** {row['descricao_base']}")
+                    st.caption("Este tema está aguardando a realização do encontro.")
+        else:
+            st.info("Nenhum tema planejado para esta turma. Use o painel à esquerda para começar.")
+    else:
+        st.info("Cronograma vazio.")
+
+    # 4. HISTÓRICO RECENTE DA TURMA
+    with st.expander(f"📜 Ver Histórico de Encontros Realizados - {turma_focal}"):
+        df_enc_hist = ler_aba("encontros")
+        if not df_enc_hist.empty:
+            hist_local = df_enc_hist[df_enc_hist['turma'] == turma_focal].sort_values(by=df_enc_hist.columns[0], ascending=False)
+            if not hist_local.empty:
+                st.dataframe(hist_local, use_container_width=True, hide_index=True)
             else:
-                st.write("Nenhum tema planejado ainda.")
+                st.write("Nenhum encontro registrado ainda.")
 
 # ==================================================================================
 # BLOCO ATUALIZADO: CADASTRO COM FOCO EM RESPONSÁVEL LEGAL E DIVERSIDADE FAMILIAR
