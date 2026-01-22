@@ -11,7 +11,7 @@ import plotly.express as px
 import extra_streamlit_components as stx
 
 # --- CONFIGURAÇÃO DE AMBIENTE (MUDE PARA FALSE NA BRANCH MAIN) ---
-IS_HOMOLOGACAO = True 
+IS_HOMOLOGACAO = False 
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
@@ -230,13 +230,13 @@ eh_gestor = papel_usuario in ["COORDENADOR", "ADMIN"]
 
 if eh_gestor:
     menu = st.sidebar.radio("MENU PRINCIPAL", [
-        "🏠 Início / Dashboard", "🏠 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
+        "🏠 Início / Dashboard", "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
         "📖 Diário de Encontros", "📝 Cadastrar Catequizando", "👤 Perfil Individual", 
         "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada"
     ])
 else:
     menu = st.sidebar.radio("MENU DO CATEQUISTA", [
-        "🏠 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", "📖 Diário de Encontros", 
+        "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", "📖 Diário de Encontros", 
         "✅ Fazer Chamada", "📝 Cadastrar Catequizando"
     ])
 
@@ -463,7 +463,7 @@ if menu == "🏠 Início / Dashboard":
                 )
 
 # --- PÁGINA: MINHA TURMA (VERSÃO COM FILTRO UNIVERSAL E OPÇÃO 'TODAS') ---
-elif menu == "🏠 Minha Turma":
+elif menu == "📚 Minha Turma":
     # 1. Definir o Escopo de Turmas Permitidas
     if eh_gestor:
         # Gestores podem ver todas as turmas cadastradas
