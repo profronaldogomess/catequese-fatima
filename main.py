@@ -466,27 +466,37 @@ if menu == "🏠 Início / Dashboard":
                     use_container_width=True
                 )
 
-# --- PÁGINA: MINHA TURMA (VERSÃO MULTI-TURMAS) ---
+# --- PÁGINA: MINHA TURMA (VERSÃO COM FILTRO UNIVERSAL E OPÇÃO 'TODAS') ---
 elif menu == "🏠 Minha Turma":
-    # 1. Lógica de Identificação de Múltiplas Turmas
-    turmas_vinculadas = [t.strip() for t in str(st.session_state.usuario.get('turma_vinculada', '')).split(',') if t.strip()]
-    
-    if not turmas_vinculadas:
-        st.warning("⚠️ Você não possui turmas vinculadas ao seu perfil. Contate a coordenação.")
-        st.stop()
-    
-    # 2. Seletor de Turma (Aparece apenas se tiver mais de uma)
-    if len(turmas_vinculadas) > 1:
-        turma_ativa = st.selectbox("🔄 Alternar entre minhas turmas:", turmas_vinculadas, key="selector_multi_turma")
+    # 1. Definir o Escopo de Turmas Permitidas
+    if eh_gestor:
+        # Gestores podem ver todas as turmas cadastradas
+        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
     else:
-        turma_ativa = turmas_vinculadas[0]
+        # Catequistas veem apenas as suas turmas vinculadas
+        turmas_permitidas = [t.strip() for t in str(st.session_state.usuario.get('turma_vinculada', '')).split(',') if t.strip()]
 
-    st.title(f"🏠 Painel da Turma: {turma_ativa}")
+    if not turmas_permitidas:
+        st.warning("⚠️ Nenhuma turma vinculada ao seu perfil. Contate a coordenação.")
+        st.stop()
+
+    # 2. Interface do Filtro (Aparece para todos, com opção 'TODAS')
+    opcoes_filtro = ["TODAS"] + turmas_permitidas
+    turma_ativa = st.selectbox("🔍 Selecione o Itinerário / Turma:", opcoes_filtro, key="filtro_universal_minha_turma")
+
+    st.title(f"🏠 Painel: {turma_ativa}")
     
+    # 3. Filtragem Dinâmica dos Dados
     df_cron = ler_aba("cronograma")
-    meus_alunos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
-    minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
+    
+    if turma_ativa == "TODAS":
+        meus_alunos = df_cat[df_cat['etapa'].isin(turmas_permitidas)] if not df_cat.empty else pd.DataFrame()
+        minhas_pres = df_pres[df_pres['id_turma'].isin(turmas_permitidas)] if not df_pres.empty else pd.DataFrame()
+    else:
+        meus_alunos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
+        minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
 
+    # 4. Métricas (Consolidadas ou Individuais)
     c1, c2, c3 = st.columns(3)
     c1.metric("Total de Catequizandos", len(meus_alunos))
     
@@ -496,98 +506,76 @@ elif menu == "🏠 Minha Turma":
         c2.metric("Frequência Média", f"{freq:.1f}%")
         total_encontros = minhas_pres['data_encontro'].nunique()
         c3.metric("Encontros Realizados", total_encontros)
-
-    st.divider()
-
-    st.subheader("🚩 Revisão do Último Encontro")
-    if not minhas_pres.empty:
-        ultima_data = minhas_pres['data_encontro'].max()
-        faltosos = minhas_pres[(minhas_pres['data_encontro'] == ultima_data) & (minhas_pres['status'] == 'AUSENTE')]
-        
-        if not faltosos.empty:
-            st.warning(f"No último encontro ({ultima_data}), os seguintes catequizandos faltaram. Que tal enviar uma mensagem de carinho?")
-            for _, f in faltosos.iterrows():
-                st.write(f"❌ {f['nome_catequizando']}")
-        else:
-            st.success(f"Parabéns! No último encontro ({ultima_data}), todos estavam presentes! 🎉")
     else:
-        st.info("Ainda não houve encontros registrados para esta turma.")
+        c2.metric("Frequência Média", "0%")
+        c3.metric("Encontros Realizados", "0")
 
     st.divider()
 
+    # 5. Revisão do Último Encontro (Apenas se uma turma específica for selecionada)
+    if turma_ativa != "TODAS":
+        st.subheader("🚩 Revisão do Último Encontro")
+        if not minhas_pres.empty:
+            ultima_data = minhas_pres['data_encontro'].max()
+            faltosos = minhas_pres[(minhas_pres['data_encontro'] == ultima_data) & (minhas_pres['status'] == 'AUSENTE')]
+            if not faltosos.empty:
+                st.warning(f"No último encontro ({ultima_data}), os seguintes catequizandos faltaram:")
+                for _, f in faltosos.iterrows(): st.write(f"❌ {f['nome_catequizando']}")
+            else:
+                st.success(f"Parabéns! No último encontro ({ultima_data}), todos estavam presentes! 🎉")
+        else:
+            st.info("Ainda não houve encontros registrados para esta turma.")
+        st.divider()
+
+    # 6. Aniversariantes do Mês (Consolidado ou Individual)
     st.subheader("🎂 Aniversariantes do Mês")
     df_niver_mes = obter_aniversariantes_mes(meus_alunos)
     
     if not df_niver_mes.empty:
-        if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True, key=f"btn_coletivo_{turma_ativa}"):
-            with st.spinner("Renderizando card coletivo..."):
+        label_card = f"GERAR CARD COLETIVO: {turma_ativa}"
+        if st.button(f"🖼️ {label_card}", use_container_width=True, key=f"btn_col_{turma_ativa}"):
+            with st.spinner("Renderizando card..."):
                 lista_para_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome_completo']}" for _, row in df_niver_mes.iterrows()]
                 card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
                 if card_coletivo:
-                    st.image(card_coletivo, caption=f"Aniversariantes de {turma_ativa}")
-                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, f"Aniversariantes_{turma_ativa}.png", "image/png")
+                    st.image(card_coletivo)
+                    st.download_button("📥 Baixar Card", card_coletivo, f"Niver_{turma_ativa}.png", "image/png")
         
         st.divider()
-
-        cols_n = st.columns(len(df_niver_mes) if len(df_niver_mes) < 4 else 4)
+        cols_n = st.columns(4)
         for i, (_, niver) in enumerate(df_niver_mes.iterrows()):
             with cols_n[i % 4]:
                 st.info(f"**Dia {int(niver['dia'])}**\n\n{niver['nome_completo']}")
-                if st.button(f"🎨 Card", key=f"btn_card_{turma_ativa}_{i}"):
-                    dados_envio = f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome_completo']}"
-                    card_img = gerar_card_aniversario(dados_envio, tipo="DIA")
+                if st.button(f"🎨 Card", key=f"btn_ind_{turma_ativa}_{i}"):
+                    card_img = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome_completo']}", tipo="DIA")
                     if card_img:
                         st.image(card_img, use_container_width=True)
-                        st.download_button("📥 Baixar", card_img, f"Niver_{niver['nome_completo']}.png", "image/png", key=f"dl_{turma_ativa}_{i}")
+                        st.download_button("📥", card_img, f"Niver_{niver['nome_completo']}.png", "image/png", key=f"dl_{turma_ativa}_{i}")
     else:
-        st.write("Nenhum aniversariante este mês na sua turma.")
+        st.write("Nenhum aniversariante este mês no escopo selecionado.")
 
+    # 7. Histórico e Próximos Temas
     col_passado, col_futuro = st.columns(2)
     with col_passado:
-        st.subheader("📖 Temas já Ministrados")
+        st.subheader("📖 Temas Ministrados")
         if not minhas_pres.empty:
-            historico = minhas_pres[['data_encontro', 'tema_do_dia']].drop_duplicates().sort_values('data_encontro', ascending=False)
+            historico = minhas_pres[['data_encontro', 'tema_do_dia', 'id_turma']].drop_duplicates().sort_values('data_encontro', ascending=False)
             st.dataframe(historico, use_container_width=True, hide_index=True)
-        else:
-            st.write("Nenhum tema registrado ainda.")
+        else: st.write("Nenhum tema registrado.")
 
     with col_futuro:
         st.subheader("🎯 Próximo Encontro")
-        if not df_cron.empty:
+        if not df_cron.empty and turma_ativa != "TODAS":
             temas_feitos = minhas_pres['tema_do_dia'].unique().tolist() if not minhas_pres.empty else []
             proximos = df_cron[(df_cron['etapa'] == turma_ativa) & (~df_cron['titulo_tema'].isin(temas_feitos))]
             if not proximos.empty:
-                proximo_tema = proximos.iloc[0]
-                st.success(f"**Sugestão de Tema:**\n\n### {proximo_tema['titulo_tema']}")
-                st.write(f"**Objetivo:** {proximo_tema.get('descricao_base', 'Consultar manual do catequista.')}")
-            else:
-                st.write("✅ Todos os temas do cronograma foram concluídos!")
-        else:
-            st.info("Dica: Peça para a coordenação cadastrar o Cronograma.")
+                st.success(f"**Sugestão:** {proximos.iloc[0]['titulo_tema']}")
+            else: st.write("✅ Cronograma concluído!")
+        else: st.info("Selecione uma turma específica para ver o cronograma.")
 
     st.divider()
     with st.expander("👥 Ver Lista Completa de Contatos"):
-        st.dataframe(meus_alunos[['nome_completo', 'contato_principal', 'status']], use_container_width=True)
-    
-    st.subheader("📱 Engajamento WhatsApp")
-    if not minhas_pres.empty:
-        ultima_data = minhas_pres['data_encontro'].max()
-        dados_ultimo = minhas_pres[minhas_pres['data_encontro'] == ultima_data]
-        
-        tema_ultimo = dados_ultimo.iloc[0]['tema_do_dia']
-        lista_presentes = dados_ultimo[dados_ultimo['status'] == 'PRESENTE']['nome_catequizando'].tolist()
-        lista_faltosos = dados_ultimo[dados_ultimo['status'] == 'AUSENTE']['nome_catequizando'].tolist()
-
-        with st.expander("✨ Gerar Mensagem para o Grupo"):
-            if st.button("📝 Criar Texto Personalizado", key=f"btn_ia_zap_{turma_ativa}"):
-                with st.spinner("Escrevendo mensagem..."):
-                    texto_zap = gerar_mensagem_whatsapp(tema_ultimo, lista_presentes, lista_faltosos)
-                    st.info(texto_zap)
-                    import urllib.parse
-                    link_zap = f"https://wa.me/?text={urllib.parse.quote(texto_zap)}"
-                    st.markdown(f'<a href="{link_zap}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:10px; border-radius:5px; width:100%;">📲 Enviar para WhatsApp</button></a>', unsafe_allow_html=True)
-    else:
-        st.info("Faça a primeira chamada para liberar esta função.")
+        st.dataframe(meus_alunos[['nome_completo', 'contato_principal', 'etapa', 'status']], use_container_width=True, hide_index=True)
 
 # --- PÁGINA: DIÁRIO DE ENCONTROS ---
 elif menu == "📖 Diário de Encontros":
