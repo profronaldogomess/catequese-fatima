@@ -1020,36 +1020,64 @@ elif menu == "🏫 Gestão de Turmas":
                     except Exception as e: st.error(f"Erro: {e}")
 
     with t3:
-        st.subheader("✏️ Detalhes e Edição")
+        st.subheader("✏️ Detalhes e Edição da Turma")
         if not df_turmas.empty:
-            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_v9")
+            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_v10")
             if sel_t:
                 d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
                 nome_turma_original = str(d['nome_turma'])
-                en = st.text_input("Nome da Turma", value=d['nome_turma']).upper()
-                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
-                cats_atuais = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
-                ed_cats = st.multiselect("Catequistas", options=lista_todos_cats, default=[c for c in cats_atuais if c in lista_todos_cats])
                 
-                if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                    lista_up = [str(d['id_turma']), en, d['etapa'], int(d['ano']), ", ".join(ed_cats), d['dias_semana'], d.get('previsao_eucaristia',''), d.get('previsao_crisma',''), d.get('turno',''), d.get('local','')]
-                    if atualizar_turma(d['id_turma'], lista_up):
-                        planilha = conectar_google_sheets()
-                        aba_u = planilha.worksheet("usuarios")
-                        for _, cat_row in equipe_tecnica.iterrows():
-                            c_nome = cat_row['nome']
-                            celula = aba_u.find(c_nome, in_column=1)
-                            if celula:
-                                v_atual = aba_u.cell(celula.row, 5).value or ""
-                                v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                mudou = False
-                                if c_nome in ed_cats:
-                                    if en not in v_list: v_list.append(en); mudou = True
-                                else:
-                                    if en in v_list: v_list.remove(en); mudou = True
-                                    if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
-                                if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                        st.success("✅ Sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                # --- CAMPOS DE EDIÇÃO RESTAURADOS ---
+                c1, c2 = st.columns(2)
+                en = c1.text_input("Nome da Turma", value=d['nome_turma']).upper()
+                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0)
+                ea = c2.number_input("Ano Letivo", value=int(d['ano']))
+                
+                # Tratamento para os Dias de Encontro
+                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
+                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
+                
+                st.markdown("---")
+                c3, c4 = st.columns(2)
+                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
+                turno_atual = str(d.get('turno', 'MANHÃ')).upper()
+                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0)
+                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA')).upper()
+                
+                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''))
+                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''))
+                
+                # Seleção de Catequistas
+                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
+                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
+                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats])
+                
+                if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR TUDO"):
+                    with st.spinner("Processando atualizações e vínculos..."):
+                        # 1. Montagem da lista de 10 colunas para a aba 'turmas'
+                        lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
+                        
+                        if atualizar_turma(d['id_turma'], lista_up):
+                            # 2. SINCRONIZAÇÃO NOS PERFIS DOS USUÁRIOS
+                            planilha = conectar_google_sheets()
+                            aba_u = planilha.worksheet("usuarios")
+                            for _, cat_row in equipe_tecnica.iterrows():
+                                c_nome = cat_row['nome']
+                                celula = aba_u.find(c_nome, in_column=1)
+                                if celula:
+                                    v_atual = aba_u.cell(celula.row, 5).value or ""
+                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                    mudou = False
+                                    if c_nome in ed_cats:
+                                        if en not in v_list: v_list.append(en); mudou = True
+                                        if nome_turma_original in v_list and en != nome_turma_original:
+                                            v_list.remove(nome_turma_original); mudou = True
+                                    else:
+                                        if en in v_list: v_list.remove(en); mudou = True
+                                        if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
+                                    if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                            
+                            st.success("✅ Turma e perfis sincronizados!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
