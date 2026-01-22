@@ -124,7 +124,7 @@ from utils import (
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
-    analisar_turma_local, gerar_relatorio_sacramentos_ia, analisar_saude_familiar_ia
+    analisar_turma_local, gerar_relatorio_sacramentos_ia, analisar_saude_familiar_ia, gerar_mensagem_reacolhida_ia
 )
 
 # --- 6. FUNÇÕES AUXILIARES DE INTERFACE ---
