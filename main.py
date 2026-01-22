@@ -966,7 +966,7 @@ elif menu == "👤 Perfil Individual":
                             use_container_width=True
                         )
 
-# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE TURMAS (VERSÃO CONSOLIDADA COM FIX DE SELEÇÃO) ---
+# --- INÍCIO DO BLOCO INTEGRAL: GESTÃO DE TURMAS (VERSÃO COM SINCRONIZAÇÃO DE VÍNCULOS) ---
 elif menu == "🏫 Gestão de Turmas":
     st.title("🏫 Gestão de Turmas e Fila de Espera")
     
@@ -1024,50 +1024,40 @@ elif menu == "🏫 Gestão de Turmas":
         elif e_t == "ADULTOS CRISMA":
             p_cris = st.text_input("🕊️ Previsão da Crisma", key="p_cris_criar_v5")
         
-        # Busca catequistas da aba usuários (Filtro global já definido no main)
         cats = st.multiselect("Catequistas Responsáveis:", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [], key="cats_criar_v5")
         
         st.divider()
         
         if st.button("🚀 SALVAR NOVA TURMA", key="btn_salvar_t_v5", use_container_width=True):
-            # Validação de campos obrigatórios com feedback ao usuário
-            if not n_t:
-                st.warning("⚠️ Por favor, informe o NOME da turma.")
-            elif not cats:
-                st.warning("⚠️ Selecione ao menos um CATEQUISTA responsável.")
-            elif not n_dias:
-                st.warning("⚠️ Selecione os DIAS de encontro.")
+            if not n_t or not cats:
+                st.warning("⚠️ Nome da turma e Catequistas são obrigatórios.")
             else:
-                with st.spinner("Conectando ao banco de dados e salvando..."):
+                with st.spinner("Gravando turma e sincronizando perfis..."):
                     try:
-                        # Montagem da lista de 10 colunas (A até J)
-                        nova_t = [
-                            f"TRM-{int(time.time())}", # A: ID
-                            n_t,                       # B: Nome
-                            e_t,                       # C: Etapa
-                            int(ano),                  # D: Ano
-                            ", ".join(cats),           # E: Catequistas
-                            ", ".join(n_dias),         # F: Dias
-                            p_euca,                    # G: Prev Euca
-                            p_cris,                    # H: Prev Crisma
-                            turno_t,                   # I: Turno
-                            local_t                    # J: Local
-                        ]
-                        
                         planilha = conectar_google_sheets()
                         if planilha:
-                            aba = planilha.worksheet("turmas")
-                            aba.append_row(nova_t)
+                            # 1. Grava na aba 'turmas'
+                            nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats), ", ".join(n_dias), p_euca, p_cris, turno_t, local_t]
+                            planilha.worksheet("turmas").append_row(nova_t)
                             
-                            st.success(f"✅ Turma '{n_t}' cadastrada com sucesso!")
+                            # 2. SINCRONIZAÇÃO: Atualiza a aba 'usuarios' para cada catequista selecionado
+                            aba_u = planilha.worksheet("usuarios")
+                            for c_nome in cats:
+                                celula = aba_u.find(c_nome, in_column=1) # Busca na Coluna A (Nome)
+                                if celula:
+                                    # Coluna E (5) é turma_vinculada
+                                    v_atual = aba_u.cell(celula.row, 5).value or ""
+                                    if n_t not in v_atual:
+                                        novo_v = f"{v_atual}, {n_t}".strip(", ")
+                                        aba_u.update_cell(celula.row, 5, novo_v)
+                            
+                            st.success(f"✅ Turma '{n_t}' criada e vinculada com sucesso!")
                             st.balloons()
-                            st.cache_data.clear() # Limpa o cache para a nova turma aparecer nas listas
+                            st.cache_data.clear()
                             time.sleep(1.5)
                             st.rerun()
-                        else:
-                            st.error("❌ Erro crítico: Não foi possível conectar à planilha Google.")
                     except Exception as e:
-                        st.error(f"❌ Erro ao salvar: Verifique se a aba 'turmas' existe na planilha. Detalhe: {e}")
+                        st.error(f"Erro na sincronização: {e}")
 
     with t3:
         st.subheader("✏️ Detalhes e Edição")
@@ -1075,64 +1065,46 @@ elif menu == "🏫 Gestão de Turmas":
             sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_t_v6_final")
             
             if sel_t:
-                # Localiza os dados atuais da turma
                 d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
-                
                 c1, c2 = st.columns(2)
                 en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="en_edit_v6").upper()
                 ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="ea_edit_v6")
-                
                 ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="ee_edit_v6")
                 
-                # --- NOVO: ASSOCIAÇÃO DE CATEQUISTAS ---
-                # 1. Prepara a lista de todos os catequistas disponíveis
-                lista_todos_catequistas = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
-                
-                # 2. Identifica quem já está na turma hoje (converte string da planilha em lista)
+                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
                 cats_atuais = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
-                
-                # 3. Campo de seleção múltipla
-                ed_cats = st.multiselect(
-                    "Catequistas Responsáveis (Associe ou remova):", 
-                    options=lista_todos_catequistas,
-                    default=[c for c in cats_atuais if c in lista_todos_catequistas],
-                    key="ed_cats_v6"
-                )
+                ed_cats = st.multiselect("Catequistas Responsáveis:", options=lista_todos_cats, default=[c for c in cats_atuais if c in lista_todos_cats], key="ed_cats_v6")
                 
                 st.markdown("---")
                 c3, c4 = st.columns(2)
                 et = c3.selectbox("Turno", ["MANHÃ", "TARDE", "NOITE"], index=["MANHÃ", "TARDE", "NOITE"].index(d.get('turno', 'MANHÃ')) if d.get('turno') in ["MANHÃ", "TARDE", "NOITE"] else 0, key="et_edit_v6")
                 el = c4.text_input("Local / Sala", value=d.get('local', ''), key="el_edit_v6").upper()
-                
                 pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="pe_edit_v6")
                 pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="pc_edit_v6")
                 
-                st.divider()
-                
                 if st.button("💾 SALVAR ALTERAÇÕES DA TURMA", key="btn_edit_t_v6_exec", use_container_width=True):
-                    if not ed_cats:
-                        st.error("⚠️ A turma não pode ficar sem catequista responsável.")
-                    else:
-                        # Montagem da lista de 10 colunas (A até J) para o database.py
-                        # Ordem: ID, Nome, Etapa, Ano, Catequistas, Dias, Euca, Crisma, Turno, Local
-                        lista_up = [
-                            str(d['id_turma']), 
-                            en, 
-                            ee, 
-                            int(ea), 
-                            ", ".join(ed_cats), # Salva os novos catequistas associados
-                            d['dias_semana'], 
-                            pe, 
-                            pc, 
-                            et, 
-                            el
-                        ]
-                        
-                        if atualizar_turma(d['id_turma'], lista_up):
-                            st.success(f"✅ Turma '{en}' atualizada com sucesso!")
-                            st.cache_data.clear()
-                            time.sleep(1.5)
-                            st.rerun()
+                    with st.spinner("Sincronizando alterações..."):
+                        try:
+                            # 1. Atualiza aba 'turmas'
+                            lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), d['dias_semana'], pe, pc, et, el]
+                            if atualizar_turma(d['id_turma'], lista_up):
+                                # 2. SINCRONIZAÇÃO: Garante que os catequistas tenham o vínculo atualizado
+                                planilha = conectar_google_sheets()
+                                aba_u = planilha.worksheet("usuarios")
+                                for c_nome in ed_cats:
+                                    celula = aba_u.find(c_nome, in_column=1)
+                                    if celula:
+                                        v_atual = aba_u.cell(celula.row, 5).value or ""
+                                        if en not in v_atual:
+                                            novo_v = f"{v_atual}, {en}".strip(", ")
+                                            aba_u.update_cell(celula.row, 5, novo_v)
+                                
+                                st.success("✅ Turma e vínculos de catequistas atualizados!")
+                                st.cache_data.clear()
+                                time.sleep(1.5)
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao sincronizar: {e}")
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
