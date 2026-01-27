@@ -1113,6 +1113,37 @@ def gerar_relatorio_evasao_pdf(df_evasao):
         if pdf.get_y() > 250: pdf.add_page()
     return finalizar_pdf(pdf)
 
+def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, lista_nomes):
+    """Gera a lista nominal oficial para a secretaria paroquial."""
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, f"LISTA DE CANDIDATOS: {tipo_sacramento}")
+    
+    pdf.set_font("helvetica", "B", 12)
+    pdf.cell(0, 10, limpar_texto(f"Turma: {nome_turma}"), ln=True)
+    pdf.cell(0, 10, limpar_texto(f"Data da Celebração: {formatar_data_br(data_cerimonia)}"), ln=True)
+    pdf.ln(5)
+    
+    # Tabela
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(15, 8, "Nº", border=1, fill=True, align='C')
+    pdf.cell(175, 8, "Nome Completo do Catequizando", border=1, fill=True)
+    pdf.ln()
+    
+    pdf.set_font("helvetica", "", 10)
+    for i, nome in enumerate(lista_nomes, 1):
+        pdf.cell(15, 7, str(i), border=1, align='C')
+        pdf.cell(175, 7, limpar_texto(nome), border=1)
+        pdf.ln()
+        if pdf.get_y() > 260: pdf.add_page()
+        
+    pdf.ln(15)
+    pdf.set_font("helvetica", "I", 9)
+    pdf.multi_cell(0, 5, "Documento gerado para fins de emissão de certificados e registro nos livros de sacramentos da Paróquia Nossa Senhora de Fátima.")
+    
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
 # ==============================================================================
