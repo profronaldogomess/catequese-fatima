@@ -1457,29 +1457,114 @@ elif menu == "🕊️ Gestão de Sacramentos":
     tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
     
     with tab_dash:
-        # 1. Censo de Batismos realizados NO SISTEMA (Aba sacramentos_recebidos)
-        total_batismos_ano = 0
+        # 1. Censo de Sacramentos REALIZADOS NO SISTEMA EM 2026 (Aba sacramentos_recebidos)
         df_recebidos = ler_aba("sacramentos_recebidos")
         
+        bat_ano, euc_ano, cri_ano = 0, 0, 0
         if not df_recebidos.empty:
             try:
-                # Tenta identificar a coluna de data (pode ser 'data' ou 'data_recebimento')
-                col_dt = 'data' if 'data' in df_recebidos.columns else 'data_recebimento'
-                df_recebidos['data_dt'] = pd.to_datetime(df_recebidos[col_dt], errors='coerce')
-                # Filtra batismos do ano atual (2026 conforme seu sistema)
-                total_batismos_ano = len(df_recebidos[
-                    (df_recebidos['tipo'].str.upper().str.contains('BATISMO')) & 
-                    (df_recebidos['data_dt'].dt.year == 2026)
-                ])
+                df_recebidos['data_dt'] = pd.to_datetime(df_recebidos['data'], errors='coerce')
+                df_2026 = df_recebidos[df_recebidos['data_dt'].dt.year == 2026]
+                bat_ano = len(df_2026[df_2026['tipo'].str.upper().str.contains('BATISMO')])
+                euc_ano = len(df_2026[df_2026['tipo'].str.upper().str.contains('EUCARISTIA')])
+                cri_ano = len(df_2026[df_2026['tipo'].str.upper().str.contains('CRISMA')])
             except: pass
 
         st.markdown(f"""
             <div style='background-color:#f8f9f0; padding:20px; border-radius:10px; border:1px solid #e03d11; text-align:center; margin-bottom:20px;'>
                 <h3 style='margin:0; color:#e03d11;'>🕊️ Frutos da Evangelização 2026</h3>
-                <p style='font-size:22px; color:#417b99; margin:5px 0;'><b>{total_batismos_ano} Batismos realizados este ano</b></p>
-                <p style='font-size:14px; color:#666;'>Registros de novos sacramentos efetuados através do sistema.</p>
+                <p style='font-size:16px; color:#666; margin-bottom:15px;'>Sacramentos celebrados e registrados este ano:</p>
+                <div style='display: flex; justify-content: space-around;'>
+                    <div><b style='font-size:20px; color:#417b99;'>{bat_ano}</b><br><small>Batismos</small></div>
+                    <div><b style='font-size:20px; color:#417b99;'>{euc_ano}</b><br><small>Eucaristias</small></div>
+                    <div><b style='font-size:20px; color:#417b99;'>{cri_ano}</b><br><small>Crismas</small></div>
+                </div>
             </div>
         """, unsafe_allow_html=True)
+
+        # 2. Quadro Geral de Sacramentos (Censo Paroquial Completo)
+        if not df_cat.empty:
+            df_censo = df_cat.copy()
+            df_censo['idade_real'] = df_censo['data_nascimento'].apply(calcular_idade)
+            
+            # Divisão de Públicos
+            df_kids = df_censo[df_censo['idade_real'] < 18]
+            df_adults = df_censo[df_censo['idade_real'] >= 18]
+            
+            # --- PÚBLICO INFANTIL / JUVENIL ---
+            st.subheader("📊 Censo Sacramental: Infantil / Juvenil")
+            c1, c2, c3 = st.columns(3)
+            
+            with c1: # Batismo Kids
+                total_k = len(df_kids)
+                k_bat = len(df_kids[df_kids['batizado_sn'].str.upper() == 'SIM'])
+                perc_k_bat = (k_bat / total_k * 100) if total_k > 0 else 0
+                st.metric("Batizados", f"{k_bat} / {total_k}", f"{perc_k_bat:.1f}%")
+            
+            with c2: # Eucaristia Kids
+                k_euc = df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
+                perc_k_euc = (k_euc / total_k * 100) if total_k > 0 else 0
+                st.metric("1ª Eucaristia", f"{k_euc} / {total_k}", f"{perc_k_euc:.1f}%")
+                
+            with c3: # Crisma Kids (Geralmente Perseverança)
+                k_cri = df_kids['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
+                perc_k_cri = (k_cri / total_k * 100) if total_k > 0 else 0
+                st.metric("Crismados", f"{k_cri} / {total_k}", f"{perc_k_cri:.1f}%")
+
+            st.markdown("---")
+
+            # --- PÚBLICO ADULTOS ---
+            st.subheader("📊 Censo Sacramental: Adultos")
+            a1, a2, a3 = st.columns(3)
+            
+            with a1: # Batismo Adultos
+                total_a = len(df_adults)
+                a_bat = len(df_adults[df_adults['batizado_sn'].str.upper() == 'SIM'])
+                perc_a_bat = (a_bat / total_a * 100) if total_a > 0 else 0
+                st.metric("Batizados", f"{a_bat} / {total_a}", f"{perc_a_bat:.1f}%")
+            
+            with a2: # Eucaristia Adultos
+                a_euc = df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
+                perc_a_euc = (a_euc / total_a * 100) if total_a > 0 else 0
+                st.metric("Eucaristia", f"{a_euc} / {total_a}", f"{perc_a_euc:.1f}%")
+                
+            with a3: # Crisma Adultos
+                a_cri = df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
+                perc_a_cri = (a_cri / total_a * 100) if total_a > 0 else 0
+                st.metric("Crismados", f"{a_cri} / {total_a}", f"{perc_a_cri:.1f}%")
+        else:
+            st.warning("Base de catequizandos vazia.")
+
+        st.divider()
+        st.subheader("🏫 Auditoria Nominal por Turma")
+        
+        if not df_turmas.empty:
+            for _, t in df_turmas.iterrows():
+                nome_t = str(t['nome_turma']).strip().upper()
+                alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
+                
+                if not alunos_t.empty:
+                    with st.expander(f"📍 {t['nome_turma']} - Diagnóstico de IVC"):
+                        # Criar colunas para os 3 sacramentos dentro do expander
+                        col_b, col_e, col_c = st.columns(3)
+                        
+                        with col_b:
+                            st.markdown("**🕊️ Batismo**")
+                            for _, r in alunos_t.iterrows():
+                                cor = "✅" if r['batizado_sn'] == "SIM" else "❌"
+                                st.caption(f"{cor} {r['nome_completo']}")
+                        
+                        with col_e:
+                            st.markdown("**🍞 Eucaristia**")
+                            for _, r in alunos_t.iterrows():
+                                cor = "✅" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "❌"
+                                st.caption(f"{cor} {r['nome_completo']}")
+                                
+                        with col_c:
+                            st.markdown("**🔥 Crisma**")
+                            for _, r in alunos_t.iterrows():
+                                cor = "✅" if "CRISMA" in str(r['sacramentos_ja_feitos']).upper() else "❌"
+                                st.caption(f"{cor} {r['nome_completo']}")
 
         # 2. Segmentação de Público por IDADE (Correção do Denominador)
         if not df_cat.empty:
