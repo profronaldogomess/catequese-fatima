@@ -311,3 +311,18 @@ def sincronizar_renomeacao_turma_catequizandos(nome_antigo, nome_novo):
             st.error(f"Erro na sincronia de nomes: {e}")
             return False
     return False
+
+def atualizar_evento_sacramento(id_evento, novos_dados):
+    """Atualiza os dados de um evento na aba sacramentos_eventos."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("sacramentos_eventos")
+            celula = aba.find(str(id_evento))
+            if celula:
+                # Atualiza as colunas A até E (ID, Tipo, Data, Turmas, Catequista)
+                aba.update(f"A{celula.row}:E{celula.row}", [novos_dados])
+                st.cache_data.clear()
+                return True
+        except: pass
+    return False
