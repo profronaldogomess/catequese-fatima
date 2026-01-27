@@ -116,7 +116,7 @@ from utils import (
     gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
     gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
     gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
-    processar_alertas_evasao,
+    processar_alertas_evasao, gerar_lista_secretaria_pdf,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
     gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
@@ -1454,8 +1454,83 @@ elif menu == "🏫 Gestão de Turmas":
 # ==============================================================================
 elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
-    tab_dash, tab_reg, tab_hist = st.tabs(["📊 Auditoria Sacramental", "✍️ Registrar Sacramento", "📜 Histórico"])
+    tab_dash, tab_plan, tab_reg, tab_hist = st.tabs([
+        "📊 Auditoria Sacramental", "📅 Planejar sacramento", "✍️ Registrar Sacramento", "📜 Histórico"
+    ])
     
+    with tab_plan:
+        st.subheader("📅 Planejamento de Cerimônias")
+        
+        if df_turmas.empty:
+            st.warning("Cadastre turmas para planejar sacramentos.")
+        else:
+            # 1. SELEÇÃO DA TURMA E SACRAMENTO
+            c1, c2 = st.columns(2)
+            t_plan = c1.selectbox("Selecione a Turma:", df_turmas['nome_turma'].tolist(), key="sel_t_plan")
+            tipo_s_plan = c2.selectbox("Sacramento Previsto:", ["EUCARISTIA", "CRISMA"], key="sel_s_plan")
+            
+            info_t = df_turmas[df_turmas['nome_turma'] == t_plan].iloc[0]
+            col_data = 'previsao_eucaristia' if tipo_s_plan == "EUCARISTIA" else 'previsao_crisma'
+            data_atual_prevista = info_t.get(col_data, "")
+            
+            # 2. DEFINIÇÃO DA DATA
+            with st.expander("⚙️ Definir/Alterar Data da Cerimônia", expanded=not data_atual_prevista):
+                nova_data_p = st.date_input("Data da Missa/Celebração:", 
+                                          value=converter_para_data(data_atual_prevista) if data_atual_prevista else date.today())
+                if st.button("📌 SALVAR DATA NO CRONOGRAMA DA TURMA"):
+                    lista_up_t = info_t.tolist()
+                    # Coluna G (6) é Eucaristia, H (7) é Crisma no rigor das 10 colunas da aba turmas
+                    idx_col = 6 if tipo_s_plan == "EUCARISTIA" else 7
+                    lista_up_t[idx_col] = str(nova_data_p)
+                    if atualizar_turma(info_t['id_turma'], lista_up_t):
+                        st.success("Data salva!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+            # 3. DIAGNÓSTICO DE CANDIDATOS
+            if data_atual_prevista:
+                st.divider()
+                st.info(f"🗓️ Celebração de **{tipo_s_plan}** prevista para: **{formatar_data_br(data_atual_prevista)}**")
+                
+                alunos_t = df_cat[(df_cat['etapa'] == t_plan) & (df_cat['status'] == 'ATIVO')]
+                
+                prontos = alunos_t[alunos_t['batizado_sn'] == 'SIM']
+                pendentes = alunos_t[alunos_t['batizado_sn'] != 'SIM']
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total de Candidatos", len(alunos_t))
+                m2.metric("✅ Prontos", len(prontos))
+                m3.metric("⚠️ Sem Batismo", len(pendentes), delta_color="inverse")
+                
+                col_l1, col_l2 = st.columns(2)
+                with col_l1:
+                    st.markdown("##### ✅ Aptos para o Sacramento")
+                    st.caption("Ativos e Batizados")
+                    for n in prontos['nome_completo'].tolist(): st.write(f"· {n}")
+                    
+                    if st.button("📄 GERAR LISTA PARA SECRETARIA (PDF)", use_container_width=True):
+                        st.session_state.pdf_secretaria = gerar_lista_secretaria_pdf(t_plan, data_atual_prevista, tipo_s_plan, prontos['nome_completo'].tolist())
+                    
+                    if "pdf_secretaria" in st.session_state:
+                        st.download_button("📥 BAIXAR LISTA NOMINAL", st.session_state.pdf_secretaria, f"Lista_Secretaria_{t_plan}.pdf", use_container_width=True)
+
+                with col_l2:
+                    st.markdown("##### 🚨 Impedimentos (Atenção!)")
+                    st.caption("Precisam de Batismo urgente")
+                    if not pendentes.empty:
+                        for n in pendentes['nome_completo'].tolist(): st.error(f"⚠️ {n}")
+                    else:
+                        st.success("Nenhum impedimento na turma!")
+
+                # 4. AÇÃO PÓS-CERIMÔNIA
+                st.divider()
+                with st.expander("🏁 FINALIZAR PROCESSO (Pós-Celebração)"):
+                    st.warning("CUIDADO: Esta ação registrará o sacramento para todos os APTOS acima e atualizará o histórico deles permanentemente.")
+                    if st.button(f"🚀 CONFIRMAR QUE A CELEBRAÇÃO OCORREU"):
+                        id_ev = f"PLAN-{int(time.time())}"
+                        lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s_plan, str(data_atual_prevista)] for _, r in prontos.iterrows()]
+                        
+                        if registrar_evento_sacramento_completo([id_ev, tipo_s_plan, str(data_atual_prevista), t_plan, st.session_state.usuario['nome']], lista_p, tipo_s_plan):
+                            st.success("Glória a Deus! Todos os registros foram atualizados."); st.balloons(); time.sleep(2); st.rerun()
+
     with tab_dash:
         # 1. Censo de Sacramentos REALIZADOS NO SISTEMA EM 2026 (Aba sacramentos_recebidos)
         df_recebidos = ler_aba("sacramentos_recebidos")
