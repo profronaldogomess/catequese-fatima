@@ -1733,11 +1733,75 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_hist:
-        st.subheader("📜 Histórico de Eventos")
+        st.subheader("📜 Histórico e Auditoria de Eventos")
         df_eventos = ler_aba("sacramentos_eventos")
+        
         if not df_eventos.empty:
-            st.dataframe(df_eventos.sort_values(by=df_eventos.columns[2], ascending=False), use_container_width=True, hide_index=True)
-        else: st.info("Nenhum evento registrado.")
+            # --- 1. FILTROS INTELIGENTES ---
+            st.markdown("#### 🔍 Filtrar Registros")
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            
+            filtro_tipo = c1.selectbox("Sacramento:", ["TODOS", "BATISMO", "EUCARISTIA", "CRISMA"], key="f_sac")
+            
+            # Preparação de datas para os filtros
+            df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
+            anos_disp = sorted(df_eventos['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
+            filtro_ano = c2.selectbox("Ano:", ["TODOS"] + [str(a) for a in anos_disp], key="f_ano")
+            
+            meses_br = {
+                "TODOS": "TODOS", "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
+                "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto", "09": "Setembro",
+                "10": "Outubro", "11": "Novembro", "12": "Dezembro"
+            }
+            filtro_mes = c3.selectbox("Mês:", list(meses_br.values()), key="f_mes")
+            
+            # Aplicar Filtros no DataFrame de exibição
+            df_f = df_eventos.copy()
+            if filtro_tipo != "TODOS":
+                df_f = df_f[df_f['tipo'] == filtro_tipo]
+            if filtro_ano != "TODOS":
+                df_f = df_f[df_f['data_dt'].dt.year == int(filtro_ano)]
+            if filtro_mes != "TODOS":
+                # Inverte o dicionário para pegar o número do mês
+                mes_num = [k for k, v in meses_br.items() if v == filtro_mes][0]
+                df_f = df_f[df_f['data_dt'].dt.strftime('%m') == mes_num]
+
+            # Exibição da Tabela Filtrada
+            st.dataframe(
+                df_f[['id_evento', 'tipo', 'data', 'turmas', 'catequista']].sort_values(by='data', ascending=False), 
+                use_container_width=True, 
+                hide_index=True
+            )
+
+            # --- 2. ÁREA DE EDIÇÃO (CORREÇÃO) ---
+            st.divider()
+            with st.expander("✏️ Editar Registro de Evento"):
+                st.info("Selecione um evento pelo ID para corrigir a data ou o tipo.")
+                id_para_editar = st.selectbox("Selecione o ID do Evento:", [""] + df_f['id_evento'].tolist())
+                
+                if id_para_editar:
+                    # Localiza os dados atuais
+                    dados_atuais = df_eventos[df_eventos['id_evento'] == id_para_editar].iloc[0]
+                    
+                    with st.form("form_edit_sac_evento"):
+                        col_e1, col_e2 = st.columns(2)
+                        ed_tipo = col_e1.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"], 
+                                                 index=["BATISMO", "EUCARISTIA", "CRISMA"].index(dados_atuais['tipo']))
+                        ed_data = col_e2.date_input("Data Correta", value=pd.to_datetime(dados_atuais['data']).date())
+                        ed_turmas = st.text_input("Turmas (Nomes separados por vírgula)", value=dados_atuais['turmas'])
+                        
+                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                            from database import atualizar_evento_sacramento
+                            novos_dados = [id_para_editar, ed_tipo, str(ed_data), ed_turmas, dados_atuais['catequista']]
+                            
+                            if atualizar_evento_sacramento(id_para_editar, novos_dados):
+                                st.success("✅ Evento atualizado com sucesso!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao atualizar. Verifique a conexão.")
+        else:
+            st.info("Nenhum evento registrado no histórico.")
 
 # --- PÁGINA: FAZER CHAMADA (FILTRO DINÂMICO PARA MULTI-TURMAS) ---
 elif menu == "✅ Fazer Chamada":
