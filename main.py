@@ -750,6 +750,7 @@ elif menu == "📝 Cadastrar Catequizando":
             st.divider()
             st.subheader("👪 2. Filiação e Responsáveis")
             
+            # Sub-bloco para Pais Biológicos
             col_mae, col_pai = st.columns(2)
             with col_mae:
                 st.markdown("##### 👩‍🦱 Dados da Mãe")
@@ -762,8 +763,11 @@ elif menu == "📝 Cadastrar Catequizando":
                 prof_pai = st.text_input("Profissão do Pai").upper()
                 tel_pai = st.text_input("Telemóvel do Pai")
 
+            # NOVO ESPAÇO EXTRA: RESPONSÁVEL LEGAL / CUIDADOR (Acolhimento de novas realidades familiares)
             st.markdown("---")
             st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
+            st.caption("Preencha caso a criança seja cuidada por Avós, Tios, Primos ou Tutores. Isso NÃO apaga os nomes dos pais acima.")
+            
             cr1, cr2, cr3 = st.columns([2, 1, 1])
             responsavel_nome = cr1.text_input("Nome do Cuidador/Responsável").upper()
             vinculo_resp = cr2.selectbox("Vínculo", ["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
@@ -776,6 +780,7 @@ elif menu == "📝 Cadastrar Catequizando":
                 estado_civil = a1.selectbox("Seu Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"])
                 sacramentos_list = a2.multiselect("Sacramentos que VOCÊ já possui:", ["BATISMO", "EUCARISTIA", "MATRIMÔNIO"])
                 sacramentos = ", ".join(sacramentos_list)
+                
                 part_grupo = a1.radio("Participa de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
                 qual_grupo = a1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
                 est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", "NÃO", 0
@@ -785,8 +790,10 @@ elif menu == "📝 Cadastrar Catequizando":
                 est_civil_pais = fe1.selectbox("Estado Civil dos Pais/Responsáveis", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS/DIVORCIADOS", "SOLTEIROS", "VIÚVO(A)"])
                 sac_pais_list = fe2.multiselect("Sacramentos que os PAIS/RESPONSÁVEIS já fizeram:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
                 sac_pais = ", ".join(sac_pais_list)
+                
                 part_grupo = fe1.radio("Os pais ou a criança participam de Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
                 qual_grupo = fe1.text_input("Se sim, qual?") if part_grupo == "SIM" else "N/A"
+                
                 tem_irmaos = fe2.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
                 qtd_irmaos = fe2.number_input("Se sim, quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
                 estado_civil, sacramentos = "N/A", "N/A"
@@ -802,132 +809,50 @@ elif menu == "📝 Cadastrar Catequizando":
             if st.form_submit_button("💾 SALVAR INSCRIÇÃO"):
                 if nome and contato and etapa_inscricao != "SEM TURMAS":
                     novo_id = f"CAT-{int(time.time())}"
+                    
+                    # Lógica de definição do Responsável Principal (Coluna J)
+                    # Se houver um cuidador específico, ele vai para a ficha, senão usa os pais.
                     resp_final = responsavel_nome if responsavel_nome else f"{nome_mae} / {nome_pai}"
+                    
+                    # Lógica da 30ª Coluna (AD): Observação Pastoral da Família
                     obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
 
+                    # MONTAGEM RIGOROSA DAS 30 COLUNAS (A até AD)
                     registro = [[
-                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco,
-                        nome_mae, nome_pai, resp_final, docs_faltando, qual_grupo, "ATIVO",
-                        medicamento, tgo, estado_civil, sacramentos, prof_mae, tel_mae,
-                        prof_pai, tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo,
-                        tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia
+                        novo_id,          # A: id_catequizando
+                        etapa_inscricao,  # B: etapa
+                        nome,             # C: nome_completo
+                        str(data_nasc),   # D: data_nascimento
+                        batizado,         # E: batizado_sn
+                        contato,          # F: contato_principal
+                        endereco,         # G: endereco_completo
+                        nome_mae,         # H: nome_mae
+                        nome_pai,         # I: nome_pai
+                        resp_final,       # J: nome_responsavel (Cuidador ou Pais)
+                        docs_faltando,    # K: doc_em_falta
+                        qual_grupo,       # L: engajado_grupo
+                        "ATIVO",          # M: status
+                        medicamento,      # N: toma_medicamento_sn
+                        tgo,              # O: tgo_sn
+                        estado_civil,     # P: estado_civil_pais_ou_proprio
+                        sacramentos,      # Q: sacramentos_ja_feitos
+                        prof_mae,         # R: profissao_mae
+                        tel_mae,          # S: tel_mae
+                        prof_pai,         # T: profissao_pai
+                        tel_pai,          # U: tel_pai
+                        est_civil_pais,   # V: est_civil_pais
+                        sac_pais,         # W: sac_pais
+                        part_grupo,       # X: participa_grupo
+                        qual_grupo,       # Y: qual_grupo
+                        tem_irmaos,       # Z: tem_irmaos
+                        qtd_irmaos,       # AA: qtd_irmaos
+                        turno,            # AB: turno
+                        local_enc,        # AC: local_encontro
+                        obs_familia       # AD: obs_pastoral_familia (30ª Coluna)
                     ]]
                     
                     if salvar_lote_catequizandos(registro):
                         st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
-
-    with tab_csv:
-        st.subheader("📂 Importação em Massa (CSV)")
-        
-        # --- 1. ORIENTAÇÕES AO USUÁRIO ---
-        with st.expander("📖 LEIA AS INSTRUÇÕES DE FORMATAÇÃO", expanded=True):
-            st.markdown("""
-                **Para que a importação funcione corretamente, seu arquivo CSV deve seguir estas regras:**
-                1. **Colunas Obrigatórias:** `nome_completo` e `etapa`.
-                2. **Formato de Data:** Use o padrão `DD/MM/AAAA`.
-                3. **Turmas:** Se a turma escrita no CSV não existir no sistema, o catequizando será movido automaticamente para **'CATEQUIZANDOS SEM TURMA'**.
-                4. **Ordem das Colunas:** O sistema mapeia pelos nomes das colunas, não pela ordem. Certifique-se de que os nomes estão corretos.
-            """)
-            # Botão para baixar um modelo (opcional, mas ajuda muito)
-            st.caption("Dica: Use o arquivo que a IA gerou para você como base.")
-
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_v2025_final")
-        
-        if arquivo_csv:
-            try:
-                # Lendo o CSV
-                df_import = pd.read_csv(arquivo_csv, encoding='utf-8').fillna("N/A")
-                df_import.columns = [c.strip().lower() for c in df_import.columns]
-                
-                # Identificação de Colunas Críticas
-                col_nome = 'nome_completo' if 'nome_completo' in df_import.columns else ('nome' if 'nome' in df_import.columns else None)
-                col_etapa = 'etapa' if 'etapa' in df_import.columns else None
-                col_nasc = 'data_nascimento' if 'data_nascimento' in df_import.columns else None
-                col_fone = 'contato_principal' if 'contato_principal' in df_import.columns else None
-
-                if not col_nome or not col_etapa:
-                    st.error("❌ Erro Crítico: O arquivo precisa ter as colunas 'nome_completo' e 'etapa'.")
-                else:
-                    # --- 2. VALIDAÇÃO DE TURMAS EM TEMPO REAL ---
-                    turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
-                    
-                    def validar_turma(nome_turma):
-                        nome_t = str(nome_turma).upper().strip()
-                        if nome_t in turmas_cadastradas:
-                            return "✅ Turma Identificada"
-                        return "⚠️ NÃO CADASTRADA (Fila de Espera)"
-
-                    # Criando DataFrame de Preview com Validação
-                    df_preview = pd.DataFrame()
-                    df_preview['Nome'] = df_import[col_nome].astype(str).str.upper()
-                    df_preview['Turma no CSV'] = df_import[col_etapa].astype(str).str.upper()
-                    df_preview['Nascimento'] = df_import[col_nasc] if col_nasc else "N/A"
-                    df_preview['Contato'] = df_import[col_fone] if col_fone else "N/A"
-                    df_preview['Status da Turma'] = df_preview['Turma no CSV'].apply(validar_turma)
-
-                    st.markdown("### 🔍 Revisão e Validação dos Dados")
-                    st.warning(f"Total de registros encontrados: {len(df_import)}")
-                    
-                    # Exibindo o Preview com cores para o Status
-                    st.dataframe(df_preview, use_container_width=True, hide_index=True)
-
-                    # Verificação de segurança para o botão
-                    tem_turma_invalida = "⚠️ NÃO CADASTRADA (Fila de Espera)" in df_preview['Status da Turma'].values
-                    
-                    if tem_turma_invalida:
-                        st.info("💡 **Nota:** Os catequizandos com turmas não cadastradas serão importados, mas ficarão na 'Fila de Espera' até que você crie a turma ou os mova manualmente.")
-
-                    # --- 3. EXECUÇÃO DA IMPORTAÇÃO (RIGOR 30 COLUNAS) ---
-                    if st.button("🚀 CONFIRMAR IMPORTAÇÃO E GRAVAR NO BANCO", use_container_width=True):
-                        with st.spinner("Processando 30 colunas e validando itinerários..."):
-                            lista_final = []
-                            for i, linha in df_import.iterrows():
-                                # Lógica de Turma: Se não existe, vai para Fila de Espera
-                                t_csv = str(linha.get(col_etapa, 'CATEQUIZANDOS SEM TURMA')).upper().strip()
-                                t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
-                                
-                                # Montagem Rigorosa das 30 Colunas (A até AD)
-                                registro = [
-                                    f"CAT-2025-{int(time.time()) + i}", # A: ID Único
-                                    t_final,                            # B: Etapa (Validada)
-                                    str(linha.get(col_nome, 'SEM NOME')).upper(), # C: Nome
-                                    str(linha.get('data_nascimento', '01/01/2000')), # D: Nasc
-                                    str(linha.get('batizado_sn', 'NÃO')).upper(), # E: Batizado
-                                    str(linha.get('contato_principal', 'N/A')), # F: Contato
-                                    str(linha.get('endereco_completo', 'N/A')).upper(), # G: Endereço
-                                    str(linha.get('nome_mae', 'N/A')).upper(), # H: Mãe
-                                    str(linha.get('nome_pai', 'N/A')).upper(), # I: Pai
-                                    str(linha.get('nome_responsavel', 'N/A')).upper(), # J: Resp
-                                    str(linha.get('doc_em_falta', 'NADA')).upper(), # K: Docs
-                                    str(linha.get('engajado_grupo', 'N/A')).upper(), # L: Engajado
-                                    "ATIVO", # M: Status
-                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), # N: Med
-                                    str(linha.get('tgo_sn', 'NÃO')).upper(), # O: TGO
-                                    str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(), # P
-                                    str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(), # Q
-                                    str(linha.get('profissao_mae', 'N/A')).upper(), # R
-                                    str(linha.get('tel_mae', 'N/A')), # S
-                                    str(linha.get('profissao_pai', 'N/A')).upper(), # T
-                                    str(linha.get('tel_pai', 'N/A')), # U
-                                    str(linha.get('est_civil_pais', 'N/A')).upper(), # V
-                                    str(linha.get('sac_pais', 'N/A')).upper(), # W
-                                    str(linha.get('participa_grupo', 'NÃO')).upper(), # X
-                                    str(linha.get('qual_grupo', 'N/A')).upper(), # Y
-                                    str(linha.get('tem_irmaos', 'NÃO')).upper(), # Z
-                                    linha.get('qtd_irmaos', 0), # AA
-                                    str(linha.get('turno', 'N/A')).upper(), # AB
-                                    str(linha.get('local_encontro', 'N/A')).upper(), # AC
-                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}" # AD: Obs Pastoral
-                                ]
-                                lista_final.append(registro)
-                            
-                            if salvar_lote_catequizandos(lista_final):
-                                st.success(f"✅ Sucesso! {len(lista_final)} catequizandos processados.")
-                                st.balloons()
-                                time.sleep(2)
-                                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro ao processar arquivo: {e}")
 
 # ==============================================================================
 # PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO BLINDADA CONTRA INDEXERROR)
@@ -938,7 +863,7 @@ elif menu == "👤 Perfil Individual":
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia.")
     else:
-# --- 1. ÁREA DE BUSCA E FILTRAGEM (VERSÃO BLINDADA) ---
+        # 1. ÁREA DE BUSCA E FILTRAGEM
         c1, c2 = st.columns([2, 1])
         busca = c1.text_input("🔍 Pesquisar por nome:", key="busca_perfil_v6").upper()
         lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
@@ -950,16 +875,7 @@ elif menu == "👤 Perfil Individual":
         if filtro_t != "TODAS": 
             df_f = df_f[df_f['etapa'] == filtro_t]
         
-        # --- BLINDAGEM CONTRA KEYERROR ---
-        cols_necessarias = ['nome_completo', 'etapa', 'status']
-        if all(col in df_f.columns for col in cols_necessarias):
-            st.dataframe(df_f[cols_necessarias], use_container_width=True, hide_index=True)
-        else:
-            st.error("⚠️ Erro de Estrutura: As colunas do Banco de Dados não foram identificadas.")
-            st.info("Verifique se a primeira linha da aba 'catequizandos' no Google Sheets contém os cabeçalhos oficiais.")
-            if not df_f.empty:
-                st.write("Colunas encontradas atualmente:", list(df_f.columns))
-            st.stop()
+        st.dataframe(df_f[['nome_completo', 'etapa', 'status']], use_container_width=True, hide_index=True)
         
         # 2. SELEÇÃO DO CATEQUIZANDO (USANDO ID PARA EVITAR ERRO DE PARÊNTESES)
         # Criamos um rótulo de exibição que termina com o ID único entre colchetes
@@ -1077,87 +993,74 @@ elif menu == "👤 Perfil Individual":
             else:
                 st.error("❌ Erro ao localizar dados do catequizando. Tente atualizar a página.")
 
-# --- BLOCO: AUDITORIA DE DOCUMENTAÇÃO POR TURMA (VERSÃO GESTÃO TOTAL) ---
+# --- NOVO BLOCO: DASHBOARD DE PENDÊNCIAS DE DOCUMENTOS ---
         st.divider()
-        st.subheader("🚩 Auditoria de Documentação por Turma")
+        st.subheader("🚩 Auditoria de Documentação")
         
-        # 1. SELETOR DE TURMA PARA AUDITORIA
-        lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-        turma_auditoria = st.selectbox("🔍 Selecione a Turma para Diagnóstico:", lista_turmas_auditoria, key="sel_auditoria_doc_turma")
+        tab_lista_p, tab_auditoria_geral = st.tabs(["📋 Pendências da Turma", "📊 Resumo por Etapa"])
 
-        if turma_auditoria:
-            # Filtra dados da turma selecionada
-            df_turma_focal = df_cat[df_cat['etapa'] == turma_auditoria]
-            
-            # Lógica de pendência (Coluna K)
-            df_pendentes_turma = df_turma_focal[
-                (df_turma_focal['doc_em_falta'].str.len() > 2) & 
-                (~df_turma_focal['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
+        with tab_lista_p:
+            # Filtra apenas quem tem algo escrito na Coluna K (doc_em_falta)
+            # E que não seja "NADA", "N/A" ou vazio.
+            df_pendentes = df_f[
+                (df_f['doc_em_falta'].str.len() > 2) & 
+                (~df_f['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO']))
             ]
 
-            # 2. MÉTRICAS DA TURMA
-            c_met1, c_met2, c_met3 = st.columns(3)
-            total_t = len(df_turma_focal)
-            pendentes_t = len(df_pendentes_turma)
-            em_dia_t = total_t - pendentes_t
-            
-            c_met1.metric("Total na Turma", total_t)
-            c_met2.metric("Pendentes", pendentes_t, delta=f"{pendentes_t} faltam docs", delta_color="inverse")
-            c_met3.metric("Em Dia", em_dia_t)
-
-            st.markdown("---")
-
-            # 3. LISTA NOMINAL DE PENDÊNCIAS
-            if df_pendentes_turma.empty:
-                st.success(f"✅ **Excelente!** Todos os {total_t} catequizandos da turma **{turma_auditoria}** estão com a documentação completa.")
+            if df_pendentes.empty:
+                st.success("🎉 Todos os catequizandos desta seleção estão com a documentação em dia!")
             else:
-                st.markdown(f"#### 📋 Lista de Pendências: {turma_auditoria}")
+                st.warning(f"Existem {len(df_pendentes)} inscrições com pendências de documentos.")
                 
-                for _, p in df_pendentes_turma.iterrows():
+                for _, p in df_pendentes.iterrows():
                     with st.container():
-                        idade_p = calcular_idade(p['data_nascimento'])
-                        is_adulto_p = idade_p >= 18
+                        # Identifica se é adulto para a IA
+                        idade = calcular_idade(p['data_nascimento'])
+                        is_adulto = idade >= 18
                         
-                        # Card Estilizado
                         st.markdown(f"""
-                            <div style='background-color:#fff5f5; padding:15px; border-radius:10px; border-left:8px solid #e03d11; margin-bottom:10px;'>
-                                <b style='color:#e03d11; font-size:16px;'>{p['nome_completo']}</b><br>
-                                <span style='font-size:13px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span>
+                            <div style='background-color:#fff5f5; padding:10px; border-radius:8px; border-left:5px solid #e03d11; margin-bottom:5px;'>
+                                <b style='color:#e03d11;'>{p['nome_completo']}</b><br>
+                                <span style='font-size:12px;'>📄 Faltando: {p['doc_em_falta']}</span>
                             </div>
                         """, unsafe_allow_html=True)
                         
-                        col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
+                        c_p1, c_p2 = st.columns([3, 1])
                         
-                        # AÇÃO 1: GERAR MENSAGEM IA
-                        if col_p1.button(f"✨ IA: Cobrar Documento", key=f"msg_aud_{p['id_catequizando']}"):
-                            msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], is_adulto_p)
-                            st.info(f"**Mensagem para copiar:**\n\n{msg_doc}")
-                        
-                        # AÇÃO 2: MARCAR COMO ENTREGUE (LIMPA COLUNA K)
-                        if col_p2.button("✅ Entregue", key=f"btn_ok_aud_{p['id_catequizando']}", use_container_width=True):
-                            lista_up = p.tolist()
-                            # Garante integridade das 30 colunas
-                            while len(lista_up) < 30: lista_up.append("N/A")
-                            lista_up[10] = "COMPLETO" # Coluna K
-                            if atualizar_catequizando(p['id_catequizando'], lista_up):
-                                st.success("Atualizado!"); time.sleep(0.5); st.rerun()
-
-                        # AÇÃO 3: WHATSAPP DIRETO (LÓGICA MOBILE)
-                        contato_alvo = p['contato_principal'] if is_adulto_p else (p['tel_mae'] if str(p['tel_mae']) != "N/A" else p['tel_pai'])
-                        num_limpo = "".join(filter(str.isdigit, str(contato_alvo)))
-                        if num_limpo:
-                            if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
-                            if not num_limpo.startswith("55"):
-                                num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
-                            
-                            col_p3.markdown(f'''
-                                <a href="https://wa.me/{num_limpo}" target="_blank" style="text-decoration:none;">
-                                    <div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">📲 WhatsApp</div>
-                                </a>
-                            ''', unsafe_allow_html=True)
+                        # Lógica de Contato (Adulto vs Pais)
+                        if is_adulto:
+                            link_zap = p['contato_principal']
+                            label_zap = "📲 Zap (Próprio)"
                         else:
-                            col_p3.caption("Sem Tel.")
+                            # Tenta Mãe, se não tiver tenta Pai
+                            link_zap = p['tel_mae'] if str(p['tel_mae']) != "N/A" else p['tel_pai']
+                            label_zap = "📲 Zap (Responsável)"
+
+                        if c_p1.button(f"✨ Gerar Mensagem de Cobrança", key=f"msg_doc_{p['id_catequizando']}"):
+                            msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], is_adulto)
+                            st.info(f"**Copie e envie:**\n\n{msg_doc}")
+                        
+                        # Botão direto para o WhatsApp se houver número
+                        from utils import limpar_whatsapp_v5 # Usando a função que já temos
+                        zap_limpo = limpar_whatsapp_v5(link_zap)
+                        if zap_limpo:
+                            c_p2.markdown(f'<a href="https://wa.me/{zap_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">{label_zap}</div></a>', unsafe_allow_html=True)
+                        else:
+                            c_p2.caption("Sem Tel.")
                         st.markdown("<br>", unsafe_allow_html=True)
+
+        with tab_auditoria_geral:
+            st.write("📊 **Distribuição de Pendências por Turma:**")
+            # Gráfico de barras mostrando quais turmas têm mais documentos faltando
+            df_all_pendentes = df_cat[
+                (df_cat['doc_em_falta'].str.len() > 2) & 
+                (~df_cat['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO']))
+            ]
+            if not df_all_pendentes.empty:
+                chart_data = df_all_pendentes['etapa'].value_counts()
+                st.bar_chart(chart_data)
+            else:
+                st.write("Nenhuma pendência registrada no sistema.")
                 
 
 # --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) ---
@@ -1280,17 +1183,9 @@ elif menu == "🏫 Gestão de Turmas":
                 
                 with col_btn_save:
                     if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15", use_container_width=True):
-                        with st.spinner("Processando atualizações e movendo catequizandos..."):
-                            # 1. Atualiza os dados da Turma
+                        with st.spinner("Processando atualizações..."):
                             lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
-                            
                             if atualizar_turma(d['id_turma'], lista_up):
-                                # 2. SE O NOME MUDOU: Sincroniza os catequizandos (Cascata)
-                                if en != nome_turma_original:
-                                    from database import sincronizar_renomeacao_turma_catequizandos
-                                    sincronizar_renomeacao_turma_catequizandos(nome_turma_original, en)
-                                
-                                # 3. Sincroniza Perfis dos Catequistas (Lógica original mantida)
                                 planilha = conectar_google_sheets()
                                 aba_u = planilha.worksheet("usuarios")
                                 for _, cat_row in equipe_tecnica.iterrows():
@@ -1308,11 +1203,7 @@ elif menu == "🏫 Gestão de Turmas":
                                             if en in v_list: v_list.remove(en); mudou = True
                                             if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
                                         if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                                
-                                st.success(f"✅ Turma e Catequizandos atualizados para '{en}'!")
-                                st.cache_data.clear()
-                                time.sleep(1)
-                                st.rerun()
+                                st.success("✅ Sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
                 # --- NOVO MECANISMO: EXCLUIR TURMA ---
                 st.markdown("<br><br>", unsafe_allow_html=True)
@@ -1862,51 +1753,59 @@ elif menu == "👥 Gestão de Catequistas":
                         if "pdf_catequista" in st.session_state:
                             st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
-                with col_edit:
-                    with st.form(f"form_edit_cat_v13_{u['email']}"):
-                        c1, c2, c3 = st.columns(3)
-                        ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
-                        ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
-                        ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
-                        
-                        ed_nasc = st.date_input("Data de Nascimento", value=converter_para_data(u.get('data_nascimento', '')))
-                        
-                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                        ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
-                        
-                        st.markdown("**Datas Sacramentais e Início:**")
-                        d1, d2, d3, d4, d5 = st.columns(5)
-                        dt_ini = d1.text_input("Início Catequese", value=str(u.get('data_inicio_catequese', '')))
-                        dt_bat = d2.text_input("Data Batismo", value=str(u.get('data_batismo', '')))
-                        dt_euc = d3.text_input("Data Eucaristia", value=str(u.get('data_eucaristia', '')))
-                        dt_cri = d4.text_input("Data Crisma", value=str(u.get('data_crisma', '')))
-                        dt_min = d5.text_input("Data Ministério", value=str(u.get('data_ministerio', '')))
+    with col_edit:
+        with st.form(f"form_edit_cat_v13_{u['email']}"):
+            c1, c2, c3 = st.columns(3)
+            ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+            ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
+            ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
+            
+            # --- ALTERAÇÃO 1: ADICIONAR O SELETOR DE PAPEL NA INTERFACE ---
+            opcoes_papel = ["CATEQUISTA", "COORDENADOR", "ADMIN"]
+            papel_atual = str(u.get('papel', 'CATEQUISTA')).upper()
+            idx_papel = opcoes_papel.index(papel_atual) if papel_atual in opcoes_papel else 0
+            ed_papel = st.selectbox("Papel / Nível de Acesso", opcoes_papel, index=idx_papel)
+            # -------------------------------------------------------------
 
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                            with st.spinner("Sincronizando..."):
-                                # Atualiza a aba 'usuarios' (12 colunas)
-                                dados_up = [
-                                    ed_nome, u['email'], ed_senha, str(u.get('papel', 'CATEQUISTA')), 
-                                    ", ".join(ed_turmas), ed_tel, str(ed_nasc),
-                                    dt_ini, dt_bat, dt_euc, dt_cri, dt_min
-                                ]
-                                if atualizar_usuario(u['email'], dados_up):
-                                    # Sincronização Reversa com aba 'turmas'
-                                    planilha = conectar_google_sheets()
-                                    aba_t = planilha.worksheet("turmas")
-                                    for _, t_row in df_turmas.iterrows():
-                                        t_nome = t_row['nome_turma']
-                                        cats_na_turma = [c.strip() for c in str(t_row['catequista_responsavel']).split(',') if c.strip()]
-                                        mudou = False
-                                        if t_nome in ed_turmas:
-                                            if ed_nome not in cats_na_turma: cats_na_turma.append(ed_nome); mudou = True
-                                        else:
-                                            if ed_nome in cats_na_turma: cats_na_turma.remove(ed_nome); mudou = True
-                                            if u['nome'] in cats_na_turma: cats_na_turma.remove(u['nome']); mudou = True
-                                        if mudou:
-                                            cel_t = aba_t.find(str(t_row['id_turma']))
-                                            if cel_t: aba_t.update_cell(cel_t.row, 5, ", ".join(cats_na_turma))
-                                    st.success("✅ Perfil e Turmas sincronizados!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+            ed_nasc = st.date_input("Data de Nascimento", value=converter_para_data(u.get('data_nascimento', '')))
+            
+            lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+            ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
+            
+            st.markdown("**Datas Sacramentais e Início:**")
+            d1, d2, d3, d4, d5 = st.columns(5)
+            dt_ini = d1.text_input("Início Catequese", value=str(u.get('data_inicio_catequese', '')))
+            dt_bat = d2.text_input("Data Batismo", value=str(u.get('data_batismo', '')))
+            dt_euc = d3.text_input("Data Eucaristia", value=str(u.get('data_eucaristia', '')))
+            dt_cri = d4.text_input("Data Crisma", value=str(u.get('data_crisma', '')))
+            dt_min = d5.text_input("Data Ministério", value=str(u.get('data_ministerio', '')))
+
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
+                with st.spinner("Sincronizando..."):
+                    # --- ALTERAÇÃO 2: USAR A VARIÁVEL 'ed_papel' NO LUGAR DA ANTIGA ---
+                    dados_up = [
+                        ed_nome, u['email'], ed_senha, ed_papel, 
+                        ", ".join(ed_turmas), ed_tel, str(ed_nasc),
+                        dt_ini, dt_bat, dt_euc, dt_cri, dt_min
+                    ]
+                    # -------------------------------------------------------------
+                    if atualizar_usuario(u['email'], dados_up):
+                        # Sincronização Reversa com aba 'turmas'
+                        planilha = conectar_google_sheets()
+                        aba_t = planilha.worksheet("turmas")
+                        for _, t_row in df_turmas.iterrows():
+                            t_nome = t_row['nome_turma']
+                            cats_na_turma = [c.strip() for c in str(t_row['catequista_responsavel']).split(',') if c.strip()]
+                            mudou = False
+                            if t_nome in ed_turmas:
+                                if ed_nome not in cats_na_turma: cats_na_turma.append(ed_nome); mudou = True
+                            else:
+                                if ed_nome in cats_na_turma: cats_na_turma.remove(ed_nome); mudou = True
+                                if u['nome'] in cats_na_turma: cats_na_turma.remove(u['nome']); mudou = True
+                            if mudou:
+                                cel_t = aba_t.find(str(t_row['id_turma']))
+                                if cel_t: aba_t.update_cell(cel_t.row, 5, ", ".join(cats_na_turma))
+                        st.success("✅ Perfil e Turmas sincronizados!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
