@@ -1409,9 +1409,11 @@ elif menu == "🏫 Gestão de Turmas":
             t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_v6")
             
             if t_origem:
+                # Filtra apenas os ativos da turma de origem
                 alunos_mov = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
+                
                 if not alunos_mov.empty:
-                    # Lógica de sincronização v6
+                    # Lógica de selecionar todos
                     def toggle_all_v6():
                         for _, al in alunos_mov.iterrows():
                             st.session_state[f"mov_al_v6_{al['id_catequizando']}"] = st.session_state.chk_mov_todos_v6
@@ -1420,17 +1422,29 @@ elif menu == "🏫 Gestão de Turmas":
                     
                     lista_ids_selecionados = []
                     cols = st.columns(2)
+                    
+                    # Itera sobre os alunos calculando a idade em tempo real
                     for i, (_, al) in enumerate(alunos_mov.iterrows()):
+                        # CÁLCULO DA IDADE PARA EXIBIÇÃO
+                        idade_atual = calcular_idade(al['data_nascimento'])
+                        
                         with cols[i % 2]:
-                            if st.checkbox(f"{al['nome_completo']}", key=f"mov_al_v6_{al['id_catequizando']}"):
+                            # NOME + IDADE NO LABEL DO CHECKBOX
+                            label_exibicao = f"{al['nome_completo']} ({idade_atual} anos)"
+                            
+                            if st.checkbox(label_exibicao, key=f"mov_al_v6_{al['id_catequizando']}"):
                                 lista_ids_selecionados.append(al['id_catequizando'])
                     
                     st.divider()
-                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS", key="btn_exec_mov_v6", use_container_width=True):
+                    # Botão de execução com contador
+                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS PARA {t_destino}", key="btn_exec_mov_v6", use_container_width=True):
                         if t_destino and t_origem != t_destino and lista_ids_selecionados:
                             if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
                                 st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
-                        else: st.error("Selecione um destino válido e ao menos um catequizando.")
+                        else: 
+                            st.error("Selecione um destino válido e ao menos um catequizando.")
+                else:
+                    st.info("Não há catequizandos ativos nesta turma de origem.")
 
 # ==============================================================================
 # BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (CORREÇÃO DE CENSO E AUDITORIA)
