@@ -805,12 +805,38 @@ elif menu == "📝 Cadastrar Catequizando":
                     resp_final = responsavel_nome if responsavel_nome else f"{nome_mae} / {nome_pai}"
                     obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
 
+                    # MONTAGEM RIGOROSA DAS 30 COLUNAS (A até AD)
                     registro = [[
-                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, contato, endereco,
-                        nome_mae, nome_pai, resp_final, docs_faltando, qual_grupo, "ATIVO",
-                        medicamento, tgo, estado_civil, sacramentos, prof_mae, tel_mae,
-                        prof_pai, tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo,
-                        tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia
+                        novo_id,          # A: id_catequizando
+                        etapa_inscricao,  # B: etapa
+                        nome,             # C: nome_completo
+                        str(data_nasc),   # D: data_nascimento
+                        batizado,         # E: batizado_sn
+                        contato,          # F: contato_principal
+                        endereco,         # G: endereco_completo
+                        nome_mae,         # H: nome_mae
+                        nome_pai,         # I: nome_pai
+                        resp_final,       # J: nome_responsavel
+                        docs_faltando,    # K: doc_em_falta
+                        qual_grupo,       # L: engajado_grupo
+                        "ATIVO",          # M: status
+                        medicamento,      # N: toma_medicamento_sn
+                        tgo,              # O: tgo_sn
+                        estado_civil,     # P: estado_civil_pais_ou_proprio
+                        sacramentos,      # Q: sacramentos_ja_feitos
+                        prof_mae,         # R: profissao_mae
+                        tel_mae,          # S: tel_mae
+                        prof_pai,         # T: profissao_pai
+                        tel_pai,          # U: tel_pai
+                        est_civil_pais,   # V: est_civil_pais
+                        sac_pais,         # W: sac_pais
+                        part_grupo,       # X: participa_grupo
+                        qual_grupo,       # Y: qual_grupo
+                        tem_irmaos,       # Z: tem_irmaos
+                        qtd_irmaos,       # AA: qtd_irmaos
+                        turno,            # AB: turno
+                        local_enc,        # AC: local_encontro
+                        obs_familia       # AD: obs_pastoral_familia
                     ]]
                     
                     if salvar_lote_catequizandos(registro):
@@ -819,90 +845,57 @@ elif menu == "📝 Cadastrar Catequizando":
     with tab_csv:
         st.subheader("📂 Importação em Massa (CSV)")
         
-        # --- 1. ORIENTAÇÕES AO USUÁRIO ---
         with st.expander("📖 LEIA AS INSTRUÇÕES DE FORMATAÇÃO", expanded=True):
             st.markdown("""
                 **Para que a importação funcione corretamente, seu arquivo CSV deve seguir estas regras:**
                 1. **Colunas Obrigatórias:** `nome_completo` e `etapa`.
                 2. **Formato de Data:** Use o padrão `DD/MM/AAAA`.
-                3. **Turmas:** Se a turma escrita no CSV não existir no sistema, o catequizando será movido automaticamente para **'CATEQUIZANDOS SEM TURMA'**.
-                4. **Ordem das Colunas:** O sistema mapeia pelos nomes das colunas, não pela ordem. Certifique-se de que os nomes estão corretos.
+                3. **Turmas:** Se a turma escrita no CSV não existir no sistema, o catequizando será movido para **'CATEQUIZANDOS SEM TURMA'**.
+                4. **Rigor:** O sistema processará as 30 colunas. Colunas ausentes no CSV serão preenchidas como 'N/A'.
             """)
-            # Botão para baixar um modelo (opcional, mas ajuda muito)
-            st.caption("Dica: Use o arquivo que a IA gerou para você como base.")
 
         arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_v2025_final")
         
         if arquivo_csv:
             try:
-                # Lendo o CSV
                 df_import = pd.read_csv(arquivo_csv, encoding='utf-8').fillna("N/A")
                 df_import.columns = [c.strip().lower() for c in df_import.columns]
                 
-                # Identificação de Colunas Críticas
                 col_nome = 'nome_completo' if 'nome_completo' in df_import.columns else ('nome' if 'nome' in df_import.columns else None)
                 col_etapa = 'etapa' if 'etapa' in df_import.columns else None
-                col_nasc = 'data_nascimento' if 'data_nascimento' in df_import.columns else None
-                col_fone = 'contato_principal' if 'contato_principal' in df_import.columns else None
 
                 if not col_nome or not col_etapa:
-                    st.error("❌ Erro Crítico: O arquivo precisa ter as colunas 'nome_completo' e 'etapa'.")
+                    st.error("❌ Erro: O arquivo precisa ter as colunas 'nome_completo' e 'etapa'.")
                 else:
-                    # --- 2. VALIDAÇÃO DE TURMAS EM TEMPO REAL ---
                     turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
                     
-                    def validar_turma(nome_turma):
-                        nome_t = str(nome_turma).upper().strip()
-                        if nome_t in turmas_cadastradas:
-                            return "✅ Turma Identificada"
-                        return "⚠️ NÃO CADASTRADA (Fila de Espera)"
+                    st.markdown("### 🔍 Revisão dos Dados")
+                    st.write(f"Total de registros: {len(df_import)}")
+                    st.dataframe(df_import.head(10), use_container_width=True)
 
-                    # Criando DataFrame de Preview com Validação
-                    df_preview = pd.DataFrame()
-                    df_preview['Nome'] = df_import[col_nome].astype(str).str.upper()
-                    df_preview['Turma no CSV'] = df_import[col_etapa].astype(str).str.upper()
-                    df_preview['Nascimento'] = df_import[col_nasc] if col_nasc else "N/A"
-                    df_preview['Contato'] = df_import[col_fone] if col_fone else "N/A"
-                    df_preview['Status da Turma'] = df_preview['Turma no CSV'].apply(validar_turma)
-
-                    st.markdown("### 🔍 Revisão e Validação dos Dados")
-                    st.warning(f"Total de registros encontrados: {len(df_import)}")
-                    
-                    # Exibindo o Preview com cores para o Status
-                    st.dataframe(df_preview, use_container_width=True, hide_index=True)
-
-                    # Verificação de segurança para o botão
-                    tem_turma_invalida = "⚠️ NÃO CADASTRADA (Fila de Espera)" in df_preview['Status da Turma'].values
-                    
-                    if tem_turma_invalida:
-                        st.info("💡 **Nota:** Os catequizandos com turmas não cadastradas serão importados, mas ficarão na 'Fila de Espera' até que você crie a turma ou os mova manualmente.")
-
-                    # --- 3. EXECUÇÃO DA IMPORTAÇÃO (RIGOR 30 COLUNAS) ---
                     if st.button("🚀 CONFIRMAR IMPORTAÇÃO E GRAVAR NO BANCO", use_container_width=True):
-                        with st.spinner("Processando 30 colunas e validando itinerários..."):
+                        with st.spinner("Processando 30 colunas..."):
                             lista_final = []
                             for i, linha in df_import.iterrows():
-                                # Lógica de Turma: Se não existe, vai para Fila de Espera
                                 t_csv = str(linha.get(col_etapa, 'CATEQUIZANDOS SEM TURMA')).upper().strip()
                                 t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
                                 
-                                # Montagem Rigorosa das 30 Colunas (A até AD)
                                 registro = [
-                                    f"CAT-2025-{int(time.time()) + i}", # A: ID Único
-                                    t_final,                            # B: Etapa (Validada)
+                                    f"CAT-CSV-{int(time.time()) + i}", # A: ID
+                                    t_final,                            # B: Etapa
                                     str(linha.get(col_nome, 'SEM NOME')).upper(), # C: Nome
-                                    str(linha.get('data_nascimento', '01/01/2000')), # D: Nasc
-                                    str(linha.get('batizado_sn', 'NÃO')).upper(), # E: Batizado
-                                    str(linha.get('contato_principal', 'N/A')), # F: Contato
-                                    str(linha.get('endereco_completo', 'N/A')).upper(), # G: Endereço
-                                    str(linha.get('nome_mae', 'N/A')).upper(), # H: Mãe
-                                    str(linha.get('nome_pai', 'N/A')).upper(), # I: Pai
-                                    str(linha.get('nome_responsavel', 'N/A')).upper(), # J: Resp
-                                    str(linha.get('doc_em_falta', 'NADA')).upper(), # K: Docs
-                                    str(linha.get('engajado_grupo', 'N/A')).upper(), # L: Engajado
-                                    "ATIVO", # M: Status
-                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), # N: Med
-                                    str(linha.get('tgo_sn', 'NÃO')).upper(), # O: TGO
+                                    str(linha.get('data_nascimento', '01/01/2000')), # D
+                                    str(linha.get('batizado_sn', 'NÃO')).upper(), # E
+                                    str(linha.get('contato_principal', 'N/A')), # F
+                                    str(linha.get('endereco_completo', 'N/A')).upper(), # G
+                                    str(linha.get('nome_mae', 'N/A')).upper(), # H
+                                    str(linha.get('nome_pai', 'N/A')).upper(), # I
+                                    str(linha.get('nome_responsavel', 'N/A')).upper(), # J
+                                    str(linha.get('doc_em_falta', 'NADA')).upper(), # K
+                                    str(linha.get('engajado_grupo', 'N/A')).upper(), # L
+                                    "ATIVO", # M
+                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), # N
+                                    str(linha.get('tgo_sn', 'NÃO')).upper(), # O
                                     str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(), # P
                                     str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(), # Q
                                     str(linha.get('profissao_mae', 'N/A')).upper(), # R
@@ -917,17 +910,17 @@ elif menu == "📝 Cadastrar Catequizando":
                                     linha.get('qtd_irmaos', 0), # AA
                                     str(linha.get('turno', 'N/A')).upper(), # AB
                                     str(linha.get('local_encontro', 'N/A')).upper(), # AC
-                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}" # AD: Obs Pastoral
+                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}" # AD
                                 ]
                                 lista_final.append(registro)
                             
                             if salvar_lote_catequizandos(lista_final):
-                                st.success(f"✅ Sucesso! {len(lista_final)} catequizandos processados.")
+                                st.success(f"✅ {len(lista_final)} catequizandos importados!")
                                 st.balloons()
                                 time.sleep(2)
                                 st.rerun()
             except Exception as e:
-                st.error(f"❌ Erro ao processar arquivo: {e}")
+                st.error(f"❌ Erro: {e}")
 
 # ==============================================================================
 # PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO BLINDADA CONTRA INDEXERROR)
