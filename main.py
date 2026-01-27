@@ -1849,6 +1849,7 @@ elif menu == "👥 Gestão de Catequistas":
                         st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
                         st.write(f"**Início na Catequese:** {formatar_data_br(u.get('data_inicio_catequese', ''))}")
                         st.write(f"**Turmas Vinculadas:** {u['turma_vinculada']}")
+                        st.write(f"**Papel Atual:** {u.get('papel', 'CATEQUISTA')}")
                     with c2:
                         if st.button(f"📄 Gerar Ficha PDF de {escolha_c}"):
                             st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
@@ -1861,6 +1862,12 @@ elif menu == "👥 Gestão de Catequistas":
                         ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
                         ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
                         ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
+                        
+                        # --- CAMPO DE PAPEL ADICIONADO NA EDIÇÃO ---
+                        opcoes_papel = ["CATEQUISTA", "COORDENADOR", "ADMIN"]
+                        papel_atual = str(u.get('papel', 'CATEQUISTA')).upper()
+                        idx_papel = opcoes_papel.index(papel_atual) if papel_atual in opcoes_papel else 0
+                        ed_papel = st.selectbox("Alterar Papel / Nível de Acesso", opcoes_papel, index=idx_papel)
                         
                         ed_nasc = st.date_input("Data de Nascimento", value=converter_para_data(u.get('data_nascimento', '')))
                         
@@ -1877,9 +1884,9 @@ elif menu == "👥 Gestão de Catequistas":
 
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
                             with st.spinner("Sincronizando..."):
-                                # Atualiza a aba 'usuarios' (12 colunas)
+                                # Atualiza a aba 'usuarios' (12 colunas) - ed_papel agora é dinâmico
                                 dados_up = [
-                                    ed_nome, u['email'], ed_senha, str(u.get('papel', 'CATEQUISTA')), 
+                                    ed_nome, u['email'], ed_senha, ed_papel, 
                                     ", ".join(ed_turmas), ed_tel, str(ed_nasc),
                                     dt_ini, dt_bat, dt_euc, dt_cri, dt_min
                                 ]
