@@ -1101,6 +1101,337 @@ elif menu == "👤 Perfil Individual":
                                 col_p3.caption("Sem Tel.")
                             st.markdown("<br>", unsafe_allow_html=True)
 
+# --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) ---
+elif menu == "🏫 Gestão de Turmas":
+    st.title("🏫 Gestão de Turmas e Fila de Espera")
+    
+    t0, t1, t2, t3, t4, t5 = st.tabs([
+        "⏳ Fila de Espera", "📋 Visualizar Turmas", "➕ Criar Nova Turma", 
+        "✏️ Detalhes e Edição", "📊 Dashboard Local", "🚀 Movimentação em Massa"
+    ])
+    
+    dias_opcoes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+    etapas_lista = [
+        "PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", 
+        "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"
+    ]
+
+    with t0:
+        st.subheader("⏳ Fila de Espera")
+        if df_cat.empty:
+            st.info("Nenhum catequizando cadastrado no sistema.")
+        else:
+            # Identifica turmas que realmente existem no banco para achar os 'órfãos'
+            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+            
+            # Filtra quem está sem turma ou em turma que não existe mais
+            fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
+            
+            if not fila_espera.empty:
+                # Blindagem: Só tenta filtrar colunas se o DataFrame não estiver vazio
+                colunas_para_exibir = ['nome_completo', 'etapa', 'contato_principal']
+                # Garante que só usaremos colunas que realmente existem no DF
+                cols_existentes = [c for c in colunas_para_exibir if c in fila_espera.columns]
+                
+                st.dataframe(fila_espera[cols_existentes], use_container_width=True, hide_index=True)
+            else:
+                st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
+
+    with t1:
+        st.subheader("📋 Turmas Cadastradas")
+        st.dataframe(df_turmas, use_container_width=True, hide_index=True)
+
+    with t2:
+        st.subheader("➕ Cadastrar Nova Turma")
+        with st.form("form_criar_t_v15"):
+            c1, c2 = st.columns(2)
+            n_t = c1.text_input("Nome da Turma (Ex: PRÉ ETAPA 2026)").upper()
+            e_t = c1.selectbox("Etapa Base", etapas_lista)
+            ano = c2.number_input("Ano Letivo", value=2026)
+            n_dias = st.multiselect("Dias de Encontro", dias_opcoes)
+            
+            st.markdown("---")
+            c3, c4 = st.columns(2)
+            turno_t = c3.selectbox("Turno do Encontro", ["MANHÃ", "TARDE", "NOITE"])
+            local_t = c4.text_input("Local/Sala do Encontro", value="SALA").upper()
+            
+            # Catequistas agora são opcionais na criação
+            cats_selecionados = st.multiselect("Catequistas Responsáveis (Opcional)", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [])
+            
+            if st.form_submit_button("🚀 SALVAR NOVA TURMA"):
+                # Validação: Apenas Nome e Dias são obrigatórios para a turma existir
+                if n_t and n_dias:
+                    try:
+                        planilha = conectar_google_sheets()
+                        if planilha:
+                            # 1. Grava na aba 'turmas' (A turma nasce aqui, independente de catequista)
+                            nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
+                            planilha.worksheet("turmas").append_row(nova_t)
+                            
+                            # 2. Sincroniza Perfis (Apenas se houver catequistas selecionados)
+                            if cats_selecionados:
+                                aba_u = planilha.worksheet("usuarios")
+                                for c_nome in cats_selecionados:
+                                    celula = aba_u.find(c_nome, in_column=1)
+                                    if celula:
+                                        v_atual = aba_u.cell(celula.row, 5).value or ""
+                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                        if n_t not in v_list:
+                                            v_list.append(n_t)
+                                            aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                            
+                            st.success(f"✅ Turma '{n_t}' criada com sucesso!")
+                            st.cache_data.clear()
+                            time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Erro ao salvar: {e}")
+                else: st.warning("⚠️ O Nome da Turma e os Dias de Encontro são obrigatórios.")
+
+    with t3:
+        st.subheader("✏️ Detalhes e Edição da Turma")
+        if not df_turmas.empty:
+            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_final_v15")
+            
+            if sel_t:
+                d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
+                nome_turma_original = str(d['nome_turma'])
+                
+                c1, c2 = st.columns(2)
+                en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="edit_nome_v15").upper()
+                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="edit_etapa_v15")
+                ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="edit_ano_v15")
+                
+                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
+                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes], key="edit_dias_v15")
+                
+                st.markdown("---")
+                c3, c4 = st.columns(2)
+                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
+                turno_atual = str(d.get('turno', 'MANHÃ')).upper()
+                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0, key="edit_turno_v15")
+                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA'), key="edit_local_v15").upper()
+                
+                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="edit_pe_v15")
+                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="edit_pc_v15")
+                
+                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
+                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
+                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_v15")
+                
+                col_btn_save, col_btn_del = st.columns([3, 1])
+                
+                with col_btn_save:
+                    if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15", use_container_width=True):
+                        with st.spinner("Processando atualizações e movendo catequizandos..."):
+                            # 1. Atualiza os dados da Turma
+                            lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
+                            
+                            if atualizar_turma(d['id_turma'], lista_up):
+                                # 2. SE O NOME MUDOU: Sincroniza os catequizandos (Cascata)
+                                if en != nome_turma_original:
+                                    from database import sincronizar_renomeacao_turma_catequizandos
+                                    sincronizar_renomeacao_turma_catequizandos(nome_turma_original, en)
+                                
+                                # 3. Sincroniza Perfis dos Catequistas (Lógica original mantida)
+                                planilha = conectar_google_sheets()
+                                aba_u = planilha.worksheet("usuarios")
+                                for _, cat_row in equipe_tecnica.iterrows():
+                                    c_nome = cat_row['nome']
+                                    celula = aba_u.find(c_nome, in_column=1)
+                                    if celula:
+                                        v_atual = aba_u.cell(celula.row, 5).value or ""
+                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                        mudou = False
+                                        if c_nome in ed_cats:
+                                            if en not in v_list: v_list.append(en); mudou = True
+                                            if nome_turma_original in v_list and en != nome_turma_original:
+                                                v_list.remove(nome_turma_original); mudou = True
+                                        else:
+                                            if en in v_list: v_list.remove(en); mudou = True
+                                            if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
+                                        if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                                
+                                st.success(f"✅ Turma e Catequizandos atualizados para '{en}'!")
+                                st.cache_data.clear()
+                                time.sleep(1)
+                                st.rerun()
+
+                # --- NOVO MECANISMO: EXCLUIR TURMA ---
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
+                    st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
+                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_t")
+                    
+                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
+                        with st.spinner("Movendo catequizandos e excluindo itinerário..."):
+                            # 1. Localiza e move catequizandos para a Fila de Espera
+                            alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
+                            if not alunos_da_turma.empty:
+                                ids_para_mover = alunos_da_turma['id_catequizando'].tolist()
+                                mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
+                            
+                            # 2. Remove vínculo dos catequistas na aba usuarios
+                            planilha = conectar_google_sheets()
+                            aba_u = planilha.worksheet("usuarios")
+                            for _, cat_row in equipe_tecnica.iterrows():
+                                v_atual = str(cat_row.get('turma_vinculada', ''))
+                                if sel_t in v_atual:
+                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                    if sel_t in v_list:
+                                        v_list.remove(sel_t)
+                                        celula_u = aba_u.find(cat_row['nome'], in_column=1)
+                                        if celula_u:
+                                            aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
+                            
+                            # 3. Exclui a turma da aba turmas
+                            if excluir_turma(d['id_turma']):
+                                st.success(f"Turma excluída! {len(alunos_da_turma)} catequizandos movidos para a Fila de Espera.")
+                                st.cache_data.clear()
+                                time.sleep(2)
+                                st.rerun()
+
+    with t4:
+        st.subheader("📊 Inteligência Pastoral da Turma")
+        if not df_turmas.empty:
+            # Usamos uma chave v6 para garantir um estado limpo no navegador
+            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v6_final")
+            
+            alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
+            info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
+            pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
+            df_recebidos = ler_aba("sacramentos_recebidos")
+            
+            if not alunos_t.empty:
+                # --- MÉTRICAS ---
+                m1, m2, m3, m4 = st.columns(4)
+                
+                # Cálculo real de catequistas para a tela e para o PDF
+                qtd_cats_real = len(str(info_t['catequista_responsavel']).split(','))
+                m1.metric("Catequistas", qtd_cats_real)
+                m2.metric("Catequizandos", len(alunos_t))
+                
+                freq_global = 0.0
+                lista_freq_mensal = []
+                
+                # BLINDAGEM: Verifica se a coluna de ID existe na tabela de presenças
+                tem_coluna_id = not pres_t.empty and 'id_catequizando' in pres_t.columns
+                
+                if not pres_t.empty:
+                    pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
+                    freq_global = round(pres_t['status_num'].mean() * 100, 1)
+                    try:
+                        pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
+                        pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
+                        mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
+                        for mes, taxa in mensal.items():
+                            lista_freq_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
+                    except: pass
+                
+                m3.metric("Frequência Global", f"{freq_global}%")
+                
+                # Cálculo real da idade média para a tela e para o PDF
+                idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
+                idade_media_val = round(sum(idades)/len(idades), 1) if idades else 0
+                m4.metric("Idade Média", f"{idade_media_val} anos")
+
+                st.divider()
+                
+                # --- BLOCO DE DOCUMENTAÇÃO ---
+                st.markdown("#### 📄 Documentação e Auditoria")
+                col_doc1, col_doc2 = st.columns(2)
+                
+                with col_doc1:
+                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_v6"):
+                        with st.spinner("Analisando itinerário..."):
+                            resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%."
+                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
+                            
+                            # Coleta de dados nominais BLINDADA contra KeyError
+                            lista_geral = []
+                            for _, r in alunos_t.iterrows():
+                                f = 0
+                                if tem_coluna_id:
+                                    # Só tenta filtrar se a coluna existir
+                                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                                lista_geral.append({'nome': r['nome_completo'], 'faltas': f})
+                            
+                            lista_sac = []
+                            if not df_recebidos.empty and 'id_catequizando' in df_recebidos.columns:
+                                sac_t = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())]
+                                for _, s in sac_t.iterrows():
+                                    lista_sac.append({'nome': s.get('nome',''), 'tipo': s.get('tipo',''), 'data': s.get('data','')})
+
+                            # CORREÇÃO APLICADA AQUI: Passando qtd_cats_real e idade_media_val
+                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v2(
+                                t_alvo, 
+                                {
+                                    'qtd_catequistas': qtd_cats_real, 
+                                    'qtd_cat': len(alunos_t), 
+                                    'freq_global': freq_global, 
+                                    'idade_media': idade_media_val, 
+                                    'freq_mensal': lista_freq_mensal
+                                }, 
+                                {'geral': lista_geral, 'sac_recebidos': lista_sac}, 
+                                parecer_ia
+                            )
+                    
+                    if f"pdf_auditoria_{t_alvo}" in st.session_state:
+                        st.download_button("📥 BAIXAR AUDITORIA", st.session_state[f"pdf_auditoria_{t_alvo}"], f"Auditoria_{t_alvo}.pdf", use_container_width=True)
+
+                with col_doc2:
+                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_v6"):
+                        with st.spinner("Gerando fichas individuais..."):
+                            pdf_fichas = gerar_fichas_turma_completa(t_alvo, alunos_t)
+                            st.session_state[f"pdf_fichas_{t_alvo}"] = pdf_fichas
+                    
+                    if f"pdf_fichas_{t_alvo}" in st.session_state:
+                        st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
+
+                st.divider()
+                
+                # --- PREVIEW NOMINAL ---
+                st.markdown("### 📋 Lista Nominal de Caminhada")
+                lista_preview = []
+                for _, r in alunos_t.iterrows():
+                    f = 0
+                    if tem_coluna_id:
+                        f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                    lista_preview.append({'Catequizando': r['nome_completo'], 'Faltas': f, 'Status': r['status']})
+                st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
+            else:
+                st.info("Selecione uma turma com catequizandos ativos.")
+
+    with t5:
+        st.subheader("🚀 Movimentação em Massa")
+        if not df_turmas.empty and not df_cat.empty:
+            c1, c2 = st.columns(2)
+            opcoes_origem = ["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
+            t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_v6")
+            t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_v6")
+            
+            if t_origem:
+                alunos_mov = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
+                if not alunos_mov.empty:
+                    # Lógica de sincronização v6
+                    def toggle_all_v6():
+                        for _, al in alunos_mov.iterrows():
+                            st.session_state[f"mov_al_v6_{al['id_catequizando']}"] = st.session_state.chk_mov_todos_v6
+
+                    st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos_v6", on_change=toggle_all_v6)
+                    
+                    lista_ids_selecionados = []
+                    cols = st.columns(2)
+                    for i, (_, al) in enumerate(alunos_mov.iterrows()):
+                        with cols[i % 2]:
+                            if st.checkbox(f"{al['nome_completo']}", key=f"mov_al_v6_{al['id_catequizando']}"):
+                                lista_ids_selecionados.append(al['id_catequizando'])
+                    
+                    st.divider()
+                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS", key="btn_exec_mov_v6", use_container_width=True):
+                        if t_destino and t_origem != t_destino and lista_ids_selecionados:
+                            if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
+                                st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
+                        else: st.error("Selecione um destino válido e ao menos um catequizando.")
+
 # ==============================================================================
 # BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (CORREÇÃO DE CENSO E AUDITORIA)
 # ==============================================================================
