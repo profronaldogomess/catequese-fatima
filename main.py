@@ -1292,7 +1292,6 @@ elif menu == "🏫 Gestão de Turmas":
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
         if not df_turmas.empty:
-            # Usamos uma chave v6 para garantir um estado limpo no navegador
             t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v6_final")
             
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
@@ -1303,35 +1302,51 @@ elif menu == "🏫 Gestão de Turmas":
             if not alunos_t.empty:
                 # --- MÉTRICAS ---
                 m1, m2, m3, m4 = st.columns(4)
-                
-                # Cálculo real de catequistas para a tela e para o PDF
                 qtd_cats_real = len(str(info_t['catequista_responsavel']).split(','))
                 m1.metric("Catequistas", qtd_cats_real)
                 m2.metric("Catequizandos", len(alunos_t))
                 
                 freq_global = 0.0
-                lista_freq_mensal = []
-                
-                # BLINDAGEM: Verifica se a coluna de ID existe na tabela de presenças
-                tem_coluna_id = not pres_t.empty and 'id_catequizando' in pres_t.columns
-                
                 if not pres_t.empty:
                     pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
                     freq_global = round(pres_t['status_num'].mean() * 100, 1)
-                    try:
-                        pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], dayfirst=True, errors='coerce')
-                        pres_t['mes_ano'] = pres_t['data_dt'].dt.strftime('%m/%Y')
-                        mensal = pres_t.groupby('mes_ano')['status_num'].mean() * 100
-                        for mes, taxa in mensal.items():
-                            lista_freq_mensal.append({'mes': mes, 'taxa': round(taxa, 1)})
-                    except: pass
-                
                 m3.metric("Frequência Global", f"{freq_global}%")
                 
-                # Cálculo real da idade média para a tela e para o PDF
                 idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
                 idade_media_val = round(sum(idades)/len(idades), 1) if idades else 0
                 m4.metric("Idade Média", f"{idade_media_val} anos")
+
+                # --- NOVO: RADAR DE MOVIMENTAÇÃO (ALERTA DE IDADE) ---
+                st.divider()
+                st.markdown("#### 🚀 Radar de Enturmação (Sugestão de Movimentação)")
+                
+                # Define a faixa etária ideal baseada na Etapa da Turma
+                etapa_base = str(info_t['etapa']).upper()
+                faixas = {
+                    "PRÉ": (4, 6),
+                    "PRIMEIRA ETAPA": (7, 8),
+                    "SEGUNDA ETAPA": (9, 10),
+                    "TERCEIRA ETAPA": (11, 13),
+                    "PERSEVERANÇA": (14, 15),
+                    "ADULTOS": (16, 99)
+                }
+                min_ideal, max_ideal = faixas.get(etapa_base, (0, 99))
+                
+                fora_da_faixa = []
+                for _, r in alunos_t.iterrows():
+                    idade_c = calcular_idade(r['data_nascimento'])
+                    if idade_c < min_ideal:
+                        fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔽 Abaixo da idade"})
+                    elif idade_c > max_ideal:
+                        fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔼 Acima da idade"})
+                
+                if fora_da_faixa:
+                    st.warning(f"⚠️ Identificamos {len(fora_da_faixa)} catequizandos fora da faixa etária ideal para a **{etapa_base}** ({min_ideal} a {max_ideal} anos).")
+                    with st.expander("🔍 Ver quem precisa de atenção para movimentação"):
+                        for item in fora_da_faixa:
+                            st.write(f"**{item['nome']}** - {item['idade']} anos ({item['aviso']})")
+                else:
+                    st.success(f"✅ Todos os catequizandos estão na faixa etária ideal para a **{etapa_base}**.")
 
                 st.divider()
                 
@@ -1344,33 +1359,16 @@ elif menu == "🏫 Gestão de Turmas":
                         with st.spinner("Analisando itinerário..."):
                             resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%."
                             parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
-                            
-                            # Coleta de dados nominais BLINDADA contra KeyError
                             lista_geral = []
+                            tem_coluna_id = 'id_catequizando' in pres_t.columns
                             for _, r in alunos_t.iterrows():
-                                f = 0
-                                if tem_coluna_id:
-                                    # Só tenta filtrar se a coluna existir
-                                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
+                                f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if tem_coluna_id else 0
                                 lista_geral.append({'nome': r['nome_completo'], 'faltas': f})
                             
-                            lista_sac = []
-                            if not df_recebidos.empty and 'id_catequizando' in df_recebidos.columns:
-                                sac_t = df_recebidos[df_recebidos['id_catequizando'].isin(alunos_t['id_catequizando'].tolist())]
-                                for _, s in sac_t.iterrows():
-                                    lista_sac.append({'nome': s.get('nome',''), 'tipo': s.get('tipo',''), 'data': s.get('data','')})
-
-                            # CORREÇÃO APLICADA AQUI: Passando qtd_cats_real e idade_media_val
                             st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v2(
                                 t_alvo, 
-                                {
-                                    'qtd_catequistas': qtd_cats_real, 
-                                    'qtd_cat': len(alunos_t), 
-                                    'freq_global': freq_global, 
-                                    'idade_media': idade_media_val, 
-                                    'freq_mensal': lista_freq_mensal
-                                }, 
-                                {'geral': lista_geral, 'sac_recebidos': lista_sac}, 
+                                {'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 'freq_global': freq_global, 'idade_media': idade_media_val}, 
+                                {'geral': lista_geral, 'sac_recebidos': []}, 
                                 parecer_ia
                             )
                     
@@ -1388,14 +1386,19 @@ elif menu == "🏫 Gestão de Turmas":
 
                 st.divider()
                 
-                # --- PREVIEW NOMINAL ---
+                # --- PREVIEW NOMINAL ATUALIZADO COM IDADE ---
                 st.markdown("### 📋 Lista Nominal de Caminhada")
                 lista_preview = []
+                tem_coluna_id = 'id_catequizando' in pres_t.columns
                 for _, r in alunos_t.iterrows():
-                    f = 0
-                    if tem_coluna_id:
-                        f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')])
-                    lista_preview.append({'Catequizando': r['nome_completo'], 'Faltas': f, 'Status': r['status']})
+                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if tem_coluna_id else 0
+                    idade_c = calcular_idade(r['data_nascimento'])
+                    lista_preview.append({
+                        'Catequizando': r['nome_completo'], 
+                        'Idade': f"{idade_c} anos",
+                        'Faltas': f, 
+                        'Status': r['status']
+                    })
                 st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
             else:
                 st.info("Selecione uma turma com catequizandos ativos.")
