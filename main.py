@@ -1611,35 +1611,67 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.warning("Base de catequizandos vazia.")
 
         st.divider()
-        st.subheader("🏫 Auditoria Nominal por Turma")
+        st.subheader("🏫 Auditoria de Pendências por Turma")
+        st.caption("Abaixo são listados apenas os catequizandos que possuem pendências sacramentais para sua etapa.")
         
         if not df_turmas.empty:
             for _, t in df_turmas.iterrows():
                 nome_t = str(t['nome_turma']).strip().upper()
+                etapa_base = str(t['etapa']).strip().upper()
                 alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
                 
                 if not alunos_t.empty:
-                    with st.expander(f"📍 {t['nome_turma']} - Diagnóstico de IVC"):
-                        # Criar colunas para os 3 sacramentos dentro do expander
-                        col_b, col_e, col_c = st.columns(3)
-                        
-                        with col_b:
-                            st.markdown("**🕊️ Batismo**")
-                            for _, r in alunos_t.iterrows():
-                                cor = "✅" if r['batizado_sn'] == "SIM" else "❌"
-                                st.caption(f"{cor} {r['nome_completo']}")
-                        
-                        with col_e:
-                            st.markdown("**🍞 Eucaristia**")
-                            for _, r in alunos_t.iterrows():
-                                cor = "✅" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "❌"
-                                st.caption(f"{cor} {r['nome_completo']}")
-                                
-                        with col_c:
-                            st.markdown("**🔥 Crisma**")
-                            for _, r in alunos_t.iterrows():
-                                cor = "✅" if "CRISMA" in str(r['sacramentos_ja_feitos']).upper() else "❌"
-                                st.caption(f"{cor} {r['nome_completo']}")
+                    # Lógica de Filtro por Etapa
+                    # Pré, 1ª e 2ª Etapa: Só checa Batismo
+                    # 3ª Etapa e Adultos: Checa Batismo, Eucaristia e Crisma
+                    is_avancado_ou_adulto = any(x in etapa_base for x in ["3ª", "TERCEIRA", "ADULTO"])
+                    
+                    # Identificar Pendentes
+                    pend_bat = alunos_t[alunos_t['batizado_sn'] != "SIM"]
+                    
+                    pend_euc = pd.DataFrame()
+                    pend_cri = pd.DataFrame()
+                    
+                    if is_avancado_ou_adulto:
+                        # Checa se a palavra não existe na coluna de sacramentos
+                        pend_euc = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False)]
+                        pend_cri = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False, case=False)]
+                    
+                    # Só exibe o expander se houver alguma pendência na turma
+                    tem_pendencia = not pend_bat.empty or not pend_euc.empty or not pend_cri.empty
+                    
+                    if tem_pendencia:
+                        with st.expander(f"🚨 {nome_t} ({etapa_base}) - Pendências Identificadas"):
+                            # Define colunas dinâmicas: 1 para iniciantes, 3 para avançados
+                            cols_p = st.columns(3 if is_avancado_ou_adulto else 1)
+                            
+                            with cols_p[0]:
+                                st.markdown("**🕊️ Falta Batismo**")
+                                if not pend_bat.empty:
+                                    for n in pend_bat['nome_completo'].tolist():
+                                        st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
+                                else:
+                                    st.success("Tudo OK")
+                            
+                            if is_avancado_ou_adulto:
+                                with cols_p[1]:
+                                    st.markdown("**🍞 Falta Eucaristia**")
+                                    if not pend_euc.empty:
+                                        for n in pend_euc['nome_completo'].tolist():
+                                            st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
+                                    else:
+                                        st.success("Tudo OK")
+                                        
+                                with cols_p[2]:
+                                    st.markdown("**🔥 Falta Crisma**")
+                                    if not pend_cri.empty:
+                                        for n in pend_cri['nome_completo'].tolist():
+                                            st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
+                                    else:
+                                        st.success("Tudo OK")
+                    else:
+                        # Se a turma estiver 100% em dia, mostra apenas uma linha discreta
+                        st.markdown(f"<small style='color:green;'>✅ {nome_t}: Todos os sacramentos em dia.</small>", unsafe_allow_html=True)
 
         # 2. Segmentação de Público por IDADE (Correção do Denominador)
         if not df_cat.empty:
