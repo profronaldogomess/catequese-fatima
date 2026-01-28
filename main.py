@@ -1130,26 +1130,55 @@ elif menu == "👤 Perfil Individual":
 
                 st.markdown("---")
 
+            # 3. LISTA NOMINAL DE PENDÊNCIAS (VERSÃO COMPATÍVEL COM NOVA FICHA)
                 if df_pendentes_turma.empty:
                     st.success(f"✅ **Excelente!** Todos os {total_t} catequizandos da turma **{turma_auditoria}** estão com a documentação completa.")
                 else:
                     st.markdown(f"#### 📋 Lista de Pendências: {turma_auditoria}")
+                    
                     for _, p in df_pendentes_turma.iterrows():
+                        idade_p = calcular_idade(p['data_nascimento'])
+                        is_adulto_p = idade_p >= 18
+                        
+                        # --- LÓGICA DE IDENTIFICAÇÃO DO CONTATO (NOVA FICHA) ---
+                        if is_adulto_p:
+                            nome_alvo = p['nome_completo']
+                            vinculo_alvo = "Próprio"
+                            tel_alvo = p['contato_principal']
+                        else:
+                            # Prioridade: Mãe -> Pai -> Responsável
+                            if str(p['tel_mae']) not in ["N/A", "", "None"]:
+                                nome_alvo = p['nome_mae']
+                                vinculo_alvo = "Mãe"
+                                tel_alvo = p['tel_mae']
+                            elif str(p['tel_pai']) not in ["N/A", "", "None"]:
+                                nome_alvo = p['nome_pai']
+                                vinculo_alvo = "Pai"
+                                tel_alvo = p['tel_pai']
+                            else:
+                                nome_alvo = p['nome_responsavel']
+                                vinculo_alvo = "Responsável/Cuidador"
+                                # Busca telefone na observação se for cuidador (conforme novo cadastro)
+                                tel_alvo = p.get('obs_pastoral_familia', '').split('TEL: ')[-1] if 'TEL: ' in str(p.get('obs_pastoral_familia', '')) else p['contato_principal']
+
                         with st.container():
-                            idade_p = calcular_idade(p['data_nascimento'])
-                            is_adulto_p = idade_p >= 18
+                            # Card Estilizado com Informação de quem cobrar
                             st.markdown(f"""
                                 <div style='background-color:#fff5f5; padding:15px; border-radius:10px; border-left:8px solid #e03d11; margin-bottom:10px;'>
                                     <b style='color:#e03d11; font-size:16px;'>{p['nome_completo']}</b><br>
-                                    <span style='font-size:13px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span>
+                                    <span style='font-size:13px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span><br>
+                                    <span style='font-size:12px; color:#666;'>👤 <b>Cobrar de:</b> {nome_alvo} ({vinculo_alvo})</span>
                                 </div>
                             """, unsafe_allow_html=True)
                             
                             col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
-                            if col_p1.button(f"✨ IA: Cobrar Documento", key=f"msg_aud_{p['id_catequizando']}"):
-                                msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], is_adulto_p)
-                                st.info(f"**Mensagem para copiar:**\n\n{msg_doc}")
                             
+                            # AÇÃO 1: IA PERSONALIZADA
+                            if col_p1.button(f"✨ IA: Cobrar {vinculo_alvo}", key=f"msg_aud_{p['id_catequizando']}"):
+                                msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], nome_alvo, vinculo_alvo)
+                                st.info(f"**Mensagem para {nome_alvo}:**\n\n{msg_doc}")
+                            
+                            # AÇÃO 2: MARCAR COMO ENTREGUE
                             if col_p2.button("✅ Entregue", key=f"btn_ok_aud_{p['id_catequizando']}", use_container_width=True):
                                 lista_up = p.tolist()
                                 while len(lista_up) < 30: lista_up.append("N/A")
@@ -1157,8 +1186,8 @@ elif menu == "👤 Perfil Individual":
                                 if atualizar_catequizando(p['id_catequizando'], lista_up):
                                     st.success("Atualizado!"); time.sleep(0.5); st.rerun()
 
-                            contato_alvo = p['contato_principal'] if is_adulto_p else (p['tel_mae'] if str(p['tel_mae']) != "N/A" else p['tel_pai'])
-                            num_limpo = "".join(filter(str.isdigit, str(contato_alvo)))
+                            # AÇÃO 3: WHATSAPP DIRETO PARA O ALVO
+                            num_limpo = "".join(filter(str.isdigit, str(tel_alvo)))
                             if num_limpo:
                                 if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
                                 if not num_limpo.startswith("55"):
