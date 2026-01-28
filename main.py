@@ -455,7 +455,7 @@ elif menu == "📚 Minha Turma":
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     df_niver_t = obter_aniversariantes_mes(meus_alunos)
     
-    # 1.1 ANIVERSARIANTES DE HOJE (DESTAQUE TOTAL)
+    # 1.1 DESTAQUE DE HOJE
     niver_hoje = []
     if not meus_alunos.empty:
         for _, r in meus_alunos.iterrows():
@@ -477,11 +477,11 @@ elif menu == "📚 Minha Turma":
                     st.image(card_img, use_container_width=True)
                     st.download_button("📥 Baixar Card", card_img, f"Parabens_{nome_n}.png", "image/png")
     
-    # 1.2 ANIVERSARIANTES DO MÊS (LISTA ORGANIZADA)
+    # 1.2 MURAL DO MÊS COM OPÇÕES INDIVIDUAIS E COLETIVAS
     with st.expander("📅 Ver todos os aniversariantes do mês", expanded=not niver_hoje):
         if not df_niver_t.empty:
-            # Botão para Card Coletivo da Turma
-            if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (TURMA)", use_container_width=True):
+            # Botão para Card Coletivo
+            if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True):
                 lista_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome']}" for _, row in df_niver_t.iterrows()]
                 card_col = gerar_card_aniversario(lista_card, tipo="MES")
                 if card_col:
@@ -489,10 +489,27 @@ elif menu == "📚 Minha Turma":
                     st.download_button("📥 Baixar Card Coletivo", card_col, "Aniversariantes_Mes_Turma.png", "image/png")
             
             st.write("")
-            cols_n = st.columns(2) # Layout mobile-friendly
+            st.markdown("---")
+            
+            # LISTA COM CARDS INDIVIDUAIS
+            cols_n = st.columns(2) 
             for i, (_, niver) in enumerate(df_niver_t.iterrows()):
                 with cols_n[i % 2]:
-                    st.info(f"🎁 **Dia {int(niver['dia'])}** - {niver['nome']}")
+                    # Container visual para cada aniversariante
+                    st.markdown(f"""
+                        <div style='background-color:#f0f2f6; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
+                            <b style='color:#417b99;'>Dia {int(niver['dia'])}</b> - {niver['nome']}
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Botão para gerar o card individual deste catequizando
+                    if st.button(f"🎨 Gerar Card Individual", key=f"btn_indiv_t_{i}"):
+                        # Busca o dia correto para o card
+                        card_indiv = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome']}", tipo="DIA")
+                        if card_indiv:
+                            st.image(card_indiv, use_container_width=True)
+                            st.download_button(f"📥 Baixar Card de {niver['nome'].split()[0]}", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{i}")
+                    st.write("") # Espaçador
         else:
             st.write("Nenhum aniversariante este mês nesta turma.")
 
