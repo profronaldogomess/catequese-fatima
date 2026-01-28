@@ -326,3 +326,40 @@ def atualizar_evento_sacramento(id_evento, novos_dados):
                 return True
         except: pass
     return False
+
+def atualizar_formacao(id_f, novos_dados):
+    """Atualiza os dados de uma formação na aba formacoes."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("formacoes")
+            celula = aba.find(str(id_f))
+            if celula:
+                # Atualiza as colunas A até F (ID, Tema, Data, Formador, Local, Status)
+                aba.update(f"A{celula.row}:F{celula.row}", [novos_dados])
+                st.cache_data.clear()
+                return True
+        except: pass
+    return False
+
+def excluir_formacao_completa(id_f):
+    """Exclui a formação e todas as presenças vinculadas a ela."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            # 1. Remove da aba formacoes
+            aba_f = planilha.worksheet("formacoes")
+            cel_f = aba_f.find(str(id_f))
+            if cel_f: aba_f.delete_rows(cel_f.row)
+            
+            # 2. Remove presenças vinculadas
+            aba_p = planilha.worksheet("presenca_formacao")
+            celulas_p = aba_p.findall(str(id_f))
+            # Deleta de baixo para cima para não perder o índice
+            for cel in sorted(celulas_p, key=lambda x: x.row, reverse=True):
+                aba_p.delete_rows(cel.row)
+                
+            st.cache_data.clear()
+            return True
+        except: pass
+    return False
