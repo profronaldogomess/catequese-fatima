@@ -1721,7 +1721,16 @@ elif menu == "🏫 Gestão de Turmas":
                                 {'geral': lista_geral}, 
                                 parecer_ia
                             )
-
+                    # --- BOTÃO DE DOWNLOAD (APARECE APÓS A GERAÇÃO) ---
+                    if f"pdf_auditoria_{t_alvo}" in st.session_state:
+                        st.write("") # Pequeno espaçador visual
+                        st.download_button(
+                            label=f"📥 BAIXAR AUDITORIA: {t_alvo}",
+                            data=st.session_state[f"pdf_auditoria_{t_alvo}"],
+                            file_name=f"Auditoria_Pastoral_{t_alvo.replace(' ', '_')}_{date.today().year}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
                 with col_doc2:
                     if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_v7"):
                         with st.spinner("Gerando fichas individuais..."):
