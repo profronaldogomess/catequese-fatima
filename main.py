@@ -118,7 +118,7 @@ from utils import (
     gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
      gerar_lista_assinatura_reuniao_pdf,gerar_relatorio_diocesano_v5, gerar_relatorio_pastoral_v4,
-    gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
+    gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, gerar_relatorio_local_turma_v3,
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
     gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
     gerar_relatorio_local_turma_pdf
@@ -1673,16 +1673,54 @@ elif menu == "🏫 Gestão de Turmas":
                 
                 with col_doc1:
                     if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_v7"):
-                        with st.spinner("Analisando itinerário..."):
-                            resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%."
-                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
+                        with st.spinner("Analisando prontidão da turma..."):
+                            # 1. Coleta de Métricas Avançadas
+                            sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
+                            batizados = len(alunos_t) - sem_batismo
+                            tgo_c = len(alunos_t[alunos_t['tgo_sn'] == 'SIM'])
+                            saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
+                            
+                            # Engajamento Pais
+                            perc_pais = 0
+                            if not df_pres_reu.empty:
+                                pais_presentes = df_pres_reu[df_pres_reu.iloc[:, 3] == t_alvo].iloc[:, 1].nunique()
+                                perc_pais = int((pais_presentes / len(alunos_t)) * 100) if len(alunos_t) > 0 else 0
+
+                            # Progresso Itinerário
+                            total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
+                            total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
+                            prog_it = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
+
+                            # 2. Preparação da Lista Nominal Enriquecida
                             lista_geral = []
                             for _, r in alunos_t.iterrows():
                                 f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-                                lista_geral.append({'nome': r['nome_completo'], 'faltas': f})
-                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v2(t_alvo, {'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 'freq_global': freq_global, 'idade_media': idade_media_val}, {'geral': lista_geral, 'sac_recebidos': []}, parecer_ia)
-                    if f"pdf_auditoria_{t_alvo}" in st.session_state:
-                        st.download_button("📥 BAIXAR AUDITORIA", st.session_state[f"pdf_auditoria_{t_alvo}"], f"Auditoria_{t_alvo}.pdf", use_container_width=True)
+                                has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
+                                lista_geral.append({
+                                    'nome': r['nome_completo'], 
+                                    'faltas': f,
+                                    'batismo': r['batizado_sn'],
+                                    'eucaristia': has_euc,
+                                    'status': r['status']
+                                })
+
+                            # 3. Chamada da IA com contexto rico
+                            resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%. Pais: {perc_pais}%. Batizados: {batizados}. Pendentes Batismo: {sem_batismo}. TGO: {tgo_c}."
+                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
+
+                            # 4. Geração do PDF v3
+                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v3(
+                                t_alvo, 
+                                {
+                                    'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 
+                                    'freq_global': freq_global, 'idade_media': idade_media_val,
+                                    'engaj_pais': perc_pais, 'progresso_it': prog_it,
+                                    'batizados': batizados, 'pend_batismo': sem_batismo,
+                                    'tgo': tgo_c, 'saude': saude_c
+                                }, 
+                                {'geral': lista_geral}, 
+                                parecer_ia
+                            )
 
                 with col_doc2:
                     if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_v7"):
