@@ -236,15 +236,21 @@ if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_99x"):
     # 1. Ativa a trava que impede o auto-login imediato
     st.session_state.logout_ativo = True
     
-    # 2. Deleta o cookie de persistência
-    cookie_manager.delete("fatima_auth_v2")
+    # 2. Tenta deletar o cookie com blindagem contra KeyError
+    try:
+        # Verifica se o cookie existe antes de tentar deletar
+        if cookie_manager.get("fatima_auth_v2"):
+            cookie_manager.delete("fatima_auth_v2")
+    except Exception:
+        # Se der erro (KeyError), ignoramos e seguimos o logout
+        pass
     
     # 3. Limpa os dados da sessão atual
     st.session_state.logado = False
     st.session_state.usuario = None
     st.session_state.session_id = None
     
-    # 4. Força o reinício
+    # 4. Força o reinício para a tela de login
     st.rerun()
 
 papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
