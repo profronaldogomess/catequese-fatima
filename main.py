@@ -2293,104 +2293,112 @@ elif menu == "👥 Gestão de Catequistas":
             st.info("Nenhum catequista cadastrado.")
 
     with tab_lista:
-            st.subheader("📋 Relação e Perfil Individual")
-            if not equipe_tecnica.empty:
-                busca_c = st.text_input("🔍 Pesquisar catequista por nome:", key="busca_cat_v13").upper()
-                df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
-                st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
+        st.subheader("📋 Relação e Perfil Individual")
+        if not equipe_tecnica.empty:
+            busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat_v2026").upper()
+            df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
+            st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
+            
+            st.divider()
+            escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat_v2026")
+            
+            if escolha_c:
+                u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
+                col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
                 
-                st.divider()
-                escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat_v13")
-                
-                if escolha_c:
-                    u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
-                    col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
-                    
-                    with col_perfil:
-                        # ... (Mantenha o código de visualização do perfil igual ao anterior)
-                        c1, c2 = st.columns([2, 1])
-                        with c1:
-                            st.markdown(f"### {u['nome']}")
-                            st.write(f"**E-mail:** {u['email']}")
-                            st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
-                            st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
-                            st.write(f"**Início na Catequese:** {formatar_data_br(u.get('data_inicio_catequese', ''))}")
-                            st.write(f"**Turmas Vinculadas:** {u['turma_vinculada']}")
-                            st.write(f"**Papel Atual:** {u.get('papel', 'CATEQUISTA')}")
-                        with c2:
-                            if st.button(f"📄 Gerar Ficha PDF de {escolha_c}"):
-                                st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
-                            if "pdf_catequista" in st.session_state:
-                                st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
+                with col_perfil:
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        st.markdown(f"### {u['nome']}")
+                        st.write(f"**E-mail:** {u['email']}")
+                        st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
+                        # Exibição do Contato de Emergência no Perfil
+                        st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[12] if len(u) > 12 else 'Não cadastrado'}")
+                        st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
+                        st.write(f"**Turmas:** {u['turma_vinculada']}")
+                    with c2:
+                        if st.button(f"📄 Gerar Ficha PDF"):
+                            st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
+                        if "pdf_catequista" in st.session_state:
+                            st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
-                    with col_edit:
-                        # --- CONFIGURAÇÃO DE LIMITES DE DATA (100 ANOS) ---
-                        hoje_ref = date.today()
-                        data_minima = date(1920, 1, 1)
-                        data_maxima = date(2050, 12, 31)
+                with col_edit:
+                    # Configurações de Data
+                    hoje = date.today()
+                    d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
 
-                        # Função interna para converter strings da planilha em objetos date seguros
-                        def converter_seguro(valor):
-                            if pd.isna(valor) or str(valor).strip() in ["", "N/A", "None", "srsr"]:
-                                return hoje_ref
-                            try:
-                                return converter_para_data(valor)
-                            except:
-                                return hoje_ref
+                    def converter_ou_none(valor):
+                        if pd.isna(valor) or str(valor).strip() in ["", "N/A", "None"]: return None
+                        try: return converter_para_data(valor)
+                        except: return None
 
-                        # Preparação dos valores iniciais
-                        val_nasc = converter_seguro(u.get('data_nascimento', ''))
-                        val_ini = converter_seguro(u.get('data_inicio_catequese', ''))
-                        val_bat = converter_seguro(u.get('data_batismo', ''))
-                        val_euc = converter_seguro(u.get('data_eucaristia', ''))
-                        val_cri = converter_seguro(u.get('data_crisma', ''))
-                        val_min = converter_seguro(u.get('data_ministerio', ''))
+                    # Carregamento dos dados atuais
+                    val_nasc = converter_ou_none(u.get('data_nascimento', '')) or hoje
+                    val_ini = converter_ou_none(u.get('data_inicio_catequese', '')) or hoje
+                    val_bat = converter_ou_none(u.get('data_batismo', ''))
+                    val_euc = converter_ou_none(u.get('data_eucaristia', ''))
+                    val_cri = converter_ou_none(u.get('data_crisma', ''))
+                    val_min = converter_ou_none(u.get('data_ministerio', ''))
+                    val_emerg = u.iloc[12] if len(u) > 12 else ""
 
-                        with st.form(f"form_edit_cat_v2026_{u['email']}"):
-                            st.markdown("#### 📍 Dados Cadastrais")
-                            c1, c2, c3 = st.columns(3)
-                            ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
-                            ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
-                            ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
-                            
-                            ed_papel = st.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"], 
-                                                index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
-                            
-                            # DATA DE NASCIMENTO COM CALENDÁRIO BR E RANGE DE 100 ANOS
-                            ed_nasc = st.date_input("Data de Nascimento", value=val_nasc, 
-                                                min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
-                            
-                            lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                            vinc_atuais = [t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes]
-                            ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=vinc_atuais)
-                            
-                            st.divider()
-                            st.markdown("#### ⛪ Datas Sacramentais e Início (Calendário)")
-                            
-                            d1, d2, d3 = st.columns(3)
-                            dt_ini = d1.date_input("Início na Catequese", value=val_ini, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
-                            dt_bat = d2.date_input("Data do Batismo", value=val_bat, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
-                            dt_euc = d3.date_input("Data da 1ª Eucaristia", value=val_euc, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
-                            
-                            d4, d5 = st.columns(2)
-                            dt_cri = d4.date_input("Data da Crisma", value=val_cri, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
-                            dt_min = d5.date_input("Data do Ministério", value=val_min, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
+                    with st.form(f"form_edit_cat_final_{u['email']}"):
+                        st.markdown("#### 📍 Dados Cadastrais e Emergência")
+                        c1, c2 = st.columns(2)
+                        ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+                        ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
+                        
+                        c3, c4 = st.columns(2)
+                        ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
+                        ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
+                        
+                        c5, c6 = st.columns(2)
+                        ed_papel = c5.selectbox("Papel", ["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
+                        ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
+                        
+                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                        ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
+                        
+                        st.divider()
+                        st.markdown("#### ⛪ Itinerário Sacramental (Marque apenas se possuir)")
+                        
+                        # Lógica para evitar datas fictícias
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            has_ini = st.checkbox("Início na Catequese", value=True)
+                            dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_ini)
+                        
+                        with col2:
+                            has_bat = st.checkbox("Possui Batismo?", value=(val_bat is not None))
+                            dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
+                        
+                        with col3:
+                            has_euc = st.checkbox("Possui 1ª Eucaristia?", value=(val_euc is not None))
+                            dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
 
-                            st.info("💡 Se o catequista não possuir algum sacramento, mantenha a data de hoje e informe na observação.")
+                        col4, col5 = st.columns(2)
+                        with col4:
+                            has_cri = st.checkbox("Possui Crisma?", value=(val_cri is not None))
+                            dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
+                        
+                        with col5:
+                            has_min = st.checkbox("É Ministro de Catequese?", value=(val_min is not None))
+                            dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
-                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                                with st.spinner("Gravando dados..."):
-                                    # Converte tudo para string para salvar na planilha
-                                    dados_up = [
-                                        ed_nome, u['email'], ed_senha, ed_papel, 
-                                        ", ".join(ed_turmas), ed_tel, str(ed_nasc),
-                                        str(dt_ini), str(dt_bat), str(dt_euc), str(dt_cri), str(dt_min)
-                                    ]
-                                    if atualizar_usuario(u['email'], dados_up):
-                                        st.success("✅ Cadastro atualizado com sucesso!")
-                                        st.cache_data.clear()
-                                        time.sleep(1)
-                                        st.rerun()
+                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
+                            # Montagem da lista com 13 colunas (A-M)
+                            dados_up = [
+                                ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
+                                ed_tel, str(ed_nasc),
+                                str(dt_ini) if has_ini else "N/A",
+                                str(dt_bat) if has_bat else "N/A",
+                                str(dt_euc) if has_euc else "N/A",
+                                str(dt_cri) if has_cri else "N/A",
+                                str(dt_min) if has_min else "N/A",
+                                ed_emergencia # Coluna M (13)
+                            ]
+                            if atualizar_usuario(u['email'], dados_up):
+                                st.success("✅ Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
