@@ -25,27 +25,28 @@ def gerar_analise_pastoral(resumo_dados):
         return "Análise técnica indisponível."
 
 def gerar_relatorio_sacramentos_ia(resumo_sacramentos):
-    """Gera auditoria de sacramentos com foco em impedimentos canônicos."""
+    """Gera auditoria com foco em Impedimentos Canônicos e Preparação Pastoral."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         prompt = f"""
-        Você é um Auditor Sacramental Diocesano. Analise tecnicamente: {resumo_sacramentos}
+        Você é um Auditor do Tribunal Eclesiástico e Coordenador de IVC. 
+        Analise os dados de prontidão sacramental: {resumo_sacramentos}
         
-        ESTRUTURA DA RESPOSTA (OBRIGATÓRIA):
-        1. PARECER TÉCNICO: (Análise sobre a saúde sacramental da paróquia)
-        2. ANÁLISE DE IMPEDIMENTOS: (Foque em situações matrimoniais e falta de batismo em turmas avançadas)
-        3. PLANO DE AÇÃO: (Sugestões de mutirões e catequese de reforço)
+        ESTRUTURA OBRIGATÓRIA DO PARECER:
+        1. DIAGNÓSTICO DE IMPEDIMENTOS: Foque em adultos conviventes ou casados apenas no civil (Impedimento para Crisma/Eucaristia) e crianças sem batismo em etapas avançadas.
+        2. CAMINHO DE PREPARAÇÃO: Sugira roteiros de encontros para regularização matrimonial e querigma para pais em situação irregular.
+        3. ORIENTAÇÃO AO PÁROCO: Liste casos que exigem entrevista pessoal ou sanação radical.
 
-        REGRAS CRÍTICAS:
+        REGRAS:
+        - Use termos: 'Impedimento Canônico', 'Regularização Matrimonial', 'Estado de Graça', 'Sanação'.
         - NÃO use asteriscos (**) para negrito.
-        - NÃO use saudações ou reflexões teológicas.
-        - Seja direto, numérico e use terminologia como 'Iniciação à Vida Cristã' e 'Impedimento Canônico'.
+        - Seja técnico, direto e pastoral.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
         return response.text
     except:
-        return "Auditoria indisponível."
-
+        return "Auditoria indisponível no momento."
+    
 def analisar_saude_familiar_ia(dados_familia):
     """
     NOVA FUNÇÃO: Analisa o perfil das famílias para sugerir ações da Pastoral Familiar.
@@ -142,3 +143,4 @@ def gerar_mensagem_cobranca_doc_ia(nome, docs, turma, is_adulto):
         return response.text
     except:
         return f"Paz e Bem! Notamos que ainda faltam alguns documentos ({docs}) para completar a inscrição de {nome} na turma {turma}. Poderia nos entregar no próximo encontro? Deus abençoe!"
+
