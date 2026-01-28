@@ -363,3 +363,38 @@ def excluir_formacao_completa(id_f):
             return True
         except: pass
     return False
+
+def salvar_reuniao_pais(dados_lista):
+    """Salva agendamento de reunião na aba 'reunioes_pais'."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("reunioes_pais")
+            aba.append_row(dados_lista)
+            st.cache_data.clear(); return True
+        except: return False
+    return False
+
+def salvar_presenca_reuniao_pais(lista_presencas):
+    """Grava presenças na aba 'presenca_reuniao'."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("presenca_reuniao")
+            aba.append_rows(lista_presencas)
+            st.cache_data.clear(); return True
+        except: return False
+    return False
+
+def atualizar_reuniao_pais(id_r, novos_dados):
+    """Edita dados de uma reunião existente."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("reunioes_pais")
+            celula = aba.find(str(id_r))
+            if celula:
+                aba.update(f"A{celula.row}:F{celula.row}", [novos_dados])
+                st.cache_data.clear(); return True
+        except: pass
+    return False
