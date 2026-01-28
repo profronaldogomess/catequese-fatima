@@ -1108,11 +1108,41 @@ elif menu == "👤 Perfil Individual":
                                 st.success(f"✅ Cadastro de {ed_nome} atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
                     with sub_tab_doc:
-                        st.subheader("📄 Documentação Cadastral")
-                        if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_v6", use_container_width=True):
-                            st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
-                        if "pdf_catequizando" in st.session_state:
-                            st.download_button("📥 BAIXAR FICHA PDF", st.session_state.pdf_catequizando, f"Ficha_{nome_sel}.pdf", "application/pdf", use_container_width=True)
+                        st.subheader("📄 Documentação Cadastral e Oficial")
+                        st.write(f"Gerar documentos para: **{nome_sel}**")
+                        
+                        col_doc_a, col_doc_b = st.columns(2)
+                        
+                        with col_doc_a:
+                            # BOTÃO 1: FICHA DE INSCRIÇÃO (A que já existia)
+                            if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_v6", use_container_width=True):
+                                with st.spinner("Gerando ficha..."):
+                                    st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
+                            
+                            if "pdf_catequizando" in st.session_state:
+                                st.download_button(
+                                    label="📥 BAIXAR FICHA PDF", 
+                                    data=st.session_state.pdf_catequizando, 
+                                    file_name=f"Ficha_{nome_sel}.pdf", 
+                                    mime="application/pdf", 
+                                    use_container_width=True
+                                )
+                        
+                        with col_doc_b:
+                            # BOTÃO 2: DECLARAÇÃO DE MATRÍCULA (A nova funcionalidade)
+                            if st.button("📜 Gerar Declaração de Matrícula", key="btn_decl_matr_v6", use_container_width=True):
+                                with st.spinner("Gerando declaração oficial..."):
+                                    # Utiliza a função oficial que configuramos no utils.py
+                                    st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
+                            
+                            if "pdf_decl_matr" in st.session_state:
+                                st.download_button(
+                                    label="📥 BAIXAR DECLARAÇÃO PDF", 
+                                    data=st.session_state.pdf_decl_matr, 
+                                    file_name=f"Declaracao_Matricula_{nome_sel}.pdf", 
+                                    mime="application/pdf", 
+                                    use_container_width=True
+                                )
 
         # --- ABA 2: AUDITORIA DE DOCUMENTAÇÃO POR TURMA ---
         with tab_auditoria_geral:
