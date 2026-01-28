@@ -502,59 +502,80 @@ elif menu == "📚 Minha Turma":
 
     st.divider()
 
-    # --- SEÇÃO 3: RADAR DE ATENÇÃO (URGÊNCIAS) ---
+    # --- SEÇÃO 3: RADAR DE ATENÇÃO (AGORA COM LISTA DE NOMES) ---
     st.subheader("🚩 Radar de Atenção")
     risco_c, atencao_p = processar_alertas_evasao(minhas_pres)
     
-    alertas = []
-    if risco_c: alertas.append(f"🔴 **{len(risco_c)} em Risco Crítico:** {', '.join([r.split(' (')[0] for r in risco_c])}")
+    # 1. Alerta de Evasão
+    if risco_c:
+        with st.expander(f"🔴 {len(risco_c)} em Risco Crítico (3+ faltas)"):
+            for r in risco_c:
+                st.write(f"• {r}")
     
-    # Checa documentos e sacramentos
-    pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
-    if not pend_doc.empty: alertas.append(f"⚠️ **{len(pend_doc)} com Documentos Pendentes**")
+    # 2. Alerta de Documentos
+    df_pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
+    if not df_pend_doc.empty:
+        with st.expander(f"⚠️ {len(df_pend_doc)} com Documentos Pendentes"):
+            for n in df_pend_doc['nome_completo'].tolist():
+                st.write(f"• {n}")
     
-    sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
-    if not sem_batismo.empty: alertas.append(f"🕊️ **{len(sem_batismo)} sem registro de Batismo**")
+    # 3. Alerta de Batismo
+    df_sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
+    if not df_sem_batismo.empty:
+        with st.expander(f"🕊️ {len(df_sem_batismo)} sem registro de Batismo"):
+            for n in df_sem_batismo['nome_completo'].tolist():
+                st.write(f"• {n}")
 
-    if alertas:
-        for a in alertas: st.warning(a)
-    else:
+    if not risco_c and df_pend_doc.empty and df_sem_batismo.empty:
         st.success("✨ Turma em caminhada estável. Nenhum alerta crítico.")
 
     st.divider()
 
-    # --- SEÇÃO 4: LISTA NOMINAL (CARDS DE CAMINHADA) ---
-    st.subheader("👥 Caminhada Individual")
+    # --- SEÇÃO 4: CAMINHADA INDIVIDUAL (FILTRO POR NOME - UM POR VEZ) ---
+    st.subheader("👥 Consulta Individual")
     
-    for _, row in meus_alunos.sort_values('nome_completo').iterrows():
-        with st.container():
-            # Lógica de Ícones Sacramentais
-            bat = "💧" if row['batizado_sn'] == "SIM" else "⚪"
-            euc = "🍞" if "EUCARISTIA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-            cri = "🔥" if "CRISMA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-            
-            # Lógica de Família
-            tem_reu = "👪 Ativos" if not df_reu_t.empty and row['id_catequizando'] in df_reu_t.iloc[:, 1].values else "👪 Ausentes"
-            
-            col_n, col_s = st.columns([3, 1])
-            with col_n:
-                st.markdown(f"**{row['nome_completo']}**")
-                st.caption(f"{bat} Batismo | {euc} Eucaristia | {cri} Crisma")
-            with col_s:
-                st.markdown(f"<small>{tem_reu}</small>", unsafe_allow_html=True)
-            
-            with st.expander("🔍 Ver Dossiê Rápido"):
-                idade_c = calcular_idade(row['data_nascimento'])
-                st.write(f"🎂 **Idade:** {idade_c} anos")
-                st.write(f"🏥 **Saúde/Alergia:** {row.get('toma_medicamento_sn', 'NÃO')}")
-                st.write(f"📝 **Última Obs. Pastoral:** {row.get('obs_pastoral_familia', 'Sem registros.')}")
-                
-                # Botão para falar no WhatsApp direto
-                num_limpo = "".join(filter(str.isdigit, str(row['contato_principal'])))
-                if num_limpo:
-                    st.markdown(f'''<a href="https://wa.me/5573{num_limpo[-9:]}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 WhatsApp</div></a>''', unsafe_allow_html=True)
-            
-            st.markdown("---")
+    lista_nomes = sorted(meus_alunos['nome_completo'].tolist())
+    nome_sel = st.selectbox("🔍 Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t")
+
+    if nome_sel:
+        row = meus_alunos[meus_alunos['nome_completo'] == nome_sel].iloc[0]
+        
+        # Lógica de Ícones Sacramentais
+        bat = "💧" if row['batizado_sn'] == "SIM" else "⚪"
+        euc = "🍞" if "EUCARISTIA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
+        cri = "🔥" if "CRISMA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
+        
+        # Lógica de Família
+        tem_reu = "👪 Ativos" if not df_reu_t.empty and row['id_catequizando'] in df_reu_t.iloc[:, 1].values else "👪 Ausentes"
+        
+        # Card Único em Destaque
+        st.markdown(f"""
+            <div style='background-color:#ffffff; padding:20px; border-radius:15px; border-left:10px solid #417b99; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                <h3 style='margin:0; color:#417b99;'>{row['nome_completo']}</h3>
+                <p style='margin:5px 0; color:#666;'>{bat} Batismo | {euc} Eucaristia | {cri} Crisma</p>
+                <p style='margin:0; font-size:14px;'><b>Situação Familiar:</b> {tem_reu}</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Dossiê já aberto para facilitar no mobile
+        st.markdown("#### 📋 Dossiê Rápido")
+        idade_c = calcular_idade(row['data_nascimento'])
+        c_d1, c_d2 = st.columns(2)
+        c_d1.write(f"🎂 **Idade:** {idade_c} anos")
+        c_d1.write(f"🏥 **Saúde:** {row.get('toma_medicamento_sn', 'NÃO')}")
+        c_d2.write(f"📄 **Docs:** {row.get('doc_em_falta', 'OK')}")
+        
+        st.info(f"📝 **Última Obs. Pastoral:**\n{row.get('obs_pastoral_familia', 'Sem registros.')}")
+        
+        # Botão WhatsApp
+        num_limpo = "".join(filter(str.isdigit, str(row['contato_principal'])))
+        if num_limpo:
+            st.markdown(f'''<a href="https://wa.me/5573{num_limpo[-9:]}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-weight:bold;">📲 Falar com Responsável</div></a>''', unsafe_allow_html=True)
+    else:
+        st.info("👆 Use a busca acima para ver a ficha de um catequizando específico.")
+
+    st.divider()
+    # ... (Seção 5: Itinerário continua igual)
 
     # --- SEÇÃO 5: PRÓXIMOS PASSOS ---
     st.subheader("🎯 Itinerário")
