@@ -1158,93 +1158,8 @@ def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, list
     
     return finalizar_pdf(pdf)
 
-def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
-    """Gera a Declaração oficial com cabeçalho centralizado e dados da Paróquia de Fátima."""
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # 1. CABEÇALHO CENTRALIZADO
-    if os.path.exists("logo.png"):
-        # Centraliza o logo (25mm de largura em uma página de 210mm)
-        pdf.image("logo.png", (210-25)/2, 10, 25)
-        pdf.ln(28)
-    else:
-        pdf.ln(10)
-    
-    pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
-    pdf.set_font("helvetica", "", 10)
-    pdf.cell(0, 5, limpar_texto("DIOCESE DE ITABUNA - BAHIA"), ln=True, align='C')
-    pdf.set_font("helvetica", "I", 9)
-    pdf.cell(0, 5, limpar_texto("Av. Juracy Magalhães, 801 - Nossa Sra. de Fátima, Itabuna - BA, 45603-231"), ln=True, align='C')
-    pdf.cell(0, 5, limpar_texto("Telefone: (73) 3212-2635 | https://paroquiadefatimaitabuna.com.br"), ln=True, align='C')
-    
-    # 2. TÍTULO SOLENE
-    pdf.ln(20)
-    pdf.set_font("helvetica", "B", 20)
-    pdf.cell(0, 15, limpar_texto("Declaração"), ln=True, align='C')
-    pdf.ln(10)
-    
-    # 3. CORPO DO TEXTO (JUSTIFICADO)
-    pdf.set_font("helvetica", "", 12)
-    
-    # Lógica de Sacramento alvo baseada na etapa
-    etapa = str(dados.get('etapa', '')).upper()
-    if "CRISMA" in etapa or "ADULTO" in etapa:
-        preparacao = "Sacramento da Crisma"
-    else:
-        preparacao = "Primeira Eucaristia"
-    
-    # Montagem do texto principal
-    texto = (
-        f"Declaro para os devidos fins que, até a presente data, o(a) catequizando(a) "
-        f"{dados['nome_completo']}, nascido(a) em {formatar_data_br(dados['data_nascimento'])}, "
-        f"filho(a) de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
-    )
-    
-    if "Transferência" in tipo:
-        texto += f"TRANSFERIDO(A) do itinerário da {etapa} desta Paróquia para a {destino.upper()}. "
-    else:
-        texto += f"regularmente MATRICULADO(A) na turma {etapa} da Paróquia de Nossa Senhora de Fátima. "
-        
-    texto += f"\n\nO referido catequizando iniciou sua caminhada em {formatar_data_br(dados.get('data_matricula', '01/01/2024'))}, "
-    texto += f"estando atualmente em preparação para a recepção do {preparacao}."
-    
-    pdf.multi_cell(0, 9, limpar_texto(texto), align='J')
-    
-    pdf.ln(15)
-    pdf.cell(0, 10, limpar_texto("Para autenticar a veracidade das afirmações, assino abaixo:"), ln=True, align='L')
-    
-    # 4. ASSINATURAS (LADO A LADO)
-    pdf.ln(25)
-    y_ass = pdf.get_y()
-    
-    # Linha do Padre
-    pdf.line(20, y_ass, 95, y_ass)
-    pdf.set_xy(20, y_ass + 2)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.cell(75, 5, limpar_texto("Pároco / Vigário"), align='C')
-    
-    # Linha da Coordenação/Secretaria
-    pdf.line(115, y_ass, 190, y_ass)
-    pdf.set_xy(115, y_ass + 2)
-    pdf.cell(75, 5, limpar_texto("Coordenação / Secretaria Paroquial"), align='C')
-    
-    # 5. DATA E LOCAL (RODAPÉ)
-    pdf.ln(30)
-    hoje = datetime.now()
-    meses = {
-        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho",
-        7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
-    }
-    data_extenso = f"Itabuna-BA, {hoje.day} de {meses[hoje.month]} de {hoje.year}."
-    pdf.set_font("helvetica", "", 11)
-    pdf.cell(0, 10, limpar_texto(data_extenso), ln=True, align='L')
-    
-    return finalizar_pdf(pdf)
-
 def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
-    """Gera uma lista de presença física para reuniões de pais com campo de assinatura."""
+    """Gera uma lista de presença física simplificada: Catequizando + Assinatura."""
     pdf = FPDF()
     pdf.add_page()
     
@@ -1273,47 +1188,46 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     pdf.set_x(12)
     pdf.cell(0, 5, limpar_texto(f"LOCAL: {local}"), ln=True)
     
-    # 3. TABELA DE ASSINATURAS
+    # 3. TABELA DE ASSINATURAS (LARGURA TOTAL 190mm)
     pdf.ln(8)
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 9)
+    pdf.set_font("helvetica", "B", 10)
     
-    # Cabeçalhos da Tabela
-    pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
-    pdf.cell(65, 8, "Catequizando", border=1, fill=True, align='C')
-    pdf.cell(55, 8, "Responsável (Pai/Mãe)", border=1, fill=True, align='C')
-    pdf.cell(60, 8, "Assinatura", border=1, fill=True, align='C')
+    # Cabeçalhos: Nº (10mm), Catequizando (80mm), Assinatura (100mm)
+    pdf.cell(10, 9, "Nº", border=1, fill=True, align='C')
+    pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C')
+    pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C')
     pdf.ln()
     
     # Linhas da Tabela
     pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 8)
+    pdf.set_font("helvetica", "", 9)
     
     for i, fam in enumerate(lista_familias, 1):
-        # Alterna cor de fundo para facilitar leitura
         fill = (i % 2 == 0)
         if fill: pdf.set_fill_color(248, 249, 250)
         else: pdf.set_fill_color(255, 255, 255)
         
-        altura_linha = 8
+        altura_linha = 9 # Aumentei um pouco a altura para facilitar a assinatura
         pdf.cell(10, altura_linha, str(i), border=1, fill=True, align='C')
-        pdf.cell(65, altura_linha, limpar_texto(fam['nome_cat'][:35]), border=1, fill=True)
-        pdf.cell(55, altura_linha, limpar_texto(fam['responsavel'][:30]), border=1, fill=True)
-        pdf.cell(60, altura_linha, "", border=1, fill=True) # Espaço para assinatura
+        pdf.cell(80, altura_linha, limpar_texto(fam['nome_cat'].upper()), border=1, fill=True)
+        pdf.cell(100, altura_linha, "", border=1, fill=True) # Espaço amplo para assinatura
         pdf.ln()
         
-        # Quebra de página se necessário
-        if pdf.get_y() > 270:
+        if pdf.get_y() > 265:
             pdf.add_page()
-            # Repete cabeçalho da tabela na nova página
-            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
-            pdf.cell(10, 8, "Nº", border=1, fill=True); pdf.cell(65, 8, "Catequizando", border=1, fill=True); pdf.cell(55, 8, "Responsável", border=1, fill=True); pdf.cell(60, 8, "Assinatura", border=1, fill=True); pdf.ln()
-            pdf.set_text_color(0, 0, 0)
+            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+            pdf.cell(10, 9, "Nº", border=1, fill=True, align='C')
+            pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C')
+            pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C')
+            pdf.ln()
+            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
 
-    # 4. RODAPÉ DE VALIDAÇÃO
+    # 4. RODAPÉ
     pdf.ln(10)
     pdf.set_font("helvetica", "I", 8)
+    pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 5, limpar_texto("Documento gerado pelo Sistema Catequese Fátima para controle de engajamento familiar."), ln=True, align='C')
     
     return finalizar_pdf(pdf)
