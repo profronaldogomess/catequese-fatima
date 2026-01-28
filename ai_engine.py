@@ -122,25 +122,32 @@ def gerar_mensagem_reacolhida_ia(nome_catequizando, nome_turma):
     except:
         return f"Olá! Sentimos muito a sua falta em nosso último encontro da catequese. A turma {nome_turma} não é a mesma sem você! Esperamos te ver no próximo encontro para continuarmos nossa caminhada de fé. Deus abençoe!"
 
-def gerar_mensagem_cobranca_doc_ia(nome, docs, turma, is_adulto):
-    """Gera mensagem diplomática para regularização de documentos."""
+def gerar_mensagem_cobranca_doc_ia(nome_catequizando, docs, turma, nome_contato, vinculo):
+    """Gera mensagem personalizada para o responsável ou para o próprio adulto."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        destinatario = "você" if is_adulto else "seu(sua) filho(a)"
+        
+        # Ajusta o tom da conversa baseado no vínculo
+        if vinculo == "Próprio":
+            tratamento = f"Olá, {nome_contato}"
+            referencia = "sua inscrição"
+        else:
+            tratamento = f"Olá, {nome_contato} ({vinculo} do catequizando {nome_catequizando})"
+            referencia = f"a inscrição do(a) {nome_catequizando}"
+
         prompt = f"""
         Você é o Secretário da Catequese da Paróquia Nossa Senhora de Fátima.
-        Escreva uma mensagem curta e gentil para {nome}, da turma {turma}, 
-        solicitando a entrega dos seguintes documentos pendentes: {docs}.
+        Escreva uma mensagem curta e gentil para {tratamento}.
+        O objetivo é solicitar a entrega dos documentos: {docs}, que faltam para completar {referencia} na turma {turma}.
         
         REGRAS:
-        1. Explique que os documentos são essenciais para completar o registro da caminhada.
-        2. Se for adulto, fale diretamente com ele. Se for criança, fale com os pais.
-        3. Use tom de acolhida, não de cobrança fria.
-        4. NÃO use asteriscos (**) para negrito.
-        5. Termine com 'Deus abençoe'.
+        1. Use um tom acolhedor e paroquial.
+        2. Não use termos escolares (aula, curso). Use 'itinerário' ou 'caminhada'.
+        3. NÃO use asteriscos (**) para negrito.
+        4. Termine com 'Deus abençoe'.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
         return response.text
     except:
-        return f"Paz e Bem! Notamos que ainda faltam alguns documentos ({docs}) para completar a inscrição de {nome} na turma {turma}. Poderia nos entregar no próximo encontro? Deus abençoe!"
+        return f"Paz e Bem! Notamos que faltam documentos ({docs}) para {nome_catequizando}. Poderia nos entregar? Deus abençoe!"
 
