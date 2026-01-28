@@ -2293,74 +2293,83 @@ elif menu == "👥 Gestão de Catequistas":
             st.info("Nenhum catequista cadastrado.")
 
     with tab_lista:
-        st.subheader("📋 Relação e Perfil Individual")
-        if not equipe_tecnica.empty:
-            busca_c = st.text_input("🔍 Pesquisar catequista por nome:", key="busca_cat_v13").upper()
-            df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
-            st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
-            
-            st.divider()
-            escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat_v13")
-            
-            if escolha_c:
-                u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
-                col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
+            st.subheader("📋 Relação e Perfil Individual")
+            if not equipe_tecnica.empty:
+                busca_c = st.text_input("🔍 Pesquisar catequista por nome:", key="busca_cat_v13").upper()
+                df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
+                st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
                 
-                with col_perfil:
-                    c1, c2 = st.columns([2, 1])
-                    with c1:
-                        st.markdown(f"### {u['nome']}")
-                        st.write(f"**E-mail:** {u['email']}")
-                        st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
-                        # EXIBIÇÃO DO CONTATO DE EMERGÊNCIA NO PERFIL
-                        emerg_contato = u.iloc[13] if len(u) > 13 else "NÃO CADASTRADO"
-                        st.error(f"🚨 **CONTATO DE EMERGÊNCIA:** {emerg_contato}")
-                        st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
-                        st.write(f"**Turmas:** {u['turma_vinculada']}")
-                    with c2:
-                        if st.button(f"📄 Gerar Ficha PDF de {escolha_c}"):
-                            st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
-                        if "pdf_catequista" in st.session_state:
-                            st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
+                st.divider()
+                escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat_v13")
+                
+                if escolha_c:
+                    u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
+                    col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
+                    
+                    with col_perfil:
+                        c1, c2 = st.columns([2, 1])
+                        with c1:
+                            st.markdown(f"### {u['nome']}")
+                            st.write(f"**E-mail:** {u['email']}")
+                            st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
+                            st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
+                            st.write(f"**Início na Catequese:** {formatar_data_br(u.get('data_inicio_catequese', ''))}")
+                            st.write(f"**Turmas Vinculadas:** {u['turma_vinculada']}")
+                            st.write(f"**Papel Atual:** {u.get('papel', 'CATEQUISTA')}")
+                        with c2:
+                            if st.button(f"📄 Gerar Ficha PDF de {escolha_c}"):
+                                st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
+                            if "pdf_catequista" in st.session_state:
+                                st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
-                with col_edit:
-                    with st.form(f"form_edit_cat_v13_{u['email']}"):
-                        c1, c2, c3 = st.columns(3)
-                        ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
-                        ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
-                        ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
-                        
-                        # EDIÇÃO DO PAPEL E EMERGÊNCIA
-                        op_papel = ["CATEQUISTA", "COORDENADOR", "ADMIN"]
-                        ed_papel = st.selectbox("Papel", op_papel, index=op_papel.index(str(u.get('papel', 'CATEQUISTA')).upper()))
-                        ed_emergencia = st.text_input("🚨 Contato de Emergência (Nome e Tel)", value=u.iloc[13] if len(u) > 13 else "")
+                    with col_edit:
+                        # --- BLINDAGEM DE DATA (CORREÇÃO DO ERRO) ---
+                        try:
+                            # Tenta converter usando pandas para ser mais flexível
+                            data_nasc_bruta = u.get('data_nascimento', '')
+                            if pd.isna(data_nasc_bruta) or str(data_nasc_bruta).strip() in ["", "N/A", "None"]:
+                                val_nasc = date(1980, 1, 1)
+                            else:
+                                # Usa a função do utils mas garante que o retorno seja .date()
+                                val_nasc = converter_para_data(data_nasc_bruta)
+                        except:
+                            val_nasc = date(1980, 1, 1)
 
-                        # CALENDÁRIO AMPLO NA EDIÇÃO
-                        ed_nasc = st.date_input("Data de Nascimento", 
-                                               value=converter_para_data(u.get('data_nascimento', '')),
-                                               min_value=date(1930, 1, 1),
-                                               max_value=date(2011, 12, 31))
-                        
-                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                        ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
-                        
-                        st.markdown("**Datas Sacramentais:**")
-                        d1, d2, d3, d4, d5 = st.columns(5)
-                        dt_ini = d1.text_input("Início", value=str(u.get('data_inicio_catequese', '')))
-                        dt_bat = d2.text_input("Batismo", value=str(u.get('data_batismo', '')))
-                        dt_euc = d3.text_input("Eucaristia", value=str(u.get('data_eucaristia', '')))
-                        dt_cri = d4.text_input("Crisma", value=str(u.get('data_crisma', '')))
-                        dt_min = d5.text_input("Ministério", value=str(u.get('data_ministerio', '')))
+                        with st.form(f"form_edit_cat_v13_{u['email']}"):
+                            c1, c2, c3 = st.columns(3)
+                            ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+                            ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
+                            ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
+                            
+                            opcoes_papel = ["CATEQUISTA", "COORDENADOR", "ADMIN"]
+                            papel_atual = str(u.get('papel', 'CATEQUISTA')).upper()
+                            idx_papel = opcoes_papel.index(papel_atual) if papel_atual in opcoes_papel else 0
+                            ed_papel = st.selectbox("Alterar Papel / Nível de Acesso", opcoes_papel, index=idx_papel)
+                            
+                            # Widget corrigido com valor garantido como objeto date
+                            ed_nasc = st.date_input("Data de Nascimento", value=val_nasc, format="DD/MM/YYYY")
+                            
+                            lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                            vinc_atuais = [t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes]
+                            ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=vinc_atuais)
+                            
+                            st.markdown("**Datas Sacramentais e Início:**")
+                            d1, d2, d3, d4, d5 = st.columns(5)
+                            dt_ini = d1.text_input("Início Catequese", value=str(u.get('data_inicio_catequese', '')))
+                            dt_bat = d2.text_input("Data Batismo", value=str(u.get('data_batismo', '')))
+                            dt_euc = d3.text_input("Data Eucaristia", value=str(u.get('data_eucaristia', '')))
+                            dt_cri = d4.text_input("Data Crisma", value=str(u.get('data_crisma', '')))
+                            dt_min = d5.text_input("Data Ministério", value=str(u.get('data_ministerio', '')))
 
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                            # Montagem das 14 colunas (A-N)
-                            dados_up = [
-                                ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
-                                ed_tel, str(ed_nasc), dt_ini, dt_bat, dt_euc, dt_cri, dt_min, 
-                                str(u.iloc[12]) if len(u) > 12 else "", ed_emergencia
-                            ]
-                            if atualizar_usuario(u['email'], dados_up):
-                                st.success("✅ Sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
+                                with st.spinner("Sincronizando..."):
+                                    dados_up = [
+                                        ed_nome, u['email'], ed_senha, ed_papel, 
+                                        ", ".join(ed_turmas), ed_tel, str(ed_nasc),
+                                        dt_ini, dt_bat, dt_euc, dt_cri, dt_min
+                                    ]
+                                    if atualizar_usuario(u['email'], dados_up):
+                                        st.success("✅ Perfil atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
