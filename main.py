@@ -580,12 +580,12 @@ elif menu == "📚 Minha Turma":
         st.dataframe(meus_alunos[['nome_completo', 'contato_principal', 'etapa', 'status']], use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# PÁGINA: 📖 DIÁRIO DE ENCONTROS (VERSÃO 4.0 - COM AUDITORIA E AUTOMAÇÃO)
+# PÁGINA: 📖 DIÁRIO DE ENCONTROS (VERSÃO 5.2 - DATAS BR + PROGRESSO)
 # ==============================================================================
 elif menu == "📖 Diário de Encontros":
     st.title("📖 Central de Itinerário e Encontros")
     
-    # --- 1. LÓGICA DE FILTRO DE TURMA ---
+    # 1. FILTRO DE TURMA
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -597,32 +597,46 @@ elif menu == "📖 Diário de Encontros":
 
     turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
 
-    # --- 2. INBOX DE PENDÊNCIAS (INTELIGÊNCIA ATIVA) ---
+    # --- NOVO: BARRA DE PROGRESSO DO ITINERÁRIO ---
+    df_cron_p = ler_aba("cronograma")
+    if not df_cron_p.empty:
+        cron_turma = df_cron_p[df_cron_p['etapa'] == turma_focal]
+        if not cron_turma.empty:
+            total_temas = len(cron_turma)
+            realizados = len(cron_turma[cron_turma.get('status', '') == 'REALIZADO'])
+            progresso = realizados / total_temas
+            st.write(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
+            st.progress(progresso)
+
+    # --- 2. INBOX DE PENDÊNCIAS (DATAS EM FORMATO BR) ---
     df_pres_local = ler_aba("presencas")
     df_enc_local = ler_aba("encontros")
     
     if not df_pres_local.empty:
-        # Identifica datas que tiveram chamada mas não têm tema
         chamadas_turma = df_pres_local[df_pres_local['id_turma'] == turma_focal]['data_encontro'].unique().tolist()
         temas_turma = df_enc_local[df_enc_local['turma'] == turma_focal]['data'].unique().tolist() if not df_enc_local.empty else []
         
         pendencias = [d for d in chamadas_turma if d not in temas_turma]
         
         if pendencias:
+            # Ordenar pendências da mais antiga para a mais nova
+            pendencias.sort()
             st.warning(f"⚠️ **Atenção:** Identificamos {len(pendencias)} encontro(s) com chamada realizada, mas sem tema registrado.")
             for p_data in pendencias:
-                with st.expander(f"📝 Registrar tema pendente para o dia {formatar_data_br(p_data)}"):
+                # DATA FORMATADA PARA BR NO TÍTULO DO EXPANDER
+                data_br = formatar_data_br(p_data)
+                with st.expander(f"📝 Registrar tema pendente para o dia {data_br}"):
                     with st.form(f"form_pendencia_{p_data}"):
                         t_pend = st.text_input("Título do Tema Ministrado").upper()
                         o_pend = st.text_area("Observações Pastorais")
-                        if st.form_submit_button("💾 SALVAR REGISTRO RETROATIVO"):
+                        if st.form_submit_button(f"💾 SALVAR REGISTRO DE {data_br}"):
                             if t_pend:
                                 if salvar_encontro([str(p_data), turma_focal, t_pend, st.session_state.usuario['nome'], o_pend]):
-                                    st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                    st.success("Registrado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     st.divider()
 
-    # --- 3. PLANEJAMENTO E REGISTRO ---
+    # --- 3. PLANEJAMENTO E REGISTRO (DATA_INPUT COM FORMATO BR) ---
     col_plan, col_reg = st.columns([1, 1])
 
     with col_plan:
@@ -637,14 +651,13 @@ elif menu == "📖 Diário de Encontros":
 
     with col_reg:
         st.subheader("✅ Registrar Encontro de Hoje")
-        df_cron_local = ler_aba("cronograma")
         temas_sugeridos = [""]
-        if not df_cron_local.empty:
-            # Filtra apenas os que não foram realizados
-            temas_sugeridos += df_cron_local[(df_cron_local['etapa'] == turma_focal) & (df_cron_local.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
+        if not df_cron_p.empty:
+            temas_sugeridos += df_cron_p[(df_cron_p['etapa'] == turma_focal) & (df_cron_p.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
 
         with st.form("form_reg_v5", clear_on_submit=True):
-            data_e = st.date_input("Data do Encontro", date.today())
+            # DATA_INPUT CONFIGURADO PARA FORMATO BR
+            data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
             tema_selecionado = st.selectbox("Selecionar do Cronograma:", temas_sugeridos)
             tema_manual = st.text_input("Ou digite o Tema:", value=tema_selecionado).upper()
             obs_e = st.text_area("Observações", height=68)
@@ -652,60 +665,45 @@ elif menu == "📖 Diário de Encontros":
             if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
                 if tema_manual:
                     if salvar_encontro([str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
-                        # Marca como realizado no cronograma em vez de apagar
                         from database import marcar_tema_realizado_cronograma
                         marcar_tema_realizado_cronograma(turma_focal, tema_manual)
                         st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-    # --- 4. HISTÓRICO INTERATIVO COM EDIÇÃO (VERSÃO BLINDADA) ---
+    # --- 4. LINHA DO TEMPO (DATAS BR + BUSCA) ---
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
     if not df_enc_local.empty:
-        # Filtra e ordena
         hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
         
-        # Mapeamento flexível de colunas para evitar KeyError
-        cols_disponiveis = hist_turma.columns.tolist()
-        col_tema = 'tema' if 'tema' in cols_disponiveis else cols_disponiveis[2]
-        col_cat = 'catequista' if 'catequista' in cols_disponiveis else cols_disponiveis[3]
-        # Procura por 'obs', 'observações' ou usa a 5ª coluna (índice 4)
-        col_obs = next((c for c in ['obs', 'observações', 'observacoes'] if c in cols_disponiveis), cols_disponiveis[4] if len(cols_disponiveis) > 4 else None)
+        # NOVO: BUSCA NO HISTÓRICO
+        busca_h = st.text_input("🔍 Pesquisar tema no histórico:").upper()
+        if busca_h:
+            hist_turma = hist_turma[hist_turma['tema'].str.contains(busca_h, na=False)]
 
         for _, row in hist_turma.iterrows():
             data_val = row['data']
-            data_dt = converter_para_data(data_val)
-            dias_passados = (date.today() - data_dt).days
-            pode_editar = eh_gestor or (dias_passados <= 7)
+            data_br_h = formatar_data_br(data_val) # DATA EM FORMATO BR
             
-            tema_display = row[col_tema]
-            catequista_display = row[col_cat]
-            relato_display = row[col_obs] if col_obs else "Sem observações registradas."
-            
-            with st.expander(f"📅 {formatar_data_br(data_val)} - {tema_display}"):
-                st.write(f"**Catequista:** {catequista_display}")
-                st.write(f"**Relato:** {relato_display}")
+            with st.expander(f"📅 {data_br_h} - {row['tema']}"):
+                st.write(f"**Catequista:** {row['catequista']}")
+                st.write(f"**Relato:** {row.get('obs', row.get('observações', 'Sem relato'))}")
                 
-                if pode_editar:
-                    if st.button(f"✏️ Editar Registro", key=f"btn_edit_{data_val}_{turma_focal}"):
-                        st.session_state[f"edit_mode_{data_val}"] = True
+                # Lógica de Edição (Mantida)
+                dias_p = (date.today() - converter_para_data(data_val)).days
+                if eh_gestor or dias_p <= 7:
+                    if st.button(f"✏️ Editar", key=f"ed_{data_val}"):
+                        st.session_state[f"edit_{data_val}"] = True
                     
-                    if st.session_state.get(f"edit_mode_{data_val}", False):
-                        with st.form(f"form_edit_{data_val}_{turma_focal}"):
-                            novo_t = st.text_input("Corrigir Tema", value=tema_display).upper()
-                            nova_o = st.text_area("Corrigir Relato", value=relato_display)
-                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                    if st.session_state.get(f"edit_{data_val}", False):
+                        with st.form(f"f_ed_{data_val}"):
+                            nt = st.text_input("Tema", value=row['tema']).upper()
+                            no = st.text_area("Relato", value=row.get('obs', row.get('observações', '')))
+                            if st.form_submit_button("💾 SALVAR"):
                                 from database import atualizar_encontro_existente
-                                # Monta a lista respeitando a ordem: Data, Turma, Tema, Catequista, Obs
-                                dados_atualizados = [str(data_val), turma_focal, novo_t, catequista_display, nova_o]
-                                if atualizar_encontro_existente(data_val, turma_focal, dados_atualizados):
-                                    st.success("Registro atualizado com sucesso!")
-                                    del st.session_state[f"edit_mode_{data_val}"]
-                                    st.cache_data.clear()
-                                    time.sleep(1)
-                                    st.rerun()
-                else:
-                    st.caption("🔒 Edição bloqueada (mais de 7 dias).")
+                                if atualizar_encontro_existente(data_val, turma_focal, [str(data_val), turma_focal, nt, row['catequista'], no]):
+                                    st.success("Atualizado!"); del st.session_state[f"edit_{data_val}"]
+                                    st.cache_data.clear(); time.sleep(1); st.rerun()
     else:
         st.info("Nenhum encontro registrado ainda.")
 
