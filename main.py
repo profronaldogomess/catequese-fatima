@@ -657,37 +657,55 @@ elif menu == "📖 Diário de Encontros":
                         marcar_tema_realizado_cronograma(turma_focal, tema_manual)
                         st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-    # --- 4. HISTÓRICO INTERATIVO COM EDIÇÃO ---
+    # --- 4. HISTÓRICO INTERATIVO COM EDIÇÃO (VERSÃO BLINDADA) ---
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
     if not df_enc_local.empty:
+        # Filtra e ordena
         hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
         
+        # Mapeamento flexível de colunas para evitar KeyError
+        cols_disponiveis = hist_turma.columns.tolist()
+        col_tema = 'tema' if 'tema' in cols_disponiveis else cols_disponiveis[2]
+        col_cat = 'catequista' if 'catequista' in cols_disponiveis else cols_disponiveis[3]
+        # Procura por 'obs', 'observações' ou usa a 5ª coluna (índice 4)
+        col_obs = next((c for c in ['obs', 'observações', 'observacoes'] if c in cols_disponiveis), cols_disponiveis[4] if len(cols_disponiveis) > 4 else None)
+
         for _, row in hist_turma.iterrows():
-            data_dt = converter_para_data(row['data'])
+            data_val = row['data']
+            data_dt = converter_para_data(data_val)
             dias_passados = (date.today() - data_dt).days
             pode_editar = eh_gestor or (dias_passados <= 7)
             
-            with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
-                st.write(f"**Catequista:** {row['catequista']}")
-                st.write(f"**Relato:** {row['obs']}")
+            tema_display = row[col_tema]
+            catequista_display = row[col_cat]
+            relato_display = row[col_obs] if col_obs else "Sem observações registradas."
+            
+            with st.expander(f"📅 {formatar_data_br(data_val)} - {tema_display}"):
+                st.write(f"**Catequista:** {catequista_display}")
+                st.write(f"**Relato:** {relato_display}")
                 
                 if pode_editar:
-                    if st.button(f"✏️ Editar Registro", key=f"edit_enc_{row['data']}"):
-                        st.session_state[f"edit_mode_{row['data']}"] = True
+                    if st.button(f"✏️ Editar Registro", key=f"btn_edit_{data_val}_{turma_focal}"):
+                        st.session_state[f"edit_mode_{data_val}"] = True
                     
-                    if st.session_state.get(f"edit_mode_{row['data']}", False):
-                        with st.form(f"form_edit_{row['data']}"):
-                            novo_t = st.text_input("Corrigir Tema", value=row['tema']).upper()
-                            nova_o = st.text_area("Corrigir Relato", value=row['obs'])
+                    if st.session_state.get(f"edit_mode_{data_val}", False):
+                        with st.form(f"form_edit_{data_val}_{turma_focal}"):
+                            novo_t = st.text_input("Corrigir Tema", value=tema_display).upper()
+                            nova_o = st.text_area("Corrigir Relato", value=relato_display)
                             if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                                 from database import atualizar_encontro_existente
-                                if atualizar_encontro_existente(row['data'], turma_focal, [row['data'], turma_focal, novo_t, row['catequista'], nova_o]):
-                                    st.success("Atualizado!"); del st.session_state[f"edit_mode_{row['data']}"]
-                                    st.cache_data.clear(); time.sleep(1); st.rerun()
+                                # Monta a lista respeitando a ordem: Data, Turma, Tema, Catequista, Obs
+                                dados_atualizados = [str(data_val), turma_focal, novo_t, catequista_display, nova_o]
+                                if atualizar_encontro_existente(data_val, turma_focal, dados_atualizados):
+                                    st.success("Registro atualizado com sucesso!")
+                                    del st.session_state[f"edit_mode_{data_val}"]
+                                    st.cache_data.clear()
+                                    time.sleep(1)
+                                    st.rerun()
                 else:
-                    st.caption("🔒 Registro bloqueado para edição (mais de 7 dias). Solicite à coordenação se precisar alterar.")
+                    st.caption("🔒 Edição bloqueada (mais de 7 dias).")
     else:
         st.info("Nenhum encontro registrado ainda.")
 
