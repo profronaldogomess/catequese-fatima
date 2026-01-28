@@ -1,6 +1,6 @@
 # ==============================================================================
 # ARQUIVO: utils.py
-# VERSÃO: 6.3.0 - INTEGRIDADE TOTAL (SEM REDUÇÃO / SEM ERROS DE DEFINIÇÃO)
+# VERSÃO: 6.5.0 - INTEGRIDADE TOTAL (SEM REDUÇÃO / SEM SIMPLIFICAÇÃO)
 # MISSÃO: Motor de Documentação, Auditoria Sacramental e Identidade Visual.
 # ==============================================================================
 
@@ -20,11 +20,14 @@ from PIL import Image, ImageDraw, ImageFont
 # ==============================================================================
 
 def formatar_data_br(valor):
-    if not valor or str(valor).strip() in ["None", "", "N/A"]: return "N/A"
+    """Garante que qualquer data seja exibida como DD/MM/AAAA."""
+    if not valor or str(valor).strip() in ["None", "", "N/A"]:
+        return "N/A"
     s = str(valor).strip().split(' ')[0]
     if re.match(r"^\d{2}/\d{2}/\d{4}$", s): return s
     if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
-        p = s.split('-'); return f"{p[2]}/{p[1]}/{p[0]}"
+        partes = s.split('-')
+        return f"{partes[2]}/{partes[1]}/{partes[0]}"
     try:
         dt = pd.to_datetime(s, dayfirst=True)
         if pd.notnull(dt): return dt.strftime('%d/%m/%Y')
@@ -32,70 +35,132 @@ def formatar_data_br(valor):
     return s
 
 def calcular_idade(data_nascimento):
-    if not data_nascimento or str(data_nascimento).strip() in ["None", "", "N/A"]: return 0
+    """Calcula a idade exata forçando o fuso horário UTC-3."""
+    if not data_nascimento or str(data_nascimento).strip() in ["None", "", "N/A"]:
+        return 0
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     try:
         d_str = formatar_data_br(data_nascimento)
         dt = dt_module.datetime.strptime(d_str, "%d/%m/%Y").date()
-        return hoje.year - dt.year - ((hoje.month, hoje.day) < (dt.month, dt.day))
+        idade = hoje.year - dt.year - ((hoje.month, hoje.day) < (dt.month, dt.day))
+        return idade if idade >= 0 else 0
     except: return 0
 
 def limpar_texto(texto):
+    """Remove artefatos e garante compatibilidade Latin-1, removendo emojis."""
     if not texto: return ""
     texto_limpo = str(texto).replace("**", "").replace("* ", " - ").replace("*", "")
     texto_limpo = re.sub(r'[^\x00-\x7F]+', ' ', texto_limpo)
     return texto_limpo.encode('latin-1', 'replace').decode('latin-1')
 
 def finalizar_pdf(pdf):
-    try: return pdf.output(dest='S').encode('latin-1')
-    except: return b""
+    """Finaliza a geração do PDF e retorna o buffer de bytes."""
+    try:
+        return pdf.output(dest='S').encode('latin-1')
+    except Exception as e:
+        print(f"Erro crítico ao finalizar PDF: {e}")
+        return b""
 
 def desenhar_campo_box(pdf, label, valor, x, y, w, h=8):
+    """Desenha uma caixa de formulário com fundo creme e label superior."""
     pdf.set_xy(x, y)
-    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(65, 123, 153)
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_text_color(65, 123, 153)
     pdf.cell(w, 4, limpar_texto(label), ln=0)
-    pdf.set_xy(x, y + 4); pdf.set_fill_color(248, 249, 240); pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 10); pdf.cell(w, h, limpar_texto(valor), border=1, fill=True)
+    pdf.set_xy(x, y + 4)
+    pdf.set_fill_color(248, 249, 240)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 10)
+    pdf.cell(w, h, limpar_texto(valor), border=1, fill=True)
 
 def marcar_opcao(pdf, texto, condicao, x, y):
-    pdf.set_xy(x, y); pdf.set_font("helvetica", "", 9)
+    """Desenha um seletor de opção (X) ou vazio."""
+    pdf.set_xy(x, y)
+    pdf.set_font("helvetica", "", 9)
     mark = "X" if condicao else " "
     pdf.cell(0, 5, limpar_texto(f"{texto} ( {mark} )"), ln=0)
 
 # ==============================================================================
-# 2. CABEÇALHO OFICIAL CENTRALIZADO (PADRÃO FÁTIMA)
+# 2. INTERFACE DE MANUTENÇÃO E CABEÇALHO OFICIAL
 # ==============================================================================
+
+def exibir_tela_manutencao():
+    st.markdown("""
+        <style>.main { background-color: #f8f9f0; }</style>
+        <div style='text-align: center; padding: 50px;'>
+            <h1 style='color: #417b99; font-size: 80px;'>✝️</h1>
+            <h2 style='color: #e03d11;'>Ajustes Pastorais em Andamento</h2>
+            <p>O sistema está em atualização técnica para melhor servir à nossa comunidade.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 def adicionar_cabecalho_diocesano(pdf, titulo=""):
+    """Cabeçalho Centralizado com dados oficiais da Paróquia de Fátima."""
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", (210-25)/2, 10, 25); pdf.ln(28)
-    else: pdf.ln(10)
-    pdf.set_font("helvetica", "B", 14); pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
-    pdf.set_font("helvetica", "", 10); pdf.cell(0, 5, limpar_texto("DIOCESE DE ITABUNA - BAHIA"), ln=True, align='C')
-    pdf.set_font("helvetica", "I", 8); pdf.cell(0, 4, limpar_texto("Av. Juracy Magalhães, 801 - Fátima, Itabuna - BA | (73) 3212-2635"), ln=True, align='C')
+        pdf.image("logo.png", (210-25)/2, 10, 25)
+        pdf.ln(28)
+    else:
+        pdf.ln(10)
+    
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
+    pdf.set_font("helvetica", "", 10)
+    pdf.cell(0, 5, limpar_texto("DIOCESE DE ITABUNA - BAHIA"), ln=True, align='C')
+    pdf.set_font("helvetica", "I", 9)
+    pdf.cell(0, 4, limpar_texto("Av. Juracy Magalhães, 801 - Nossa Sra. de Fátima, Itabuna - BA, 45603-231"), ln=True, align='C')
+    pdf.cell(0, 4, limpar_texto("Telefone: (73) 3212-2635 | https://paroquiadefatimaitabuna.com.br"), ln=True, align='C')
+    
     if titulo:
-        pdf.ln(5); pdf.set_fill_color(245, 245, 245); pdf.rect(10, pdf.get_y(), 190, 12, 'F')
-        pdf.set_font("helvetica", "B", 12); pdf.set_text_color(65, 123, 153)
-        pdf.cell(190, 12, limpar_texto(titulo), border=1, align='C', ln=True); pdf.set_text_color(0, 0, 0); pdf.ln(5)
+        pdf.ln(5)
+        pdf.set_fill_color(245, 245, 245)
+        pdf.rect(10, pdf.get_y(), 190, 12, 'F')
+        pdf.set_font("helvetica", "B", 12)
+        pdf.set_text_color(65, 123, 153)
+        pdf.cell(190, 12, limpar_texto(titulo), border=1, align='C', ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(5)
 
 # ==============================================================================
-# 3. FICHA DE INSCRIÇÃO (TEXTO INTEGRAL LGPD)
+# 3. MOTOR DE CARDS DE ANIVERSÁRIO
+# ==============================================================================
+
+def gerar_card_aniversario(dados_niver, tipo="DIA"):
+    MESES_EXTENSO = {1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL", 5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO", 9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"}
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    try:
+        template_path = "template_niver_4.png" if tipo == "MES" else f"template_niver_{random.randint(1, 3)}.png"
+        if not os.path.exists(template_path): return None
+        img = Image.open(template_path).convert("RGB"); draw = ImageDraw.Draw(img)
+        font_path = "fonte_card.ttf"
+        f_main = ImageFont.truetype(font_path, 42 if tipo=="DIA" else 28) if os.path.exists(font_path) else ImageFont.load_default()
+        if tipo == "MES":
+            nomes = [f"{str(x).split(' | ')[0]} - {str(x).split(' | ')[2].split()[0]}" for x in dados_niver]
+            draw.multiline_text((541, 682), "\n".join(nomes), font=f_main, fill=(26, 74, 94), align="center", anchor="mm")
+        else:
+            p = str(dados_niver).split(" | ")
+            draw.text((540, 650), f"{p[1]} - {p[2].split()[0]}", font=f_main, fill=(26, 74, 94), anchor="mm")
+        buf = io.BytesIO(); img.save(buf, format="PNG"); return buf.getvalue()
+    except: return None
+
+# ==============================================================================
+# 4. GESTÃO DE FICHAS DE INSCRIÇÃO (VERSÃO INTEGRAL - 30 COLUNAS)
 # ==============================================================================
 
 def _desenhar_corpo_ficha(pdf, dados):
+    """Desenha a ficha completa com Termo LGPD Integral e Layout Moderno."""
     y_base = pdf.get_y()
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_adulto = idade_real >= 18
     
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 7, " 1. IDENTIFICAÇÃO DO CATEQUIZANDO", ln=True, fill=True)
+    pdf.cell(190, 7, limpar_texto(" 1. IDENTIFICAÇÃO DO CATEQUIZANDO"), ln=True, fill=True)
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
     desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome_completo', ''), 10, y, 190)
     y += 14
     desenhar_campo_box(pdf, "Data de Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 10, y, 45)
     desenhar_campo_box(pdf, "Idade:", f"{idade_real} anos", 60, y, 25)
-    marcar_opcao(pdf, "Batizado: Sim", dados.get('batizado_sn') == 'SIM', 95, y+4)
-    marcar_opcao(pdf, "Não", dados.get('batizado_sn') == 'NÃO', 125, y+4)
+    marcar_opcao(pdf, "Batizado: Sim", dados.get('batizado_sn') == 'SIM', 95, y + 4)
+    marcar_opcao(pdf, "Não", dados.get('batizado_sn') == 'NÃO', 125, y + 4)
     y += 14
     desenhar_campo_box(pdf, "Endereço Residencial:", dados.get('endereco_completo', ''), 10, y, 190)
     y += 14
@@ -104,12 +169,12 @@ def _desenhar_corpo_ficha(pdf, dados):
 
     pdf.set_y(pdf.get_y() + 16); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
     if is_adulto:
-        pdf.cell(190, 7, " 2. CONTATO DE EMERGÊNCIA / VÍNCULO", ln=True, fill=True)
+        pdf.cell(190, 7, limpar_texto(" 2. CONTATO DE EMERGÊNCIA / VÍNCULO"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome do Contato:", dados.get('nome_responsavel', 'N/A'), 10, y, 110)
         desenhar_campo_box(pdf, "Vínculo / Telefone:", dados.get('obs_pastoral_familia', 'N/A'), 125, y, 75)
     else:
-        pdf.cell(190, 7, " 2. FILIAÇÃO E RESPONSÁVEIS", ln=True, fill=True)
+        pdf.cell(190, 7, limpar_texto(" 2. FILIAÇÃO E RESPONSÁVEIS"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome da Mãe:", dados.get('nome_mae', 'N/A'), 10, y, 110)
         desenhar_campo_box(pdf, "Nome do Pai:", dados.get('nome_pai', 'N/A'), 10, y+14, 110)
@@ -141,7 +206,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_xy(115, y_ass + 1); pdf.cell(80, 5, "Assinatura do Catequista / Coordenação", align='C')
 
 # ==============================================================================
-# 4. RELATÓRIOS DIOCESANOS E PASTORAIS (V5 E V6)
+# 5. RELATÓRIOS DIOCESANOS E PASTORAIS (V5 E V6)
 # ==============================================================================
 
 def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
@@ -205,10 +270,11 @@ def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
             pdf.set_xy(110, y_antes); pdf.cell(30, h, "Sim" if r['batizado_sn']=="SIM" else "Não", border=1, align='C')
             pdf.set_xy(140, y_antes); pdf.cell(30, h, "Sim" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "Não", border=1, align='C')
             pdf.set_xy(170, y_antes); pdf.cell(30, h, "Regular" if r['doc_em_falta'] in ['COMPLETO','OK'] else "Pendente", border=1, align='C'); pdf.ln(h)
+            if pdf.get_y() > 260: pdf.add_page()
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 5. AUDITORIA SACRAMENTAL E LOCAL (AS FUNÇÕES QUE FALTAVAM)
+# 6. AUDITORIA SACRAMENTAL E LOCAL
 # ==============================================================================
 
 def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedimentos_lista, analise_ia):
@@ -246,7 +312,7 @@ def gerar_relatorio_local_turma_v2(nome_turma, metricas, listas, analise_ia):
     return finalizar_pdf(pdf)
 
 # ==============================================================================
-# 6. DOCUMENTOS OFICIAIS E ALIASES
+# 7. DOCUMENTOS OFICIAIS E ALIASES
 # ==============================================================================
 
 def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, lista_nomes):
@@ -270,7 +336,7 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
         pdf.cell(10, 9, str(i), border=1); pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1); pdf.cell(100, 9, "", border=1); pdf.ln()
     return finalizar_pdf(pdf)
 
-# ALIASES
+# ALIASES DE COMPATIBILIDADE
 gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v5
 gerar_relatorio_diocesano_v2 = gerar_relatorio_diocesano_v5
 gerar_relatorio_diocesano_v4 = gerar_relatorio_diocesano_v5
@@ -279,9 +345,11 @@ gerar_relatorio_pastoral_v3 = gerar_relatorio_pastoral_v4
 gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
 gerar_pdf_perfil_turma = lambda n, m, a, l: finalizar_pdf(FPDF())
 gerar_relatorio_local_turma_pdf = gerar_relatorio_local_turma_v2
+gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v4
+gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v4
 
 # ==============================================================================
-# 7. FUNÇÕES DE ITINERÁRIO, ANIVERSÁRIO E STATUS (MANTIDAS ORIGINAIS)
+# 8. FUNÇÕES DE ITINERÁRIO, ANIVERSÁRIO E STATUS (MANTIDAS ORIGINAIS)
 # ==============================================================================
 
 def sugerir_etapa(data_nascimento):
@@ -412,8 +480,4 @@ def gerar_fichas_turma_completa(t_alvo, alunos_t):
     pdf = FPDF()
     for _, r in alunos_t.iterrows():
         pdf.add_page(); adicionar_cabecalho_diocesano(pdf); _desenhar_corpo_ficha(pdf, r.to_dict())
-    return finalizar_pdf(pdf)
-
-def gerar_relatorio_familia_pdf(dados_familia, filhos_lista):
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "FICHA DE VISITAÇÃO")
     return finalizar_pdf(pdf)
