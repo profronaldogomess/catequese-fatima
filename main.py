@@ -2121,21 +2121,26 @@ elif menu == "🕊️ Gestão de Sacramentos":
         else:
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
                 with st.spinner("O Auditor IA está analisando impedimentos..."):
-                    # 1. Coleta dados de Prontidão por Turma (Para a Seção 1)
                     analise_detalhada_ia = []
                     for _, t in df_turmas.iterrows():
                         nome_t = str(t['nome_turma']).strip().upper()
                         alunos_t = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
                         if not alunos_t.empty:
                             pend_bat = len(alunos_t[alunos_t['batizado_sn'] != "SIM"])
+                            
+                            # CONTAGEM REAL DE IMPEDIMENTOS (3ª Etapa ou Adultos sem Batismo)
+                            imp_count = len(alunos_t[
+                                (("3ª" in str(t['etapa'])) | ("ADULTO" in str(t['etapa']).upper())) & 
+                                (alunos_t['batizado_sn'] != "SIM")
+                            ])
+                            
                             analise_detalhada_ia.append({
                                 "turma": nome_t, 
                                 "etapa": t['etapa'], 
                                 "batizados": len(alunos_t) - pend_bat, 
                                 "pendentes": pend_bat,
-                                "impedimentos_civel": 0 # Pode ser expandido futuramente
+                                "impedimentos_civel": imp_count # Agora mostra o número real de casos críticos
                             })
-
                     # 2. Lista de Impedimentos Nominais (Para a Seção 2)
                     impedimentos_detalhados = []
                     for _, cat in df_cat[df_cat['status'] == 'ATIVO'].iterrows():
