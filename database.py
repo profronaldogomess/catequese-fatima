@@ -55,7 +55,7 @@ def ler_aba(nome_aba):
 
 # --- 2. NOVAS FUNÇÕES DE INFRAESTRUTURA E SEGURANÇA ---
 
-@st.cache_data(ttl=300) # Cache de 5 minutos para o status de manutenção
+@st.cache_data(ttl=60) # Reduzido de 300 para 60 segundos para resposta mais rápida
 def verificar_status_sistema():
     """Consulta a aba 'config' para travar o sistema se necessário."""
     planilha = conectar_google_sheets()
