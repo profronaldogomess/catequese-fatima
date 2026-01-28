@@ -890,28 +890,60 @@ def gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres):
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedimentos_lista, analise_ia):
-    """Auditoria Sacramental e Censo de IVC."""
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "AUDITORIA SACRAMENTAL E CENSO DE IVC")
+    """Gera o Dossiê de Regularização Canônica e Preparação Pastoral."""
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "DOSSIÊ DE REGULARIZAÇÃO E PREPARAÇÃO SACRAMENTAL")
+    
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
+
+    # 1. QUADRO DE PRONTIDÃO POR TURMA
     pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("1. QUADRO GERAL DE SACRAMENTALIZAÇÃO"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("1. PRONTIDÃO POR ITINERÁRIO (VISÃO GERAL)"), ln=True, fill=True, align='C')
+    
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-    pdf.cell(50, 7, "Sacramento", border=1, fill=True); pdf.cell(70, 7, "Infantil / Juvenil", border=1, fill=True, align='C'); pdf.cell(70, 7, "Jovens / Adultos", border=1, fill=True, align='C'); pdf.ln()
-    pdf.set_font("helvetica", "", 9)
-    for sac, k, a in [("BATISMO", stats_gerais.get('bat_k', 0), stats_gerais.get('bat_a', 0)), ("EUCARISTIA", stats_gerais.get('euca_k', 0), stats_gerais.get('euca_a', 0)), ("CRISMA", "N/A", stats_gerais.get('crisma_a', 0))]:
-        pdf.cell(50, 7, f" {sac}", border=1); pdf.cell(70, 7, str(k), border=1, align='C'); pdf.cell(70, 7, str(a), border=1, align='C'); pdf.ln()
-    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("2. DIAGNÓSTICO DE IMPEDIMENTOS"), ln=True, fill=True, align='C')
+    pdf.cell(60, 7, "Turma", border=1, fill=True)
+    pdf.cell(40, 7, "Etapa", border=1, fill=True, align='C')
+    pdf.cell(30, 7, "Batizados", border=1, fill=True, align='C')
+    pdf.cell(30, 7, "Pendentes", border=1, fill=True, align='C')
+    pdf.cell(30, 7, "Impedimentos", border=1, fill=True, align='C'); pdf.ln()
+
+    pdf.set_font("helvetica", "", 8)
+    for t in analise_turmas:
+        pdf.cell(60, 6, limpar_texto(t['turma']), border=1)
+        pdf.cell(40, 6, limpar_texto(t['etapa']), border=1, align='C')
+        pdf.cell(30, 6, str(t['batizados']), border=1, align='C')
+        pdf.cell(30, 6, str(t['pendentes']), border=1, align='C')
+        pdf.cell(30, 6, str(t['impedimentos_civel']), border=1, align='C'); pdf.ln()
+
+    # 2. DETALHAMENTO NOMINAL DE IMPEDIMENTOS CANÔNICOS
+    pdf.ln(5)
+    pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("2. DIAGNÓSTICO NOMINAL DE IMPEDIMENTOS (AÇÃO IMEDIATA)"), ln=True, fill=True, align='C')
+    
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-    pdf.cell(70, 7, "Catequizando", border=1, fill=True); pdf.cell(50, 7, "Turma", border=1, fill=True); pdf.cell(70, 7, "Situação", border=1, fill=True); pdf.ln()
+    pdf.cell(70, 7, "Catequizando", border=1, fill=True)
+    pdf.cell(50, 7, "Turma", border=1, fill=True)
+    pdf.cell(70, 7, "Impedimento Identificado", border=1, fill=True); pdf.ln()
+
     pdf.set_font("helvetica", "", 8)
     if impedimentos_lista:
         for imp in impedimentos_lista:
-            pdf.cell(70, 6, limpar_texto(imp.get('nome', 'N/A')), border=1); pdf.cell(50, 6, limpar_texto(imp.get('turma', 'N/A')), border=1); pdf.cell(70, 6, limpar_texto(imp.get('situacao', 'N/A')), border=1); pdf.ln()
-    else: pdf.cell(190, 7, "Nenhum impedimento registrado.", border=1, align='C', ln=True)
-    pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("3. PARECER TÉCNICO DA AUDITORIA"), ln=True, fill=True, align='C')
-    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10); pdf.multi_cell(190, 6, limpar_texto(analise_ia))
+            pdf.cell(70, 6, limpar_texto(imp['nome']), border=1)
+            pdf.cell(50, 6, limpar_texto(imp['turma']), border=1)
+            pdf.set_text_color(*LARANJA_P)
+            pdf.cell(70, 6, limpar_texto(imp['situacao']), border=1)
+            pdf.set_text_color(0, 0, 0); pdf.ln()
+    else:
+        pdf.cell(190, 7, "Nenhum impedimento canônico detectado nos registros atuais.", border=1, align='C', ln=True)
+
+    # 3. PARECER TÉCNICO E PLANO DE PREPARAÇÃO
+    pdf.ln(5)
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("3. PARECER TÉCNICO E ROTEIRO DE PREPARAÇÃO (IA)"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
+    pdf.multi_cell(190, 6, limpar_texto(analise_ia))
+    
     return finalizar_pdf(pdf)
 
 # ==============================================================================
