@@ -116,7 +116,7 @@ from utils import (
     gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
     gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
     gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
-    processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,gerar_lista_assinatura_reuniao_pdf,
+    processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
      gerar_lista_assinatura_reuniao_pdf,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
