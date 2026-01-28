@@ -827,21 +827,23 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
 
 def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     """
-    Versão 5.0: Inteligência Sacramental Integrada.
-    Inclui Resumo de Celebrações por Itinerário, Censo de Cobertura e Equipe.
+    VERSÃO 5.0 - DEFINITIVA: Inteligência Sacramental Integrada.
+    Cruza dados de Turmas, Catequizandos e Registros de Sacramentos Recebidos.
     """
     from database import ler_aba 
+    
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO E PASTORAL DIOCESANO")
 
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
-    ANO_ATUAL = 2026 
+    # Uso do dt_module para evitar AttributeError
+    ANO_ATUAL = dt_module.datetime.now().year 
 
-    # --- 1. ITINERÁRIOS (INFANTIL E ADULTO) ---
+    # --- 1. TABELAS DE ITINERÁRIOS (INFANTIL E ADULTO) ---
     def eh_infantil(row):
-        nome = str(row['nome_turma']).upper()
-        etapa = str(row['etapa']).upper()
+        nome = str(row.get('nome_turma', '')).upper()
+        etapa = str(row.get('etapa', '')).upper()
         return any(x in nome or x in etapa for x in ["PRÉ", "ETAPA", "PERSEVERANÇA"])
 
     t_infantil = df_turmas[df_turmas.apply(eh_infantil, axis=1)] if not df_turmas.empty else pd.DataFrame()
@@ -858,11 +860,12 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
         pdf.cell(20, 7, "Ativos", border=1, fill=True, align='C'); pdf.ln()
         pdf.set_font("helvetica", "", 8)
         for _, t in df_alvo.iterrows():
-            alunos = df_cat[(df_cat['etapa'] == t['nome_turma']) & (df_cat['status'] == 'ATIVO')]
+            nome_t = t['nome_turma']
+            alunos = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
             bat = len(alunos[alunos['batizado_sn'] == 'SIM'])
-            euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-            pdf.cell(70, 6, limpar_texto(t['nome_turma']), border=1)
-            pdf.cell(60, 6, limpar_texto(str(t['catequista_responsavel'])[:35]), border=1)
+            euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False).sum()
+            pdf.cell(70, 6, limpar_texto(nome_t), border=1)
+            pdf.cell(60, 6, limpar_texto(str(t.get('catequista_responsavel', ''))[:35]), border=1)
             pdf.cell(20, 6, str(bat), border=1, align='C')
             pdf.cell(20, 6, str(euc), border=1, align='C')
             pdf.cell(20, 6, str(len(alunos)), border=1, align='C'); pdf.ln()
@@ -871,16 +874,19 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     pdf.ln(4)
     desenhar_tabela_itinerarios("2. ITINERÁRIOS DE JOVENS E ADULTOS", t_adultos)
 
-    # --- 3. CENSO DE COBERTURA ---
+    # --- 3. CENSO DE COBERTURA SACRAMENTAL ---
     pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(190, 8, limpar_texto("3. CENSO DE COBERTURA SACRAMENTAL (ATIVOS)"), ln=True, fill=True, align='C')
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 9); pdf.ln(2)
     df_ativos = df_cat[df_cat['status'] == 'ATIVO']
-    total_bat = len(df_ativos[df_ativos['batizado_sn'] == 'SIM'])
-    perc_bat = (total_bat / len(df_ativos) * 100) if len(df_ativos) > 0 else 0
-    pdf.cell(190, 8, limpar_texto(f"Cobertura Geral da Paróquia: {total_bat} Batizados de {len(df_ativos)} Catequizandos ({perc_bat:.1f}%)"), border=1, align='C', ln=True)
+    if not df_ativos.empty:
+        total_bat = len(df_ativos[df_ativos['batizado_sn'] == 'SIM'])
+        perc_bat = (total_bat / len(df_ativos) * 100)
+        pdf.cell(190, 8, limpar_texto(f"Cobertura Geral da Paróquia: {total_bat} Batizados de {len(df_ativos)} Catequizandos ({perc_bat:.1f}%)"), border=1, align='C', ln=True)
+    else:
+        pdf.cell(190, 8, "Nenhum catequizando ativo para censo.", border=1, align='C', ln=True)
 
-    # --- 4. RESUMO DE CELEBRAÇÕES REALIZADAS EM 2026 ---
+    # --- 4. RESUMO DE CELEBRAÇÕES REALIZADAS ---
     df_eventos = ler_aba("sacramentos_eventos")
     df_recebidos = ler_aba("sacramentos_recebidos")
     if not df_eventos.empty:
@@ -902,74 +908,25 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
                 pdf.cell(40, 6, formatar_data_br(ev['data']), border=1, align='C')
                 pdf.cell(30, 6, str(qtd_fies), border=1, align='C'); pdf.ln()
 
-    # --- 5. RELAÇÃO NOMINAL DE RECEPÇÃO SACRAMENTAL ---
-    if not df_recebidos.empty:
-        df_recebidos['data_dt'] = pd.to_datetime(df_recebidos['data'], errors='coerce')
-        df_ano_rec = df_recebidos[df_recebidos['data_dt'].dt.year == ANO_ATUAL]
-        if not df_ano_rec.empty:
-            pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-            pdf.cell(190, 8, limpar_texto(f"5. RELAÇÃO NOMINAL DE RECEPÇÃO SACRAMENTAL {ANO_ATUAL}"), ln=True, fill=True, align='C')
-            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-            pdf.cell(110, 7, "Nome do Catequizando", border=1, fill=True)
-            pdf.cell(40, 7, "Sacramento", border=1, fill=True, align='C')
-            pdf.cell(40, 7, "Data", border=1, fill=True, align='C'); pdf.ln()
-            pdf.set_font("helvetica", "", 8)
-            for _, r in df_ano_rec.sort_values(by='data_dt').iterrows():
-                pdf.cell(110, 6, limpar_texto(r['nome']), border=1)
-                pdf.cell(40, 6, limpar_texto(r['tipo']), border=1, align='C')
-                pdf.cell(40, 6, formatar_data_br(r['data']), border=1, align='C'); pdf.ln()
-
-    # --- 6. EQUIPE CATEQUÉTICA ---
-    df_equipe_real = df_usuarios[df_usuarios['papel'].str.upper() != 'ADMIN']
-    pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto(f"6. EQUIPE CATEQUÉTICA E QUALIFICAÇÃO (Total: {len(df_equipe_real)})"), ln=True, fill=True, align='C')
-    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-    pdf.cell(100, 7, "Indicador de Fé (Equipe)", border=1, fill=True); pdf.cell(45, 7, "Quantidade", border=1, fill=True, align='C'); pdf.cell(45, 7, "Percentual", border=1, fill=True, align='C'); pdf.ln()
-    bat_e = df_equipe_real['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-    euc_e = df_equipe_real['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-    cri_e = df_equipe_real['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-    pdf.set_font("helvetica", "", 8)
-    total_e = len(df_equipe_real) if len(df_equipe_real) > 0 else 1
-    for desc, qtd in [("Batismo", bat_e), ("Eucaristia", euc_e), ("Crisma", cri_e)]:
-        pdf.cell(100, 6, f" {desc}", border=1); pdf.cell(45, 6, str(qtd), border=1, align='C'); pdf.cell(45, 6, f"{(qtd/total_e)*100:.1f}%", border=1, align='C'); pdf.ln()
-
-def gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres):
-    """Dossiê Pastoral Nominal: Detalhamento por turma com lista de ATIVOS e EVASÃO."""
-    pdf = FPDF(); pdf.add_page(); adicionar_cabecalho_diocesano(pdf, "RELATÓRIO PASTORAL E NOMINAL POR ITINERÁRIO")
-    AZUL_P = (65, 123, 153); CINZA_F = (245, 245, 245); LARANJA_P = (224, 61, 17)
-    
-    for _, t in df_turmas.iterrows():
-        nome_t = t['nome_turma']
-        alunos_t = df_cat[df_cat['etapa'] == nome_t] if not df_cat.empty else pd.DataFrame()
-        ativos = alunos_t[alunos_t['status'] == 'ATIVO']
-        evasao = alunos_t[alunos_t['status'].isin(['DESISTENTE', 'TRANSFERIDO', 'INATIVO'])]
-        
-        pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-        pdf.cell(190, 8, limpar_texto(f"TURMA: {nome_t}"), ln=True, fill=True)
-        
+    # --- 5. EQUIPE CATEQUÉTICA ---
+    df_equipe_real = df_usuarios[df_usuarios['papel'].str.upper() != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
+    if not df_equipe_real.empty:
+        pdf.ln(5); pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+        pdf.cell(190, 8, limpar_texto(f"5. EQUIPE CATEQUÉTICA E QUALIFICAÇÃO (Total: {len(df_equipe_real)})"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
-        pdf.cell(63, 7, f"Ativos: {len(ativos)}", border=1, fill=True, align='C')
-        pdf.cell(63, 7, f"Batizados (Ativos): {len(ativos[ativos['batizado_sn']=='SIM'])}", border=1, fill=True, align='C')
-        pdf.cell(64, 7, f"Evasão/Transf: {len(evasao)}", border=1, fill=True, align='C'); pdf.ln()
-        
-        pdf.set_font("helvetica", "B", 8); pdf.cell(0, 6, "CATEQUIZANDOS EM CAMINHADA ATIVA:", ln=True)
+        pdf.cell(100, 7, "Indicador de Fé (Equipe)", border=1, fill=True); pdf.cell(45, 7, "Quantidade", border=1, fill=True, align='C'); pdf.cell(45, 7, "Percentual", border=1, fill=True, align='C'); pdf.ln()
+        bat_e = df_equipe_real['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+        euc_e = df_equipe_real['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+        cri_e = df_equipe_real['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
         pdf.set_font("helvetica", "", 8)
-        nomes_ativos = sorted(ativos['nome_completo'].tolist())
-        for i in range(0, len(nomes_ativos), 2):
-            pdf.cell(95, 5, limpar_texto(f" - {nomes_ativos[i]}"), border=0)
-            if i+1 < len(nomes_ativos): pdf.cell(95, 5, limpar_texto(f" - {nomes_ativos[i+1]}"), border=0)
-            pdf.ln()
-        
-        if not evasao.empty:
-            pdf.ln(2); pdf.set_text_color(*LARANJA_P); pdf.set_font("helvetica", "B", 8)
-            pdf.cell(0, 6, "ALERTA: CATEQUIZANDOS COM ITINERÁRIO INTERROMPIDO / TRANSFERIDOS:", ln=True)
-            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "I", 8)
-            for _, r in evasao.iterrows():
-                pdf.cell(0, 5, limpar_texto(f" ! {r['nome_completo']} ({r['status']})"), ln=True)
-        
-        pdf.ln(10)
-        if pdf.get_y() > 230: pdf.add_page()
+        total_e = len(df_equipe_real)
+        for desc, qtd in [("Batismo", bat_e), ("Eucaristia", euc_e), ("Crisma", cri_e)]:
+            pdf.cell(100, 6, f" {desc}", border=1)
+            pdf.cell(45, 6, str(qtd), border=1, align='C')
+            pdf.cell(45, 6, f"{(qtd/total_e)*100:.1f}%", border=1, align='C'); pdf.ln()
+
     return finalizar_pdf(pdf)
+
 
 def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedimentos_lista, analise_ia):
     """Gera o Dossiê de Regularização Canônica e Preparação Pastoral."""
@@ -1415,15 +1372,22 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     return gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
 
 # ==============================================================================
-# 11. ALIASES DE COMPATIBILIDADE (ATUALIZADOS PARA V5)
+# 11. ALIASES DE COMPATIBILIDADE (CORREÇÃO DE VARIÁVEL INDEFINIDA)
 # ==============================================================================
+# Apontamos versões antigas para as novas funções v4 (Pastoral) e v5 (Diocesano)
+
+# Relatório Diocesano (Todos apontam para a v5 corrigida)
 gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v5
 gerar_relatorio_diocesano_v2 = gerar_relatorio_diocesano_v5
 gerar_relatorio_diocesano_v4 = gerar_relatorio_diocesano_v5 
-gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v3
-gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v3
+
+# Relatório Pastoral (Todos apontam para a v4, que é a mais atual)
+gerar_relatorio_pastoral_pdf = gerar_relatorio_pastoral_v4
+gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v4
+gerar_relatorio_pastoral_v3 = gerar_relatorio_pastoral_v4
+gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v4
+
+# Outros Utilitários
+gerar_relatorio_local_turma_pdf = gerar_relatorio_local_turma_v2
 gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
 gerar_pdf_perfil_turma = lambda n, m, a, l: finalizar_pdf(FPDF())
-gerar_relatorio_local_turma_pdf = gerar_relatorio_local_turma_v2
-gerar_relatorio_pastoral_pdf = gerar_relatorio_pastoral_v4
-gerar_relatorio_pastoral_v3 = gerar_relatorio_pastoral_v4
