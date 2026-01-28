@@ -1243,6 +1243,81 @@ def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
     
     return finalizar_pdf(pdf)
 
+def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
+    """Gera uma lista de presença física para reuniões de pais com campo de assinatura."""
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # 1. CABEÇALHO OFICIAL CENTRALIZADO
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", (210-20)/2, 10, 20)
+        pdf.ln(22)
+    
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
+    pdf.set_font("helvetica", "B", 12)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 7, limpar_texto("LISTA DE PRESENÇA - REUNIÃO DE PAIS E RESPONSÁVEIS"), ln=True, align='C')
+    
+    # 2. INFORMAÇÕES DO EVENTO
+    pdf.ln(5)
+    pdf.set_fill_color(245, 245, 245)
+    pdf.rect(10, pdf.get_y(), 190, 18, 'F')
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_xy(12, pdf.get_y() + 2)
+    pdf.cell(0, 5, limpar_texto(f"TEMA: {tema}"), ln=True)
+    pdf.set_x(12)
+    pdf.cell(95, 5, limpar_texto(f"DATA: {formatar_data_br(data)}"), ln=0)
+    pdf.cell(95, 5, limpar_texto(f"TURMA: {turma}"), ln=True)
+    pdf.set_x(12)
+    pdf.cell(0, 5, limpar_texto(f"LOCAL: {local}"), ln=True)
+    
+    # 3. TABELA DE ASSINATURAS
+    pdf.ln(8)
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 9)
+    
+    # Cabeçalhos da Tabela
+    pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
+    pdf.cell(65, 8, "Catequizando", border=1, fill=True, align='C')
+    pdf.cell(55, 8, "Responsável (Pai/Mãe)", border=1, fill=True, align='C')
+    pdf.cell(60, 8, "Assinatura", border=1, fill=True, align='C')
+    pdf.ln()
+    
+    # Linhas da Tabela
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 8)
+    
+    for i, fam in enumerate(lista_familias, 1):
+        # Alterna cor de fundo para facilitar leitura
+        fill = (i % 2 == 0)
+        if fill: pdf.set_fill_color(248, 249, 250)
+        else: pdf.set_fill_color(255, 255, 255)
+        
+        altura_linha = 8
+        pdf.cell(10, altura_linha, str(i), border=1, fill=True, align='C')
+        pdf.cell(65, altura_linha, limpar_texto(fam['nome_cat'][:35]), border=1, fill=True)
+        pdf.cell(55, altura_linha, limpar_texto(fam['responsavel'][:30]), border=1, fill=True)
+        pdf.cell(60, altura_linha, "", border=1, fill=True) # Espaço para assinatura
+        pdf.ln()
+        
+        # Quebra de página se necessário
+        if pdf.get_y() > 270:
+            pdf.add_page()
+            # Repete cabeçalho da tabela na nova página
+            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+            pdf.cell(10, 8, "Nº", border=1, fill=True); pdf.cell(65, 8, "Catequizando", border=1, fill=True); pdf.cell(55, 8, "Responsável", border=1, fill=True); pdf.cell(60, 8, "Assinatura", border=1, fill=True); pdf.ln()
+            pdf.set_text_color(0, 0, 0)
+
+    # 4. RODAPÉ DE VALIDAÇÃO
+    pdf.ln(10)
+    pdf.set_font("helvetica", "I", 8)
+    pdf.cell(0, 5, limpar_texto("Documento gerado pelo Sistema Catequese Fátima para controle de engajamento familiar."), ln=True, align='C')
+    
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
 # ==============================================================================
