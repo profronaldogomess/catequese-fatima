@@ -1030,13 +1030,12 @@ def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedim
 
 def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
     """
-    VERSÃO 4.0 - DOSSIÊ DE SAÚDE DO ITINERÁRIO
-    Substitua a função antiga por esta para ativar os indicadores e marcadores.
+    Versão 5.0: Dossiê de Auditoria de Itinerário.
+    Nomes completos (sem cortes), sem abreviações e alertas agrupados.
     """
     pdf = FPDF()
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
     
-    # Faixas etárias para o Radar de Alerta
     faixas = {
         "PRÉ": (4, 6), "1ª ETAPA": (7, 8), "PRIMEIRA ETAPA": (7, 8),
         "2ª ETAPA": (9, 10), "SEGUNDA ETAPA": (9, 10),
@@ -1047,70 +1046,97 @@ def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
     for _, t in df_turmas.iterrows():
         nome_t = t['nome_turma']
         etapa_base = str(t['etapa']).upper()
-        
-        # Filtra dados da turma
         alunos_t = df_cat[df_cat['etapa'] == nome_t]
         if alunos_t.empty: continue
         
         pdf.add_page()
         adicionar_cabecalho_diocesano(pdf, f"DOSSIÊ PASTORAL: {nome_t}")
 
-        # --- 1. QUADRO DE INDICADORES (MÉTRICAS) ---
+        # --- 1. QUADRO DE INDICADORES ---
         ativos = alunos_t[alunos_t['status'] == 'ATIVO']
         pres_t = df_pres[df_pres['id_turma'] == nome_t] if not df_pres.empty else pd.DataFrame()
-        
-        # Cálculo de Frequência Real
         freq_val = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
-        # Cálculo de Documentos Completos
         docs_ok = len(ativos[ativos['doc_em_falta'].isin(['COMPLETO', 'NADA', 'OK', 'NADA FALTANDO'])])
         
         pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-        pdf.cell(190, 8, limpar_texto("1. INDICADORES DE SAÚDE DA TURMA"), ln=True, fill=True, align='C')
+        pdf.cell(190, 8, limpar_texto("1. INDICADORES DE ENGAJAMENTO E REGULARIZAÇÃO"), ln=True, fill=True, align='C')
         
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 9); pdf.set_fill_color(*CINZA_F)
-        pdf.cell(63, 8, limpar_texto(f"Frequência: {freq_val:.1f}%"), border=1, fill=True, align='C')
-        pdf.cell(63, 8, limpar_texto(f"Docs OK: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
+        pdf.cell(63, 8, limpar_texto(f"Frequência Média: {freq_val:.1f}%"), border=1, fill=True, align='C')
+        pdf.cell(63, 8, limpar_texto(f"Documentação Regularizada: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
         pdf.cell(64, 8, limpar_texto(f"Catequistas: {str(t['catequista_responsavel'])[:25]}"), border=1, fill=True, align='C')
         pdf.ln(12)
 
-        # --- 2. LISTA NOMINAL COM MARCADORES TÉCNICOS ---
+        # --- 2. TABELA NOMINAL DE CAMINHADA ---
         pdf.set_font("helvetica", "B", 10); pdf.set_text_color(*AZUL_P)
-        pdf.cell(0, 7, limpar_texto("2. CAMINHADA NOMINAL (B=Batizado | E=Eucaristia | D=Doc. OK)"), ln=True)
-        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
+        pdf.cell(0, 7, limpar_texto("2. RELAÇÃO NOMINAL E SITUAÇÃO SACRAMENTAL"), ln=True)
         
-        nomes_ativos = ativos.sort_values('nome_completo')
-        for i, (_, r) in enumerate(nomes_ativos.iterrows()):
-            # Lógica dos Marcadores (Sem Emojis)
-            m_bat = "(B)" if r['batizado_sn'] == "SIM" else "( )"
-            m_euc = "(E)" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "( )"
-            m_doc = "(D)" if r['doc_em_falta'] in ['COMPLETO', 'NADA', 'OK'] else "( )"
-            
-            texto_linha = f"{i+1:02d}. {r['nome_completo'][:45]} {m_bat} {m_euc} {m_doc}"
-            pdf.cell(0, 6, limpar_texto(texto_linha), border="B", ln=True)
-            
-            if pdf.get_y() > 250: pdf.add_page()
+        # Cabeçalho da Tabela
+        pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8)
+        pdf.cell(10, 7, "Nº", border=1, fill=True, align='C')
+        pdf.cell(90, 7, "Nome Completo do Catequizando", border=1, fill=True, align='C')
+        pdf.cell(30, 7, "Batismo", border=1, fill=True, align='C')
+        pdf.cell(30, 7, "1ª Eucaristia", border=1, fill=True, align='C')
+        pdf.cell(30, 7, "Documentos", border=1, fill=True, align='C')
+        pdf.ln()
 
-        # --- 3. RADAR DE ATENÇÃO PASTORAL (ALERTAS) ---
-        pdf.ln(10)
+        pdf.set_font("helvetica", "", 8)
+        nomes_ativos = ativos.sort_values('nome_completo')
+        for i, (_, r) in enumerate(nomes_ativos.iterrows(), 1):
+            # Lógica de Status por extenso
+            status_bat = "Sim" if r['batizado_sn'] == "SIM" else "Pendente"
+            status_euc = "Sim" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "Pendente"
+            status_doc = "Regular" if r['doc_em_falta'] in ['COMPLETO', 'NADA', 'OK'] else "Pendente"
+            
+            # Altura dinâmica para o nome não cortar
+            inicio_y = pdf.get_y()
+            pdf.set_xy(20, inicio_y)
+            pdf.multi_cell(90, 6, limpar_texto(r['nome_completo']), border=0, align='L')
+            fim_y = pdf.get_y()
+            altura_linha = fim_y - inicio_y
+            if altura_linha < 7: altura_linha = 7
+            
+            # Desenha as bordas e o restante da linha
+            pdf.set_xy(10, inicio_y)
+            pdf.cell(10, altura_linha, f"{i:02d}", border=1, align='C')
+            pdf.cell(90, altura_linha, "", border=1) # Espaço do nome já preenchido pelo multi_cell
+            pdf.cell(30, altura_linha, status_bat, border=1, align='C')
+            pdf.cell(30, altura_linha, status_euc, border=1, align='C')
+            pdf.cell(30, altura_linha, status_doc, border=1, align='C')
+            pdf.ln()
+            
+            if pdf.get_y() > 260: pdf.add_page()
+
+        # --- 3. RADAR DE ATENÇÃO PASTORAL (AGRUPADO) ---
+        pdf.ln(5)
         pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-        pdf.cell(190, 8, limpar_texto("3. RADAR DE ATENÇÃO (AÇÕES NECESSÁRIAS)"), ln=True, fill=True, align='C')
+        pdf.cell(190, 8, limpar_texto("3. RADAR DE ATENÇÃO PASTORAL (AGRUPADO)"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
         
-        tem_alerta = False
         min_i, max_i = faixas.get(etapa_base, (0, 99))
-        
+        acima_idade = []
+        abaixo_idade = []
+        risco_evasao = []
+
         for _, r in ativos.iterrows():
             idade_c = calcular_idade(r['data_nascimento'])
-            # Alerta de Idade fora da faixa
-            if idade_c < min_i or idade_c > max_i:
-                pdf.cell(0, 6, limpar_texto(f" - ATENÇÃO IDADE: {r['nome_completo']} ({idade_c} anos) - Fora da faixa da {etapa_base}"), ln=True)
-                tem_alerta = True
+            if idade_c > max_i: acima_idade.append(f"{r['nome_completo']} ({idade_c} anos)")
+            elif idade_c < min_i: abaixo_idade.append(f"{r['nome_completo']} ({idade_c} anos)")
             
-            # Alerta de Faltas (Evasão)
             faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-            if faltas >= 3:
-                pdf.cell(0, 6, limpar_texto(f" - RISCO EVASÃO: {r['nome_completo']} possui {faltas} faltas acumuladas."), ln=True)
-                tem_alerta = True
+            if faltas >= 3: risco_evasao.append(f"{r['nome_completo']} ({faltas} faltas)")
+
+        # Exibição Agrupada
+        tem_alerta = False
+        if acima_idade:
+            pdf.set_font("helvetica", "B", 9); pdf.write(6, "Catequizandos acima da idade ideal: "); pdf.set_font("helvetica", "", 9)
+            pdf.multi_cell(0, 6, limpar_texto(", ".join(acima_idade)) + "."); tem_alerta = True
+        if abaixo_idade:
+            pdf.set_font("helvetica", "B", 9); pdf.write(6, "Catequizandos abaixo da idade ideal: "); pdf.set_font("helvetica", "", 9)
+            pdf.multi_cell(0, 6, limpar_texto(", ".join(abaixo_idade)) + "."); tem_alerta = True
+        if risco_evasao:
+            pdf.set_font("helvetica", "B", 9); pdf.set_text_color(*LARANJA_P); pdf.write(6, "Risco Crítico de Evasão (3+ faltas): "); pdf.set_font("helvetica", "", 9)
+            pdf.multi_cell(0, 6, limpar_texto(", ".join(risco_evasao)) + "."); pdf.set_text_color(0, 0, 0); tem_alerta = True
 
         if not tem_alerta:
             pdf.cell(0, 8, limpar_texto("Nenhum alerta crítico detectado para esta turma."), ln=True)
