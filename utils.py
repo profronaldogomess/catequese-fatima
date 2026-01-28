@@ -1163,7 +1163,6 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. CABEÇALHO OFICIAL CENTRALIZADO
     if os.path.exists("logo.png"):
         pdf.image("logo.png", (210-20)/2, 10, 20)
         pdf.ln(22)
@@ -1174,7 +1173,6 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     pdf.set_text_color(65, 123, 153)
     pdf.cell(0, 7, limpar_texto("LISTA DE PRESENÇA - REUNIÃO DE PAIS E RESPONSÁVEIS"), ln=True, align='C')
     
-    # 2. INFORMAÇÕES DO EVENTO
     pdf.ln(5)
     pdf.set_fill_color(245, 245, 245)
     pdf.rect(10, pdf.get_y(), 190, 18, 'F')
@@ -1188,46 +1186,28 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     pdf.set_x(12)
     pdf.cell(0, 5, limpar_texto(f"LOCAL: {local}"), ln=True)
     
-    # 3. TABELA DE ASSINATURAS (LARGURA TOTAL 190mm)
     pdf.ln(8)
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 10)
-    
-    # Cabeçalhos: Nº (10mm), Catequizando (80mm), Assinatura (100mm)
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
     pdf.cell(10, 9, "Nº", border=1, fill=True, align='C')
     pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C')
     pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C')
     pdf.ln()
     
-    # Linhas da Tabela
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 9)
-    
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
     for i, fam in enumerate(lista_familias, 1):
         fill = (i % 2 == 0)
-        if fill: pdf.set_fill_color(248, 249, 250)
-        else: pdf.set_fill_color(255, 255, 255)
-        
-        altura_linha = 9 # Aumentei um pouco a altura para facilitar a assinatura
-        pdf.cell(10, altura_linha, str(i), border=1, fill=True, align='C')
-        pdf.cell(80, altura_linha, limpar_texto(fam['nome_cat'].upper()), border=1, fill=True)
-        pdf.cell(100, altura_linha, "", border=1, fill=True) # Espaço amplo para assinatura
+        pdf.set_fill_color(248, 249, 250) if fill else pdf.set_fill_color(255, 255, 255)
+        pdf.cell(10, 9, str(i), border=1, fill=True, align='C')
+        pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1, fill=True)
+        pdf.cell(100, 9, "", border=1, fill=True)
         pdf.ln()
-        
         if pdf.get_y() > 265:
             pdf.add_page()
             pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-            pdf.cell(10, 9, "Nº", border=1, fill=True, align='C')
-            pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C')
-            pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C')
-            pdf.ln()
+            pdf.cell(10, 9, "Nº", border=1, fill=True, align='C'); pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C'); pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C'); pdf.ln()
             pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
 
-    # 4. RODAPÉ
-    pdf.ln(10)
-    pdf.set_font("helvetica", "I", 8)
-    pdf.set_text_color(100, 100, 100)
+    pdf.ln(10); pdf.set_font("helvetica", "I", 8); pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 5, limpar_texto("Documento gerado pelo Sistema Catequese Fátima para controle de engajamento familiar."), ln=True, align='C')
     
     return finalizar_pdf(pdf)
