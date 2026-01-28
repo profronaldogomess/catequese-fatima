@@ -1185,11 +1185,11 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     return gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
 
 # ==============================================================================
-# 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
+# 11. ALIASES DE COMPATIBILIDADE (ATUALIZADOS PARA V5)
 # ==============================================================================
 gerar_relatorio_diocesano_pdf = gerar_relatorio_diocesano_v5
 gerar_relatorio_diocesano_v2 = gerar_relatorio_diocesano_v5
-gerar_relatorio_diocesano_v4 = gerar_relatorio_diocesano_v5 # Redireciona v4 para v5
+gerar_relatorio_diocesano_v4 = gerar_relatorio_diocesano_v5 
 gerar_relatorio_pastoral_interno_pdf = gerar_relatorio_pastoral_v3
 gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v3
 gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
