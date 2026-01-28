@@ -117,7 +117,7 @@ from utils import (
     gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
     gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
-     gerar_lista_assinatura_reuniao_pdf,
+     gerar_lista_assinatura_reuniao_pdf,gerar_relatorio_diocesano_v5, gerar_relatorio_pastoral_v4,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
     gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
@@ -210,6 +210,7 @@ df_turmas = ler_aba("turmas")
 df_pres = ler_aba("presencas")
 df_usuarios = ler_aba("usuarios") 
 df_sac_eventos = ler_aba("sacramentos_eventos")
+df_pres_reuniao = ler_aba("presenca_reuniao") 
 
 equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
 
@@ -374,18 +375,26 @@ if menu == "🏠 Início / Dashboard":
             col_paroquial, col_lote = st.columns(2)
             with col_paroquial:
                 st.markdown("##### 📋 Relatórios de Gestão Paroquial")
+                
+                # 1. RELATÓRIO DIOCESANO (Atualizado para v5 - Inteligência Sacramental)
                 if st.button("🏛️ GERAR RELATÓRIO DIOCESANO", use_container_width=True, key="btn_diocesano_v15"):
                     st.cache_data.clear()
                     if "pdf_diocesano" in st.session_state: del st.session_state.pdf_diocesano
-                    st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
+                    # Chamando a v5 para garantir a nova tabela de celebrações
+                    st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios)
                     st.rerun()
+                
                 if "pdf_diocesano" in st.session_state:
                     st.download_button("📥 BAIXAR RELATÓRIO DIOCESANO", st.session_state.pdf_diocesano, f"Relatorio_Diocesano_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
+                # 2. RELATÓRIO PASTORAL (Atualizado para v4 - Dossiê de Saúde com Radar)
                 if st.button("📋 GERAR RELATÓRIO PASTORAL", use_container_width=True, key="btn_pastoral_v15"):
                     if "pdf_pastoral" in st.session_state: del st.session_state.pdf_pastoral
-                    st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v3(df_turmas, df_cat, df_pres)
+                    
+                    # IMPORTANTE: Adicionado df_pres_reuniao como 4º parâmetro para evitar erro
+                    st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao)
                     st.rerun()
+                
                 if "pdf_pastoral" in st.session_state:
                     st.download_button("📥 BAIXAR RELATÓRIO PASTORAL", st.session_state.pdf_pastoral, f"Relatorio_Pastoral_Nominal_{date.today().year}.pdf", "application/pdf", use_container_width=True)
 
