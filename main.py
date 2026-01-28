@@ -116,7 +116,7 @@ from utils import (
     gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
     gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
     gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
-    processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
+    processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,gerar_lista_assinatura_reuniao_pdf,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, 
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
     gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
@@ -2539,40 +2539,51 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                             if salvar_reuniao_pais([id_r, r_tema, str(r_data), r_turma, r_local, "PENDENTE"]):
                                 st.success("Reunião agendada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-            with sub_r2:
-                df_r_pend = df_reunioes[df_reunioes.iloc[:, 5] == "PENDENTE"] if not df_reunioes.empty else pd.DataFrame()
-                if df_r_pend.empty:
-                    st.info("Nenhuma reunião aguardando validação.")
-                else:
-                    sel_r = st.selectbox("Selecione a Reunião Realizada:", df_r_pend.iloc[:, 1].tolist())
-                    dados_r = df_r_pend[df_r_pend.iloc[:, 1] == sel_r].iloc[0]
-                    
-                    # Filtra famílias da turma alvo
-                    t_alvo = dados_r.iloc[3]
-                    df_familias = df_cat[df_cat['status'] == 'ATIVO']
-                    if t_alvo != "GERAL (TODAS)":
-                        df_familias = df_familias[df_familias['etapa'] == t_alvo]
-                    
-                    st.markdown(f"### Chamada de Pais: {sel_r}")
-                    st.caption("Marque as famílias que compareceram ao encontro.")
-                    
-                    selecionados = []
-                    cols_f = st.columns(2)
-                    for i, (_, row) in enumerate(df_familias.iterrows()):
-                        with cols_f[i % 2]:
-                            label = f"{row['nome_completo']} (Resp: {row['nome_responsavel']})"
-                            if st.checkbox(label, key=f"reu_{dados_r.iloc[0]}_{row['id_catequizando']}"):
-                                selecionados.append(row['id_catequizando'])
-                    
-                    if st.button("💾 SALVAR PRESENÇAS DA FAMÍLIA", use_container_width=True):
-                        if selecionados:
-                            lista_p = [[dados_r.iloc[0], id_c] for id_c in selecionados]
-                            if salvar_presenca_reuniao_pais(lista_p):
-                                # Atualiza status da reunião para CONCLUIDA
-                                novos_dados = list(dados_r.values)
-                                novos_dados[5] = "CONCLUIDA"
-                                atualizar_reuniao_pais(dados_r.iloc[0], novos_dados)
-                                st.success("Presenças registradas!"); st.balloons(); st.cache_data.clear(); time.sleep(1); st.rerun()
+        with sub_r2:
+            # Filtra reuniões que ainda não foram concluídas ou todas para permitir reimpressão
+            df_r_pend = df_reunioes if not df_reunioes.empty else pd.DataFrame()
+            
+            if df_r_pend.empty:
+                st.info("Nenhuma reunião cadastrada.")
+            else:
+                st.markdown("#### 📋 Preparar e Validar Reunião")
+                sel_r = st.selectbox("Selecione a Reunião:", df_r_pend.iloc[:, 1].tolist(), key="sel_r_valida")
+                dados_r = df_r_pend[df_r_pend.iloc[:, 1] == sel_r].iloc[0]
+                
+                # Filtra famílias da turma alvo para a lista
+                t_alvo = dados_r.iloc[3]
+                df_familias = df_cat[df_cat['status'] == 'ATIVO']
+                if t_alvo != "GERAL (TODAS)":
+                    df_familias = df_familias[df_familias['etapa'] == t_alvo]
+                
+                # --- NOVO: BOTÃO PARA GERAR LISTA FÍSICA ---
+                col_btn1, col_btn2 = st.columns([1, 1])
+                with col_btn1:
+                    if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)", use_container_width=True):
+                        lista_para_pdf = []
+                        for _, row in df_familias.iterrows():
+                            lista_para_pdf.append({
+                                'nome_cat': row['nome_completo'],
+                                'responsavel': row['nome_responsavel']
+                            })
+                        
+                        # Chama a função do utils.py
+                        pdf_lista = gerar_lista_assinatura_reuniao_pdf(
+                            dados_r.iloc[1], dados_r.iloc[2], dados_r.iloc[4], dados_r.iloc[3], lista_para_pdf
+                        )
+                        st.session_state.pdf_assinatura = pdf_lista
+                
+                if "pdf_assinatura" in st.session_state:
+                    with col_btn2:
+                        st.download_button(
+                            label="📥 BAIXAR LISTA PARA IMPRIMIR",
+                            data=st.session_state.pdf_assinatura,
+                            file_name=f"Lista_Assinatura_{sel_r.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                
+                st.divider()
 
             with sub_r3:
                 if not df_reunioes.empty:
