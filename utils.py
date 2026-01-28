@@ -1556,6 +1556,58 @@ def gerar_relatorio_local_turma_v3(nome_turma, metricas, listas, analise_ia):
     
     return finalizar_pdf(pdf)
 
+def gerar_relatorio_sacramentos_tecnico_v3(analise_turmas, impedimentos_lista, analise_ia):
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "DOSSIÊ DE REGULARIZAÇÃO E ESTRATÉGIA SACRAMENTAL")
+    
+    AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
+
+    # 1. QUADRO DE PRONTIDÃO (MANTIDO E MELHORADO)
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("1. PRONTIDÃO POR ITINERÁRIO (VISÃO GERAL)"), ln=True, fill=True, align='C')
+    # ... (Tabela de turmas igual ao anterior)
+
+    # 2. ZONA VERMELHA: IMPEDIMENTOS CANÔNICOS (AÇÃO IMEDIATA)
+    pdf.ln(5)
+    pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("2. ZONA VERMELHA: IMPEDIMENTOS QUE BLOQUEIAM O SACRAMENTO"), ln=True, fill=True, align='C')
+    
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+    pdf.cell(80, 7, "Catequizando", border=1, fill=True)
+    pdf.cell(50, 7, "Turma", border=1, fill=True)
+    pdf.cell(60, 7, "Gravidade / Impedimento", border=1, fill=True); pdf.ln()
+
+    pdf.set_font("helvetica", "", 8)
+    if impedimentos_lista:
+        for imp in impedimentos_lista:
+            pdf.cell(80, 6, limpar_texto(imp['nome']), border=1)
+            pdf.cell(50, 6, limpar_texto(imp['turma']), border=1)
+            pdf.set_text_color(*LARANJA_P)
+            pdf.cell(60, 6, limpar_texto(imp['motivo']), border=1)
+            pdf.set_text_color(0, 0, 0); pdf.ln()
+    else:
+        pdf.cell(190, 7, "Nenhum impedimento crítico detectado.", border=1, align='C', ln=True)
+
+    # 3. ESTRATÉGIA PASTORAL E PLANO DE AÇÃO (IA)
+    pdf.ln(5)
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("3. PARECER DO AUDITOR E PLANO DE REGULARIZAÇÃO (IA)"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
+    
+    # Fallback caso a IA falhe
+    if "indisponível" in analise_ia.lower():
+        analise_ia = "Aguardando processamento da IA. Recomenda-se conferência manual dos batistérios das turmas de 3ª Etapa e Crisma."
+        
+    pdf.multi_cell(190, 6, limpar_texto(analise_ia))
+    
+    # Rodapé de Responsabilidade
+    pdf.ln(10)
+    pdf.set_font("helvetica", "I", 8)
+    pdf.multi_cell(0, 4, "Este dossiê é para uso exclusivo da Coordenação e do Pároco. As informações aqui contidas visam a salvação das almas e a correta administração dos sacramentos.")
+
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 11. MAPEAMENTO FINAL DE ALIASES (PONTOS DE ENTRADA)
 # ==============================================================================
