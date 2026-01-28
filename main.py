@@ -2175,7 +2175,19 @@ elif menu == "👥 Gestão de Catequistas":
     with tab_formacao:
         st.subheader("🎓 Itinerário de Formação Continuada")
         
-        # Sub-abas internas para organizar o fluxo
+        # --- BLINDAGEM DE COLUNAS ---
+        # Identifica qual coluna representa o Status (geralmente a 6ª coluna, índice 5)
+        if not df_formacoes.empty:
+            if 'status' in df_formacoes.columns:
+                col_status = 'status'
+            elif 'col_5' in df_formacoes.columns:
+                col_status = 'col_5'
+            else:
+                # Se não achar pelos nomes, pega a 6ª coluna disponível
+                col_status = df_formacoes.columns[5] if len(df_formacoes.columns) > 5 else None
+        else:
+            col_status = None
+
         sub_tab_plan, sub_tab_valida, sub_tab_hist = st.tabs([
             "📅 Planejar Formação", "✅ Validar Presença", "📜 Histórico e Edição"
         ])
@@ -2192,13 +2204,16 @@ elif menu == "👥 Gestão de Catequistas":
                 if st.form_submit_button("📌 AGENDAR FORMAÇÃO"):
                     if f_tema:
                         id_f = f"FOR-{int(time.time())}"
-                        # Status inicial: PENDENTE (Aguardando realização)
+                        # Salva com status PENDENTE
                         if salvar_formacao([id_f, f_tema, str(f_data), f_formador, f_local, "PENDENTE"]):
-                            st.success(f"Formação '{f_tema}' agendada para {formatar_data_br(f_data)}!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            st.success(f"Formação '{f_tema}' agendada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
         # --- SUB-ABA 2: VALIDAR (AGORA) ---
         with sub_tab_valida:
-            df_f_pendentes = df_formacoes[df_formacoes['col_5'] == "PENDENTE"] if not df_formacoes.empty else pd.DataFrame()
+            # Usa a coluna identificada na blindagem para filtrar
+            df_f_pendentes = pd.DataFrame()
+            if col_status and not df_formacoes.empty:
+                df_f_pendentes = df_formacoes[df_formacoes[col_status].str.upper() == "PENDENTE"]
             
             if df_f_pendentes.empty:
                 st.info("Não há formações pendentes de validação.")
@@ -2210,7 +2225,6 @@ elif menu == "👥 Gestão de Catequistas":
                 st.divider()
                 st.markdown(f"### Lista de Presença: {escolha_f}")
                 
-                # Lista de Catequistas para Checkbox
                 dict_equipe = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
                 selecionados = []
                 
@@ -2224,19 +2238,18 @@ elif menu == "👥 Gestão de Catequistas":
                     if selecionados:
                         lista_p = [[dados_f['id_formacao'], email] for email in selecionados]
                         if salvar_presenca_formacao(lista_p):
-                            # Atualiza status da formação para CONCLUÍDA
+                            # Atualiza para CONCLUIDA
                             nova_lista_f = [dados_f['id_formacao'], dados_f['tema'], dados_f['data'], dados_f['formador'], dados_f['local'], "CONCLUIDA"]
                             from database import atualizar_formacao
                             atualizar_formacao(dados_f['id_formacao'], nova_lista_f)
-                            st.success("Presenças registradas e formação concluída!"); st.balloons(); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            st.success("Presenças registradas!"); st.balloons(); st.cache_data.clear(); time.sleep(1); st.rerun()
                     else:
-                        st.error("Selecione ao menos um catequista presente.")
+                        st.error("Selecione ao menos um catequista.")
 
         # --- SUB-ABA 3: HISTÓRICO E EDIÇÃO (PASSADO) ---
         with sub_tab_hist:
             if not df_formacoes.empty:
                 st.markdown("#### 🔍 Consultar e Corrigir")
-                # Filtro por Ano
                 df_formacoes['data_dt'] = pd.to_datetime(df_formacoes['data'], errors='coerce')
                 anos = sorted(df_formacoes['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
                 ano_sel = st.selectbox("Filtrar por Ano:", ["TODOS"] + [str(a) for a in anos])
@@ -2245,7 +2258,11 @@ elif menu == "👥 Gestão de Catequistas":
                 if ano_sel != "TODOS":
                     df_hist = df_hist[df_hist['data_dt'].dt.year == int(ano_sel)]
                 
-                st.dataframe(df_hist[['tema', 'data', 'formador', 'local', 'col_5']], use_container_width=True, hide_index=True)
+                # Exibe as colunas existentes de forma segura
+                cols_view = ['tema', 'data', 'formador', 'local']
+                if col_status in df_hist.columns: cols_view.append(col_status)
+                
+                st.dataframe(df_hist[cols_view], use_container_width=True, hide_index=True)
                 
                 st.divider()
                 with st.expander("✏️ Editar ou Excluir Formação"):
@@ -2257,7 +2274,10 @@ elif menu == "👥 Gestão de Catequistas":
                             ed_data = st.date_input("Data", value=pd.to_datetime(d_edit['data']).date())
                             ed_formador = st.text_input("Formador", value=d_edit['formador']).upper()
                             ed_local = st.text_input("Local", value=d_edit['local']).upper()
-                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit['col_5'] == "PENDENTE" else 1)
+                            
+                            status_atual_val = str(d_edit[col_status]).upper() if col_status else "PENDENTE"
+                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], 
+                                                   index=0 if status_atual_val == "PENDENTE" else 1)
                             
                             c_btn1, c_btn2 = st.columns([3, 1])
                             if c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
