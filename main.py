@@ -2307,6 +2307,7 @@ elif menu == "👥 Gestão de Catequistas":
                     col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
                     
                     with col_perfil:
+                        # ... (Mantenha o código de visualização do perfil igual ao anterior)
                         c1, c2 = st.columns([2, 1])
                         with c1:
                             st.markdown(f"### {u['nome']}")
@@ -2323,53 +2324,73 @@ elif menu == "👥 Gestão de Catequistas":
                                 st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
                     with col_edit:
-                        # --- BLINDAGEM DE DATA (CORREÇÃO DO ERRO) ---
-                        try:
-                            # Tenta converter usando pandas para ser mais flexível
-                            data_nasc_bruta = u.get('data_nascimento', '')
-                            if pd.isna(data_nasc_bruta) or str(data_nasc_bruta).strip() in ["", "N/A", "None"]:
-                                val_nasc = date(1980, 1, 1)
-                            else:
-                                # Usa a função do utils mas garante que o retorno seja .date()
-                                val_nasc = converter_para_data(data_nasc_bruta)
-                        except:
-                            val_nasc = date(1980, 1, 1)
+                        # --- CONFIGURAÇÃO DE LIMITES DE DATA (100 ANOS) ---
+                        hoje_ref = date.today()
+                        data_minima = date(1920, 1, 1)
+                        data_maxima = date(2050, 12, 31)
 
-                        with st.form(f"form_edit_cat_v13_{u['email']}"):
+                        # Função interna para converter strings da planilha em objetos date seguros
+                        def converter_seguro(valor):
+                            if pd.isna(valor) or str(valor).strip() in ["", "N/A", "None", "srsr"]:
+                                return hoje_ref
+                            try:
+                                return converter_para_data(valor)
+                            except:
+                                return hoje_ref
+
+                        # Preparação dos valores iniciais
+                        val_nasc = converter_seguro(u.get('data_nascimento', ''))
+                        val_ini = converter_seguro(u.get('data_inicio_catequese', ''))
+                        val_bat = converter_seguro(u.get('data_batismo', ''))
+                        val_euc = converter_seguro(u.get('data_eucaristia', ''))
+                        val_cri = converter_seguro(u.get('data_crisma', ''))
+                        val_min = converter_seguro(u.get('data_ministerio', ''))
+
+                        with st.form(f"form_edit_cat_v2026_{u['email']}"):
+                            st.markdown("#### 📍 Dados Cadastrais")
                             c1, c2, c3 = st.columns(3)
                             ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
                             ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
                             ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
                             
-                            opcoes_papel = ["CATEQUISTA", "COORDENADOR", "ADMIN"]
-                            papel_atual = str(u.get('papel', 'CATEQUISTA')).upper()
-                            idx_papel = opcoes_papel.index(papel_atual) if papel_atual in opcoes_papel else 0
-                            ed_papel = st.selectbox("Alterar Papel / Nível de Acesso", opcoes_papel, index=idx_papel)
+                            ed_papel = st.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"], 
+                                                index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
                             
-                            # Widget corrigido com valor garantido como objeto date
-                            ed_nasc = st.date_input("Data de Nascimento", value=val_nasc, format="DD/MM/YYYY")
+                            # DATA DE NASCIMENTO COM CALENDÁRIO BR E RANGE DE 100 ANOS
+                            ed_nasc = st.date_input("Data de Nascimento", value=val_nasc, 
+                                                min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
                             
                             lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
                             vinc_atuais = [t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes]
                             ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=vinc_atuais)
                             
-                            st.markdown("**Datas Sacramentais e Início:**")
-                            d1, d2, d3, d4, d5 = st.columns(5)
-                            dt_ini = d1.text_input("Início Catequese", value=str(u.get('data_inicio_catequese', '')))
-                            dt_bat = d2.text_input("Data Batismo", value=str(u.get('data_batismo', '')))
-                            dt_euc = d3.text_input("Data Eucaristia", value=str(u.get('data_eucaristia', '')))
-                            dt_cri = d4.text_input("Data Crisma", value=str(u.get('data_crisma', '')))
-                            dt_min = d5.text_input("Data Ministério", value=str(u.get('data_ministerio', '')))
+                            st.divider()
+                            st.markdown("#### ⛪ Datas Sacramentais e Início (Calendário)")
+                            
+                            d1, d2, d3 = st.columns(3)
+                            dt_ini = d1.date_input("Início na Catequese", value=val_ini, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
+                            dt_bat = d2.date_input("Data do Batismo", value=val_bat, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
+                            dt_euc = d3.date_input("Data da 1ª Eucaristia", value=val_euc, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
+                            
+                            d4, d5 = st.columns(2)
+                            dt_cri = d4.date_input("Data da Crisma", value=val_cri, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
+                            dt_min = d5.date_input("Data do Ministério", value=val_min, min_value=data_minima, max_value=data_maxima, format="DD/MM/YYYY")
+
+                            st.info("💡 Se o catequista não possuir algum sacramento, mantenha a data de hoje e informe na observação.")
 
                             if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                                with st.spinner("Sincronizando..."):
+                                with st.spinner("Gravando dados..."):
+                                    # Converte tudo para string para salvar na planilha
                                     dados_up = [
                                         ed_nome, u['email'], ed_senha, ed_papel, 
                                         ", ".join(ed_turmas), ed_tel, str(ed_nasc),
-                                        dt_ini, dt_bat, dt_euc, dt_cri, dt_min
+                                        str(dt_ini), str(dt_bat), str(dt_euc), str(dt_cri), str(dt_min)
                                     ]
                                     if atualizar_usuario(u['email'], dados_up):
-                                        st.success("✅ Perfil atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        st.success("✅ Cadastro atualizado com sucesso!")
+                                        st.cache_data.clear()
+                                        time.sleep(1)
+                                        st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
