@@ -2120,14 +2120,25 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 st.rerun()
         else:
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
-                with st.spinner("O Auditor IA está analisando impedimentos canônicos e realidades familiares..."):
-                    # Coleta dados de Matrimônio dos Pais para o Dossiê
-                    resumo_familias = df_cat['est_civil_pais'].value_counts().to_dict()
-                    
-                    # Lista de Impedimentos Nominais (Melhorada)
+                with st.spinner("O Auditor IA está analisando impedimentos..."):
+                    # 1. Coleta dados de Prontidão por Turma (Para a Seção 1)
+                    analise_detalhada_ia = []
+                    for _, t in df_turmas.iterrows():
+                        nome_t = str(t['nome_turma']).strip().upper()
+                        alunos_t = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
+                        if not alunos_t.empty:
+                            pend_bat = len(alunos_t[alunos_t['batizado_sn'] != "SIM"])
+                            analise_detalhada_ia.append({
+                                "turma": nome_t, 
+                                "etapa": t['etapa'], 
+                                "batizados": len(alunos_t) - pend_bat, 
+                                "pendentes": pend_bat,
+                                "impedimentos_civel": 0 # Pode ser expandido futuramente
+                            })
+
+                    # 2. Lista de Impedimentos Nominais (Para a Seção 2)
                     impedimentos_detalhados = []
                     for _, cat in df_cat[df_cat['status'] == 'ATIVO'].iterrows():
-                        # Regra: 3ª Etapa ou Adultos sem Batismo = Crítico
                         if ("3ª" in str(cat['etapa']) or "ADULTO" in str(cat['etapa']).upper()) and cat['batizado_sn'] != "SIM":
                             impedimentos_detalhados.append({
                                 "nome": cat['nome_completo'],
@@ -2135,18 +2146,13 @@ elif menu == "🕊️ Gestão de Sacramentos":
                                 "motivo": "Falta Batismo (Impedimento de Iniciação)"
                             })
                     
-                    # Contexto rico para a IA
-                    contexto_ia = {
-                        "total_ativos": len(df_cat[df_cat['status'] == 'ATIVO']),
-                        "impedimentos": impedimentos_detalhados,
-                        "realidade_matrimonial_pais": resumo_familias
-                    }
+                    # 3. Chamada da IA
+                    resumo_ia = str({"turmas": analise_detalhada_ia, "impedimentos": impedimentos_detalhados})
+                    analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
                     
-                    analise_ia_sac = gerar_relatorio_sacramentos_ia(str(contexto_ia))
-                    
-                    # Gera o PDF v3 (Vou te passar a função do utils abaixo)
+                    # 4. Geração do PDF v3
                     st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v3(
-                        analise_detalhada_ia, # Dados das turmas
+                        analise_detalhada_ia, 
                         impedimentos_detalhados, 
                         analise_ia_sac
                     )
