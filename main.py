@@ -143,9 +143,8 @@ def mostrar_logo_login():
 
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
 
-# A. Auto-Login via Cookies (COM TRAVA DE LOGOUT)
-# Só tenta o auto-login se NÃO houver uma flag de 'logout_ativo' na sessão
-if not st.session_state.logado and not st.session_state.get('logout_ativo', False):
+# A. Auto-Login via Cookies (COM BLOQUEIO DE REENTRADA)
+if not st.session_state.logado and not st.session_state.get('logout_em_curso', False):
     auth_cookie = cookie_manager.get("fatima_auth_v2")
     if auth_cookie:
         user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
@@ -157,39 +156,54 @@ if not st.session_state.logado and not st.session_state.get('logout_ativo', Fals
                 st.session_state.session_id = new_sid
                 st.rerun()
 
-# B. Validação de Sessão Única (COM TELA DE BLOQUEIO PERSISTENTE)
+# B. Validação de Sessão Única
 if st.session_state.logado:
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
-    
-    # Se o ID do banco for diferente do ID desta sessão atual...
     if sid_no_db and sid_no_db != st.session_state.session_id:
-        # 1. Marcamos que a sessão foi derrubada para travar a tela
-        st.session_state.sessao_derrubada = True
+        st.warning("⚠️ Esta conta foi conectada em outro dispositivo.")
+        st.info("Sua sessão atual foi encerrada por segurança.")
         st.session_state.logado = False
-        
-        # 2. Tentamos limpar o cookie por segurança
-        try:
-            cookie_manager.delete("fatima_auth_v2")
-        except: pass
-
-# C. TELA DE AVISO DE SESSÃO DUPLICADA (ESTA TELA FICA PARADA)
-if st.session_state.get('sessao_derrubada'):
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.error("🚨 **ACESSO ENCERRADO: CONEXÃO DUPLICADA**")
-    st.markdown(f"""
-        <div style='background-color:#fff5f5; padding:20px; border-radius:10px; border:2px solid #e03d11;'>
-            <h3 style='color:#e03d11; margin-top:0;'>Atenção, {st.session_state.usuario['nome'] if st.session_state.usuario else 'Usuário'}</h3>
-            <p style='color:#333;'>Identificamos que sua conta foi conectada em <b>outro dispositivo ou navegador</b>.</p>
-            <p style='color:#333;'>Por motivos de segurança e integridade dos dados da paróquia, esta sessão foi encerrada automaticamente.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("ENTENDI, VOLTAR PARA O LOGIN", use_container_width=True):
-        st.session_state.sessao_derrubada = False
-        st.session_state.usuario = None
         st.session_state.session_id = None
-        st.rerun()
-    st.stop() # Trava a execução aqui para a mensagem não sumir
+        cookie_manager.delete("fatima_auth_v2")
+        if st.button("RECONECTAR"): st.rerun()
+        st.stop()
+
+# C. Tela de Login Manual
+if not st.session_state.logado:
+    # Se ele chegou na tela de login, resetamos a flag de logout para permitir novos logins
+    if st.session_state.get('logout_em_curso'):
+        st.session_state.logout_em_curso = False
+        
+    st.container()
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        col_conteudo = st.columns([0.2, 2, 0.2])[1]
+        with col_conteudo:
+            st.markdown("<br>", unsafe_allow_html=True)
+            mostrar_logo_login()
+            st.markdown(f"<h2 style='text-align: center; color: {cor_sidebar};'>Acesso Restrito</h2>", unsafe_allow_html=True)
+            
+            email_login = st.text_input("E-mail")
+            senha_login = st.text_input("Senha", type="password")
+            lembrar = st.checkbox("Manter conectado por 30 dias")
+            
+            st.write("") 
+            if st.button("ENTRAR NO SISTEMA", use_container_width=True):
+                user = verificar_login(email_login, senha_login)
+                if user:
+                    new_sid = str(uuid.uuid4())
+                    if atualizar_session_id(email_login, new_sid):
+                        st.session_state.logado = True
+                        st.session_state.usuario = user
+                        st.session_state.session_id = new_sid
+                        if lembrar:
+                            cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
+                        st.success(f"Bem-vindo(a), {user['nome']}!")
+                        time.sleep(1)
+                        st.rerun()
+                    else: st.error("Erro ao validar sessão única.")
+                else: st.error("🚫 Acesso negado. Verifique suas credenciais.")
+    st.stop() 
 
 # --- 8. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
 df_cat = ler_aba("catequizandos")
@@ -218,22 +232,16 @@ if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_99x"):
     st.cache_data.clear(); st.toast("Dados atualizados!", icon="✅"); time.sleep(1); st.rerun()
 
 if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_99x"):
-    # 1. Ativa a trava que impede o auto-login imediato
-    st.session_state.logout_ativo = True
+    # 1. Ativa flag para impedir que o auto-login te conecte de volta no próximo ciclo
+    st.session_state.logout_em_curso = True
     
-    # 2. Tenta deletar o cookie com blindagem contra KeyError
-    try:
-        # Verifica se o cookie existe antes de tentar deletar
-        if cookie_manager.get("fatima_auth_v2"):
-            cookie_manager.delete("fatima_auth_v2")
-    except Exception:
-        # Se der erro (KeyError), ignoramos e seguimos o logout
-        pass
+    # 2. Deleta o cookie no navegador
+    cookie_manager.delete("fatima_auth_v2")
     
-    # 3. Limpa os dados da sessão atual
+    # 3. Limpa o estado da sessão atual
     st.session_state.logado = False
-    st.session_state.usuario = None
     st.session_state.session_id = None
+    st.session_state.usuario = None
     
     # 4. Força o reinício para a tela de login
     st.rerun()
