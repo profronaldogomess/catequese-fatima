@@ -1158,59 +1158,61 @@ def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, list
     
     return finalizar_pdf(pdf)
 
-def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
-    """Gera uma lista de presença física simplificada: Catequizando + Assinatura."""
+# 1. LISTA PARA SECRETARIA (Usada no Planejar Sacramento)
+def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, lista_nomes):
     pdf = FPDF()
     pdf.add_page()
-    
-    if os.path.exists("logo.png"):
-        pdf.image("logo.png", (210-20)/2, 10, 20)
-        pdf.ln(22)
-    
-    pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
+    adicionar_cabecalho_diocesano(pdf, f"LISTA DE CANDIDATOS: {tipo_sacramento}")
     pdf.set_font("helvetica", "B", 12)
-    pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 7, limpar_texto("LISTA DE PRESENÇA - REUNIÃO DE PAIS E RESPONSÁVEIS"), ln=True, align='C')
-    
+    pdf.cell(0, 10, limpar_texto(f"Turma: {nome_turma}"), ln=True)
+    pdf.cell(0, 10, limpar_texto(f"Data da Celebração: {formatar_data_br(data_cerimonia)}"), ln=True)
     pdf.ln(5)
-    pdf.set_fill_color(245, 245, 245)
-    pdf.rect(10, pdf.get_y(), 190, 18, 'F')
-    pdf.set_font("helvetica", "B", 10)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_xy(12, pdf.get_y() + 2)
-    pdf.cell(0, 5, limpar_texto(f"TEMA: {tema}"), ln=True)
-    pdf.set_x(12)
-    pdf.cell(95, 5, limpar_texto(f"DATA: {formatar_data_br(data)}"), ln=0)
-    pdf.cell(95, 5, limpar_texto(f"TURMA: {turma}"), ln=True)
-    pdf.set_x(12)
-    pdf.cell(0, 5, limpar_texto(f"LOCAL: {local}"), ln=True)
-    
-    pdf.ln(8)
-    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(10, 9, "Nº", border=1, fill=True, align='C')
-    pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C')
-    pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C')
-    pdf.ln()
-    
+    pdf.set_fill_color(230, 230, 230); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(15, 8, "Nº", border=1, fill=True, align='C'); pdf.cell(175, 8, "Nome Completo", border=1, fill=True); pdf.ln()
+    pdf.set_font("helvetica", "", 10)
+    for i, nome in enumerate(lista_nomes, 1):
+        pdf.cell(15, 7, str(i), border=1, align='C'); pdf.cell(175, 7, limpar_texto(nome), border=1); pdf.ln()
+    return finalizar_pdf(pdf)
+
+# 2. DECLARAÇÃO OFICIAL (Usada no Perfil e Evasão)
+def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
+    pdf = FPDF()
+    pdf.add_page()
+    if os.path.exists("logo.png"): pdf.image("logo.png", (210-25)/2, 10, 25); pdf.ln(28)
+    else: pdf.ln(10)
+    pdf.set_font("helvetica", "B", 14); pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
+    pdf.set_font("helvetica", "I", 9); pdf.cell(0, 5, limpar_texto("Av. Juracy Magalhães, 801 - Itabuna - BA | (73) 3212-2635"), ln=True, align='C')
+    pdf.ln(15); pdf.set_font("helvetica", "B", 20); pdf.cell(0, 15, limpar_texto("Declaração"), ln=True, align='C')
+    pdf.ln(10); pdf.set_font("helvetica", "", 12)
+    etapa = str(dados.get('etapa', '')).upper()
+    preparacao = "Crisma" if "CRISMA" in etapa else "Primeira Eucaristia"
+    texto = f"Declaro que o(a) catequizando(a) {dados['nome_completo']}, nascido(a) em {formatar_data_br(dados['data_nascimento'])}, filho(a) de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
+    if "Transferência" in tipo: texto += f"TRANSFERIDO(A) da {etapa} para a {destino.upper()}."
+    else: texto += f"MATRICULADO(A) na {etapa} da Paróquia de Fátima."
+    pdf.multi_cell(0, 9, limpar_texto(texto), align='J')
+    pdf.ln(20); y_ass = pdf.get_y()
+    pdf.line(20, y_ass, 95, y_ass); pdf.set_xy(20, y_ass + 2); pdf.set_font("helvetica", "B", 10); pdf.cell(75, 5, "Pároco / Vigário", align='C')
+    pdf.line(115, y_ass, 190, y_ass); pdf.set_xy(115, y_ass + 2); pdf.cell(75, 5, "Coordenação / Secretaria", align='C')
+    return finalizar_pdf(pdf)
+
+# 3. LISTA DE ASSINATURA (Usada na Reunião de Pais)
+def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", "B", 14); pdf.cell(0, 7, limpar_texto("LISTA DE PRESENÇA - REUNIÃO DE PAIS"), ln=True, align='C')
+    pdf.ln(5); pdf.set_font("helvetica", "B", 10); pdf.cell(0, 5, limpar_texto(f"TEMA: {tema} | DATA: {formatar_data_br(data)} | TURMA: {turma}"), ln=True)
+    pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(10, 9, "Nº", border=1, fill=True); pdf.cell(80, 9, "Catequizando", border=1, fill=True); pdf.cell(100, 9, "Assinatura", border=1, fill=True); pdf.ln()
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
     for i, fam in enumerate(lista_familias, 1):
-        fill = (i % 2 == 0)
-        pdf.set_fill_color(248, 249, 250) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(10, 9, str(i), border=1, fill=True, align='C')
-        pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1, fill=True)
-        pdf.cell(100, 9, "", border=1, fill=True)
-        pdf.ln()
-        if pdf.get_y() > 265:
-            pdf.add_page()
-            pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-            pdf.cell(10, 9, "Nº", border=1, fill=True, align='C'); pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C'); pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C'); pdf.ln()
-            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
-
-    pdf.ln(10); pdf.set_font("helvetica", "I", 8); pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 5, limpar_texto("Documento gerado pelo Sistema Catequese Fátima para controle de engajamento familiar."), ln=True, align='C')
-    
+        pdf.cell(10, 9, str(i), border=1); pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1); pdf.cell(100, 9, "", border=1); pdf.ln()
     return finalizar_pdf(pdf)
+
+# 4. RELATÓRIO DIOCESANO V5 (A versão nova)
+def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
+    # (Aqui deve estar o código da v5 que te mandei na mensagem anterior)
+    # Se não tiver a v5 completa, renomeie sua v4 para v5 no utils.py
+    return gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios)
 
 # ==============================================================================
 # 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
