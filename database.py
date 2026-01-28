@@ -404,3 +404,38 @@ def atualizar_reuniao_pais(id_r, novos_dados):
             st.error(f"Erro ao atualizar reunião: {e}")
             return False
     return False
+
+def atualizar_encontro_existente(data_e, turma_e, novos_dados):
+    """Atualiza um registro de encontro baseado na data e turma."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("encontros")
+            # Busca a célula da data (Coluna A)
+            celulas_data = aba.findall(str(data_e))
+            for celula in celulas_data:
+                # Verifica se na mesma linha a turma (Coluna B) coincide
+                if aba.cell(celula.row, 2).value == turma_e:
+                    # Atualiza a linha (Data, Turma, Tema, Catequista, Obs)
+                    aba.update(f"A{celula.row}:E{celula.row}", [novos_dados])
+                    st.cache_data.clear()
+                    return True
+        except Exception as e:
+            st.error(f"Erro ao atualizar diário: {e}")
+    return False
+
+def marcar_tema_realizado_cronograma(turma, tema):
+    """Em vez de excluir, marca como REALIZADO na Coluna E do cronograma."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("cronograma")
+            celulas = aba.findall(str(tema))
+            for celula in celulas:
+                if aba.cell(celula.row, 2).value == turma:
+                    # Coluna E (5) recebe o status
+                    aba.update_cell(celula.row, 5, "REALIZADO")
+                    st.cache_data.clear()
+                    return True
+        except: pass
+    return False
