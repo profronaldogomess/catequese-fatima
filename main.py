@@ -2173,21 +2173,104 @@ elif menu == "👥 Gestão de Catequistas":
                 else: st.warning("⚠️ Nome, E-mail e Senha são obrigatórios.")
 
     with tab_formacao:
-        st.subheader("🎓 Registro de Formação Continuada")
-        with st.form("form_nova_form_v13"):
-            f_tema = st.text_input("Tema da Formação").upper()
-            f_data = st.date_input("Data", value=date.today())
-            f_formador = st.text_input("Formador").upper()
-            dict_equipe = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
-            participantes = st.multiselect("Catequistas Presentes:", list(dict_equipe.keys()))
-            if st.form_submit_button("💾 REGISTRAR FORMAÇÃO"):
-                if f_tema and participantes:
-                    id_f = f"FOR-{int(time.time())}"
-                    if salvar_formacao([id_f, f_tema, str(f_data), f_formador, "", ""]):
-                        lista_p = [[id_f, dict_equipe[nome]] for nome in participantes]
+        st.subheader("🎓 Itinerário de Formação Continuada")
+        
+        # Sub-abas internas para organizar o fluxo
+        sub_tab_plan, sub_tab_valida, sub_tab_hist = st.tabs([
+            "📅 Planejar Formação", "✅ Validar Presença", "📜 Histórico e Edição"
+        ])
+
+        # --- SUB-ABA 1: PLANEJAR (FUTURO) ---
+        with sub_tab_plan:
+            with st.form("form_plan_formacao", clear_on_submit=True):
+                f_tema = st.text_input("Tema da Formação").upper()
+                c1, c2 = st.columns(2)
+                f_data = c1.date_input("Data Prevista", value=date.today())
+                f_formador = c2.text_input("Quem irá ministrar? (Formador)").upper()
+                f_local = st.text_input("Local / Sala").upper()
+                
+                if st.form_submit_button("📌 AGENDAR FORMAÇÃO"):
+                    if f_tema:
+                        id_f = f"FOR-{int(time.time())}"
+                        # Status inicial: PENDENTE (Aguardando realização)
+                        if salvar_formacao([id_f, f_tema, str(f_data), f_formador, f_local, "PENDENTE"]):
+                            st.success(f"Formação '{f_tema}' agendada para {formatar_data_br(f_data)}!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+        # --- SUB-ABA 2: VALIDAR (AGORA) ---
+        with sub_tab_valida:
+            df_f_pendentes = df_formacoes[df_formacoes['col_5'] == "PENDENTE"] if not df_formacoes.empty else pd.DataFrame()
+            
+            if df_f_pendentes.empty:
+                st.info("Não há formações pendentes de validação.")
+            else:
+                st.warning("Selecione a formação realizada e marque os catequistas presentes.")
+                escolha_f = st.selectbox("Formação para dar Baixa:", df_f_pendentes['tema'].tolist())
+                dados_f = df_f_pendentes[df_f_pendentes['tema'] == escolha_f].iloc[0]
+                
+                st.divider()
+                st.markdown(f"### Lista de Presença: {escolha_f}")
+                
+                # Lista de Catequistas para Checkbox
+                dict_equipe = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
+                selecionados = []
+                
+                cols = st.columns(2)
+                for i, (nome, email) in enumerate(dict_equipe.items()):
+                    with cols[i % 2]:
+                        if st.checkbox(nome, key=f"pres_f_{dados_f['id_formacao']}_{email}"):
+                            selecionados.append(email)
+                
+                if st.button("💾 FINALIZAR E REGISTRAR PRESENÇAS", use_container_width=True):
+                    if selecionados:
+                        lista_p = [[dados_f['id_formacao'], email] for email in selecionados]
                         if salvar_presenca_formacao(lista_p):
-                            st.success("Formação registrada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-# --- FIM DO BLOCO: GESTÃO DE CATEQUISTAS ---
+                            # Atualiza status da formação para CONCLUÍDA
+                            nova_lista_f = [dados_f['id_formacao'], dados_f['tema'], dados_f['data'], dados_f['formador'], dados_f['local'], "CONCLUIDA"]
+                            from database import atualizar_formacao
+                            atualizar_formacao(dados_f['id_formacao'], nova_lista_f)
+                            st.success("Presenças registradas e formação concluída!"); st.balloons(); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    else:
+                        st.error("Selecione ao menos um catequista presente.")
+
+        # --- SUB-ABA 3: HISTÓRICO E EDIÇÃO (PASSADO) ---
+        with sub_tab_hist:
+            if not df_formacoes.empty:
+                st.markdown("#### 🔍 Consultar e Corrigir")
+                # Filtro por Ano
+                df_formacoes['data_dt'] = pd.to_datetime(df_formacoes['data'], errors='coerce')
+                anos = sorted(df_formacoes['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
+                ano_sel = st.selectbox("Filtrar por Ano:", ["TODOS"] + [str(a) for a in anos])
+                
+                df_hist = df_formacoes.copy()
+                if ano_sel != "TODOS":
+                    df_hist = df_hist[df_hist['data_dt'].dt.year == int(ano_sel)]
+                
+                st.dataframe(df_hist[['tema', 'data', 'formador', 'local', 'col_5']], use_container_width=True, hide_index=True)
+                
+                st.divider()
+                with st.expander("✏️ Editar ou Excluir Formação"):
+                    f_para_editar = st.selectbox("Selecione a Formação:", [""] + df_hist['tema'].tolist())
+                    if f_para_editar:
+                        d_edit = df_hist[df_hist['tema'] == f_para_editar].iloc[0]
+                        with st.form("form_edit_f_real"):
+                            ed_tema = st.text_input("Tema", value=d_edit['tema']).upper()
+                            ed_data = st.date_input("Data", value=pd.to_datetime(d_edit['data']).date())
+                            ed_formador = st.text_input("Formador", value=d_edit['formador']).upper()
+                            ed_local = st.text_input("Local", value=d_edit['local']).upper()
+                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit['col_5'] == "PENDENTE" else 1)
+                            
+                            c_btn1, c_btn2 = st.columns([3, 1])
+                            if c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
+                                from database import atualizar_formacao
+                                if atualizar_formacao(d_edit['id_formacao'], [d_edit['id_formacao'], ed_tema, str(ed_data), ed_formador, ed_local, ed_status]):
+                                    st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            
+                            if c_btn2.form_submit_button("🗑️ EXCLUIR", use_container_width=True):
+                                from database import excluir_formacao_completa
+                                if excluir_formacao_completa(d_edit['id_formacao']):
+                                    st.success("Excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+            else:
+                st.info("Nenhuma formação registrada.")
 
 # ==============================================================================
 # PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO INTEGRAL + CONTATO PRÓPRIO + MOBILE)
