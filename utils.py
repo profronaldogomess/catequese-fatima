@@ -1159,71 +1159,99 @@ def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, list
     return finalizar_pdf(pdf)
 
 def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
-    """Gera a Declaração de Matrícula ou Transferência baseada no modelo oficial."""
+    """Gera a Declaração oficial da Paróquia de Fátima com rigor estético."""
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. CABEÇALHO (Brasão e Info da Paróquia)
+    # 1. CABEÇALHO (Brasão à esquerda e Informações à direita)
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", 10, 10, 25)
+        pdf.image("logo.png", 12, 12, 28)
     
-    pdf.set_xy(40, 15)
+    pdf.set_xy(45, 15)
     pdf.set_font("helvetica", "B", 14)
-    pdf.cell(0, 7, limpar_texto("PARÓQUIA NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
-    pdf.set_font("helvetica", "", 10)
-    pdf.cell(0, 5, limpar_texto("DIOCESE DE ITABUNA - BAHIA"), ln=True, align='C')
-    pdf.cell(0, 5, limpar_texto("Rua São Francisco, Fátima | Tel: (73) XXXX-XXXX"), ln=True, align='C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 7, limpar_texto("PARÓQUIA NOSSA SENHORA DE FÁTIMA"), ln=True)
     
-    # 2. TÍTULO
+    pdf.set_x(45)
+    pdf.set_font("helvetica", "B", 11)
+    pdf.set_text_color(65, 123, 153) # Azul Diocesano
+    pdf.cell(0, 6, limpar_texto("DIOCESE DE ITABUNA - BAHIA"), ln=True)
+    
+    pdf.set_x(45)
+    pdf.set_font("helvetica", "", 9)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 5, limpar_texto("Av. Juracy Magalhães, 801 - Fátima, Itabuna-BA | CEP: 45603-231"), ln=True)
+    pdf.set_x(45)
+    pdf.cell(0, 5, limpar_texto("Tel: (73) 3212-2635 | https://paroquiadefatimaitabuna.com.br"), ln=True)
+    
+    # Linha divisória elegante
+    pdf.set_draw_color(65, 123, 153)
+    pdf.line(10, 45, 200, 45)
+
+    # 2. TÍTULO CENTRALIZADO
     pdf.ln(25)
-    pdf.set_font("helvetica", "B", 22)
+    pdf.set_font("helvetica", "B", 24)
+    pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 15, limpar_texto("Declaração"), ln=True, align='C')
     pdf.ln(10)
     
-    # 3. CORPO DO TEXTO
+    # 3. CORPO DO TEXTO (JUSTIFICADO)
     pdf.set_font("helvetica", "", 12)
     
-    # Lógica de Sacramento alvo
+    # Lógica de Sacramento alvo baseada na Etapa
     etapa = str(dados.get('etapa', '')).upper()
-    preparacao = "Primeira Eucaristia" if "ETAPA" in etapa else "Crisma"
+    if "CRISMA" in etapa or "ADULTO" in etapa:
+        preparacao = "Sacramento da Crisma"
+    else:
+        preparacao = "Sacramento da Primeira Eucaristia"
     
+    # Construção do texto formal
     texto = (
         f"Declaro para os devidos fins que, até a presente data, o(a) catequizando(a) "
-        f"{dados['nome_completo']}, nascido em {formatar_data_br(dados['data_nascimento'])}, "
-        f"filho de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
+        f"{dados['nome_completo']}, nascido(a) em {formatar_data_br(dados['data_nascimento'])}, "
+        f"filho(a) de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
     )
     
     if "Transferência" in tipo:
-        texto += f"TRANSFERIDO da turma {etapa} desta Paróquia para a {destino}. "
+        texto += f"TRANSFERIDO(A) do itinerário de iniciação cristã ({etapa}) desta Paróquia para a {destino.upper()}. "
     else:
-        texto += f"MATRICULADO na turma {etapa} da Paróquia Nossa Senhora de Fátima. "
+        texto += f"regularmente MATRICULADO(A) na turma {etapa} da Paróquia Nossa Senhora de Fátima. "
         
-    texto += f"\n\nDesde: {formatar_data_br(dados.get('data_matricula', '2024-01-01'))}"
-    texto += f"\nem preparação para: {preparacao}."
+    texto += f"\n\nO referido catequizando iniciou sua caminhada em {formatar_data_br(dados.get('data_matricula', '01/01/2025'))}, "
+    texto += f"estando atualmente em preparação para o {preparacao}."
     
-    pdf.multi_cell(0, 8, limpar_texto(texto), align='J')
+    pdf.set_x(20)
+    pdf.multi_cell(170, 9, limpar_texto(texto), align='J')
     
     pdf.ln(15)
+    pdf.set_x(20)
     pdf.cell(0, 10, limpar_texto("Para autenticar a veracidade das afirmações, assino abaixo:"), ln=True)
     
-    # 4. ASSINATURAS
-    pdf.ln(20)
+    # 4. ASSINATURAS (LADO A LADO)
+    pdf.ln(25)
     y_ass = pdf.get_y()
-    pdf.line(30, y_ass, 90, y_ass)
-    pdf.line(120, y_ass, 180, y_ass)
     
-    pdf.set_xy(30, y_ass + 2)
+    # Linha 1: Pároco / Secretaria
+    pdf.line(20, y_ass, 95, y_ass)
+    pdf.set_xy(20, y_ass + 2)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(60, 5, "Pároco", align='C')
+    pdf.cell(75, 5, limpar_texto("Pároco / Secretaria Paroquial"), align='C')
     
-    pdf.set_xy(120, y_ass + 2)
-    pdf.cell(60, 5, "Secretaria Responsável", align='C')
+    # Linha 2: Coordenação
+    pdf.line(115, y_ass, 190, y_ass)
+    pdf.set_xy(115, y_ass + 2)
+    pdf.cell(75, 5, limpar_texto("Coordenação de Catequese"), align='C')
     
-    # 5. DATA FINAL
-    pdf.ln(20)
+    # 5. DATA FINAL (RODAPÉ)
+    pdf.set_y(260)
     hoje = datetime.now()
-    data_f = f"Itabuna-BA, {hoje.day} de janeiro de {hoje.year}." # Ajustar lógica de mês se quiser
-    pdf.cell(0, 10, limpar_texto(data_f), ln=True, align='L')
+    meses_br = {
+        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho",
+        7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
+    }
+    data_f = f"Itabuna-BA, {hoje.day} de {meses_br[hoje.month]} de {hoje.year}."
+    pdf.set_font("helvetica", "I", 11)
+    pdf.cell(0, 10, limpar_texto(data_f), ln=True, align='C')
     
     return finalizar_pdf(pdf)
 
