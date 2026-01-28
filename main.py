@@ -267,27 +267,64 @@ else:
 if menu == "🏠 Início / Dashboard":
     st.title("📊 Radar de Gestão Pastoral")
 
-    # --- 1. ALERTA DE ANIVERSÁRIO (COMPACTO E ELEGANTE) ---
+    # --- 1. MURAL DE CELEBRAÇÃO PAROQUIAL (ANIVERSARIANTES) ---
+    st.markdown("### 🎂 Mural de Celebração")
+    
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     aniversariantes_agora = obter_aniversariantes_hoje(df_cat, df_usuarios)
+    df_niver_mes_geral = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
+
+    # 1.1 DESTAQUE DE HOJE (CATEQUISTAS E CATEQUIZANDOS)
     if aniversariantes_agora:
-        with st.container():
-            for item in aniversariantes_agora:
-                partes = item.split(" | ")
-                st.markdown(f"""
-                    <div style='background-color:#e8f5e9; padding:10px; border-radius:10px; border-left:5px solid #2e7d32; margin-bottom:5px;'>
-                        🎂 <b>HOJE É ANIVERSÁRIO!</b> {partes[1]}: <b>{partes[2]}</b>
-                    </div>
-                """, unsafe_allow_html=True)
+        for item in aniversariantes_agora:
+            partes = item.split(" | ")
+            papel = partes[1]
+            nome_completo = partes[2]
+            icone = "🛡️" if papel == "CATEQUISTA" else "😇"
             
-            with st.expander("🎨 Gerar Cards de Parabéns"):
-                cols_niver = st.columns(len(aniversariantes_agora) if len(aniversariantes_agora) < 4 else 4)
-                for i, item in enumerate(aniversariantes_agora):
-                    with cols_niver[i % 4]:
-                        if st.button(f"🎨 Card: {item.split(' | ')[2].split()[0]}", key=f"btn_niver_{i}"):
-                            card_img = gerar_card_aniversario(item, tipo="DIA")
-                            if card_img:
-                                st.image(card_img, use_container_width=True)
-                                st.download_button("📥 Baixar", card_img, f"Niver_{i}.png", "image/png")
+            st.balloons()
+            st.success(f"🌟 **HOJE É ANIVERSÁRIO!** {icone} {papel}: **{nome_completo}**")
+            
+            if st.button(f"🎨 Gerar Card de Parabéns para {nome_completo.split()[0]}", key=f"btn_hoje_dash_{nome_completo}"):
+                card_img = gerar_card_aniversario(item, tipo="DIA")
+                if card_img:
+                    st.image(card_img, use_container_width=True)
+                    st.download_button("📥 Baixar Card", card_img, f"Parabens_Hoje_{nome_completo}.png", "image/png")
+    
+    # 1.2 MURAL DO MÊS (TODA A PARÓQUIA)
+    with st.expander("📅 Ver todos os aniversariantes do mês (Paróquia)", expanded=not aniversariantes_agora):
+        if not df_niver_mes_geral.empty:
+            # Botão para Card Coletivo Paroquial
+            if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (GERAL)", use_container_width=True):
+                lista_para_card = [f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_mes_geral.iterrows()]
+                card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
+                if card_coletivo:
+                    st.image(card_coletivo, caption="Aniversariantes do Mês - Paróquia de Fátima")
+                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, "Aniversariantes_do_Mes_Geral.png", "image/png")
+            
+            st.write("")
+            st.markdown("---")
+            
+            # LISTA COM CARDS INDIVIDUAIS (4 colunas para caber mais gente)
+            cols_dash = st.columns(4)
+            for i, (_, niver) in enumerate(df_niver_mes_geral.iterrows()):
+                with cols_dash[i % 4]:
+                    icone_m = "🛡️" if niver['tipo'] == 'CATEQUISTA' else "🎁"
+                    st.markdown(f"""
+                        <div style='background-color:#f0f2f6; padding:8px; border-radius:10px; border-left:4px solid #417b99; margin-bottom:5px; min-height:80px;'>
+                            <small style='color:#666;'>Dia {int(niver['dia'])}</small><br>
+                            <b style='font-size:13px;'>{icone_m} {niver['nome'].split()[0]} {niver['nome'].split()[-1] if len(niver['nome'].split()) > 1 else ''}</b>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if st.button(f"🎨 Card", key=f"btn_indiv_dash_{i}"):
+                        dados_envio = f"{int(niver['dia'])} | {niver['tipo']} | {niver['nome']}"
+                        card_indiv = gerar_card_aniversario(dados_envio, tipo="DIA")
+                        if card_indiv:
+                            st.image(card_indiv, use_container_width=True)
+                            st.download_button(f"📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_dash_{i}")
+        else:
+            st.write("Nenhum aniversariante este mês nos registros.")
 
     st.divider()
 
