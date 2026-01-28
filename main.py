@@ -2519,12 +2519,12 @@ elif menu == "👥 Gestão de Catequistas":
                 st.info("Nenhuma formação registrada.")
 
 # ==============================================================================
-# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (DUALIDADE: GESTOR vs CATEQUISTA)
+# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO CONSOLIDADA 2026 - GESTOR & CATEQUISTA)
 # ==============================================================================
 elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
     st.title("👨‍👩‍👧‍👦 Gestão da Igreja Doméstica")
     
-    # --- FUNÇÕES DE APOIO (COMUNS A AMBOS) ---
+    # --- 1. FUNÇÕES DE APOIO E INTELIGÊNCIA (WHATSAPP E RADAR) ---
     def limpar_wa(tel):
         if not tel or str(tel).strip() in ["N/A", "", "None"]: return None
         num = "".join(filter(str.isdigit, str(tel)))
@@ -2539,46 +2539,96 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
         return irmaos[['nome_completo', 'etapa']].to_dict('records')
 
     # ==========================================================================
-    # VISÃO 1: COORDENADOR / ADMIN (MODELO COMPLETO POR ABAS)
+    # VISÃO A: COORDENADOR / ADMIN (CENTRAL DE COMANDO)
     # ==========================================================================
     if eh_gestor:
         tab_reunioes, tab_censo, tab_agenda, tab_visitas, tab_ia = st.tabs([
             "📅 Reuniões de Pais", "📊 Censo Familiar", "📞 Agenda Geral", "🏠 Visitas", "✨ IA"
         ])
 
+        # --- ABA 1: REUNIÕES DE PAIS (AGENDAR, PDF, CHAMADA E EDIÇÃO) ---
         with tab_reunioes:
             st.subheader("📅 Ciclo de Encontros com as Famílias")
-            sub_r1, sub_r2, sub_r3 = st.tabs(["Agendar", "Lista de Assinatura", "Histórico"])
+            sub_r1, sub_r2, sub_r3, sub_r4 = st.tabs([
+                "➕ Agendar", "📄 Lista Física (PDF)", "✅ Validar Presença (Digital)", "📜 Histórico e Edição"
+            ])
             
+            # 1.1 AGENDAR REUNIÃO
             with sub_r1:
                 with st.form("form_plan_reuniao", clear_on_submit=True):
                     r_tema = st.text_input("Tema da Reunião").upper()
                     c_r1, c_r2 = st.columns(2)
-                    r_data = c_r1.date_input("Data Prevista", value=date.today())
+                    r_data = c_r1.date_input("Data Prevista", value=date.today(), format="DD/MM/YYYY")
                     r_turma = c_r2.selectbox("Turma Alvo", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
-                    r_local = st.text_input("Local").upper()
+                    r_local = st.text_input("Local (Ex: Salão Paroquial)").upper()
                     if st.form_submit_button("📌 AGENDAR REUNIÃO"):
                         if r_tema:
                             if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, str(r_data), r_turma, r_local, "PENDENTE"]):
-                                st.success("Reunião agendada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
+            # 1.2 GERAR PDF PARA ASSINATURA FÍSICA
             with sub_r2:
-                df_reunioes = ler_aba("reunioes_pais")
-                if not df_reunioes.empty:
-                    sel_r = st.selectbox("Selecione a Reunião para gerar Lista:", df_reunioes.iloc[:, 1].tolist())
-                    dados_r = df_reunioes[df_reunioes.iloc[:, 1] == sel_r].iloc[0]
+                df_reunioes_v = ler_aba("reunioes_pais")
+                if not df_reunioes_v.empty:
+                    sel_r_pdf = st.selectbox("Selecione a Reunião para gerar PDF:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pdf")
+                    dados_r = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_pdf].iloc[0]
                     if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)"):
                         t_alvo = dados_r.iloc[3]
                         df_f_lista = df_cat[df_cat['status'] == 'ATIVO']
                         if t_alvo != "GERAL (TODAS)": df_f_lista = df_f_lista[df_f_lista['etapa'] == t_alvo]
                         lista_pdf = [{'nome_cat': r['nome_completo'], 'responsavel': r['nome_responsavel']} for _, r in df_f_lista.iterrows()]
                         pdf_out = gerar_lista_assinatura_reuniao_pdf(dados_r.iloc[1], dados_r.iloc[2], dados_r.iloc[4], t_alvo, lista_pdf)
-                        st.download_button("📥 Baixar Lista para Impressão", pdf_out, f"Lista_{sel_r}.pdf")
+                        st.download_button("📥 Baixar Lista para Impressão", pdf_out, f"Lista_{sel_r_pdf}.pdf")
                 else: st.info("Nenhuma reunião agendada.")
 
+            # 1.3 VALIDAR PRESENÇA (CHAMADA DIGITAL DOS PAIS)
             with sub_r3:
-                st.dataframe(ler_aba("reunioes_pais"), use_container_width=True, hide_index=True)
+                if not df_reunioes_v.empty:
+                    sel_r_pres = st.selectbox("Selecione a Reunião para Chamada Digital:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pres")
+                    dados_r_pres = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_pres].iloc[0]
+                    id_reuniao = dados_r_pres.iloc[0]
+                    t_alvo_pres = dados_r_pres.iloc[3]
 
+                    df_fam_pres = df_cat[df_cat['status'] == 'ATIVO']
+                    if t_alvo_pres != "GERAL (TODAS)": df_fam_pres = df_fam_pres[df_fam_pres['etapa'] == t_alvo_pres]
+                    
+                    st.info(f"📋 Registrando presença para: {sel_r_pres}")
+                    with st.form(f"form_pres_reu_{id_reuniao}"):
+                        lista_presenca_reu = []
+                        for _, r in df_fam_pres.sort_values('nome_completo').iterrows():
+                            col_n, col_c = st.columns([3, 1])
+                            col_n.write(f"**{r['nome_completo']}** (Resp: {r['nome_responsavel']})")
+                            presente = col_c.toggle("Presente", key=f"reu_p_{id_reuniao}_{r['id_catequizando']}")
+                            lista_presenca_reu.append([id_reuniao, r['id_catequizando'], r['nome_completo'], t_alvo_pres, "PRESENTE" if presente else "AUSENTE", str(date.today())])
+                        
+                        if st.form_submit_button("💾 SALVAR PRESENÇAS NO BANCO"):
+                            if salvar_presenca_reuniao_pais(lista_presenca_reu):
+                                novos_dados_reu = list(dados_r_pres); novos_dados_reu[5] = "CONCLUIDA"
+                                atualizar_reuniao_pais(id_reuniao, novos_dados_reu)
+                                st.success("Presenças registradas!"); st.balloons(); time.sleep(1); st.rerun()
+                else: st.info("Nenhuma reunião para validar.")
+
+            # 1.4 HISTÓRICO E EDIÇÃO DE REUNIÕES
+            with sub_r4:
+                if not df_reunioes_v.empty:
+                    st.write("### ✏️ Editar Dados da Reunião")
+                    sel_r_edit = st.selectbox("Selecione para alterar:", [""] + df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_edit")
+                    if sel_r_edit:
+                        d_edit = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_edit].iloc[0]
+                        with st.form(f"form_edit_reu_{d_edit.iloc[0]}"):
+                            ed_tema = st.text_input("Tema", value=d_edit.iloc[1]).upper()
+                            ed_data = st.date_input("Data", value=converter_para_data(d_edit.iloc[2]))
+                            ed_turma = st.selectbox("Turma", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
+                            ed_local = st.text_input("Local", value=d_edit.iloc[4]).upper()
+                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
+                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                                if atualizar_reuniao_pais(d_edit.iloc[0], [d_edit.iloc[0], ed_tema, str(ed_data), ed_turma, ed_local, ed_status]):
+                                    st.success("Reunião atualizada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    st.divider()
+                    st.write("### 📜 Histórico Geral")
+                    st.dataframe(df_reunioes_v, use_container_width=True, hide_index=True)
+
+        # --- ABA 2: CENSO MATRIMONIAL ---
         with tab_censo:
             st.subheader("📊 Diagnóstico da Igreja Doméstica")
             c1, c2 = st.columns(2)
@@ -2590,13 +2640,15 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 sac_series = df_cat['sac_pais'].str.split(', ').explode()
                 st.bar_chart(sac_series.value_counts())
 
+        # --- ABA 3: AGENDA GERAL ---
         with tab_agenda:
             busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):").upper()
             df_age = df_cat[df_cat['nome_completo'].str.contains(busca_g, na=False) | df_cat['nome_mae'].str.contains(busca_g, na=False)] if busca_g else df_cat
             st.dataframe(df_age[['nome_completo', 'etapa', 'contato_principal', 'nome_mae', 'tel_mae', 'nome_pai', 'tel_pai']], use_container_width=True, hide_index=True)
 
+        # --- ABA 4: RELATOS DE VISITAS ---
         with tab_visitas:
-            st.subheader("🏠 Relatos de Visitas e Acompanhamento")
+            st.subheader("🏠 Acompanhamento Familiar")
             busca_v = st.text_input("Localizar Família para Relato:").upper()
             if busca_v:
                 fam = df_cat[df_cat['nome_mae'].str.contains(busca_v, na=False) | df_cat['nome_pai'].str.contains(busca_v, na=False)]
@@ -2612,12 +2664,14 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                             atualizar_catequizando(filho['id_catequizando'], lista_up)
                         st.success("Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
+        # --- ABA 5: IA ---
         with tab_ia:
             if st.button("🚀 EXECUTAR DIAGNÓSTICO FAMILIAR IA"):
-                st.info(analisar_saude_familiar_ia(str(df_cat['est_civil_pais'].value_counts().to_dict())))
+                resumo_fam = str(df_cat['est_civil_pais'].value_counts().to_dict())
+                st.info(analisar_saude_familiar_ia(resumo_fam))
 
     # ==========================================================================
-    # VISÃO 2: CATEQUISTA (MODELO MOBILE-FIRST / CARDS)
+    # VISÃO B: CATEQUISTA (MODELO MOBILE-FIRST / CARDS)
     # ==========================================================================
     else:
         vinculo = str(st.session_state.usuario.get('turma_vinculada', '')).split(',')[0].strip()
@@ -2642,7 +2696,7 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     with st.expander("🔗 IRMÃOS NA CATEQUESE"):
                         for ir in irmaos: st.write(f"👦 {ir['nome_completo']} ({ir['etapa']})")
 
-                # Botões WhatsApp
+                # Botões WhatsApp Mobile
                 c1, c2, c3 = st.columns(3)
                 lm = limpar_wa(row['tel_mae'])
                 if lm: c1.markdown(f'''<a href="https://wa.me/{lm}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">👩‍🦱 MÃE</div></a>''', unsafe_allow_html=True)
