@@ -1474,6 +1474,88 @@ def executar_core_diocesano_v5(df_turmas, df_cat, df_usuarios):
 
     return finalizar_pdf(pdf)
 
+def gerar_relatorio_local_turma_v3(nome_turma, metricas, listas, analise_ia):
+    """
+    AUDITORIA PASTORAL V3: Dossiê Completo de Prontidão e Inclusão.
+    Integra Sacramentos, Família, Saúde e Itinerário.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA PASTORAL: {nome_turma}")
+    
+    AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
+
+    # --- 1. INDICADORES ESTRUTURAIS E ADESÃO (6 BOXES) ---
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("1. INDICADORES DE DESEMPENHO E ENGAJAMENTO"), ln=True, fill=True, align='C')
+    
+    pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
+    # Linha 1 de Boxes
+    desenhar_campo_box(pdf, "Catequistas", str(metricas.get('qtd_catequistas', 0)), 10, y, 45)
+    desenhar_campo_box(pdf, "Catequizandos", str(metricas.get('qtd_cat', 0)), 58, y, 45)
+    desenhar_campo_box(pdf, "Frequência", f"{metricas.get('freq_global', 0)}%", 106, y, 45)
+    desenhar_campo_box(pdf, "Idade Média", f"{metricas.get('idade_media', 0)}a", 154, y, 46)
+    
+    y += 14
+    # Linha 2 de Boxes (Novos Indicadores)
+    desenhar_campo_box(pdf, "Engajamento Pais", f"{metricas.get('engaj_pais', 0)}%", 10, y, 93)
+    desenhar_campo_box(pdf, "Progresso Itinerário", f"{metricas.get('progresso_it', 0)}%", 107, y, 93)
+    
+    pdf.ln(22)
+
+    # --- 2. DIAGNÓSTICO SACRAMENTAL E SAÚDE ---
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("2. PRONTIDÃO SACRAMENTAL E CUIDADO (RESUMO)"), ln=True, fill=True, align='C')
+    
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
+    col_sac = f"Batizados: {metricas.get('batizados', 0)} | Pendentes: {metricas.get('pend_batismo', 0)}"
+    col_sau = f"Inclusão (TGO): {metricas.get('tgo', 0)} | Alerta Médico: {metricas.get('saude', 0)}"
+    
+    pdf.set_fill_color(*CINZA_F)
+    pdf.cell(95, 8, limpar_texto(f" SACRAMENTOS: {col_sac}"), border=1, fill=True)
+    pdf.cell(95, 8, limpar_texto(f" SAÚDE/INCLUSÃO: {col_sau}"), border=1, fill=True, ln=True)
+    
+    pdf.ln(4)
+
+    # --- 3. LISTA NOMINAL DETALHADA ---
+    pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("3. RELAÇÃO NOMINAL E SITUAÇÃO INDIVIDUAL"), ln=True, fill=True, align='C')
+    
+    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(*CINZA_F)
+    pdf.cell(80, 7, "Nome do Catequizando", border=1, fill=True)
+    pdf.cell(25, 7, "Batismo", border=1, fill=True, align='C')
+    pdf.cell(25, 7, "Eucaristia", border=1, fill=True, align='C')
+    pdf.cell(30, 7, "Faltas", border=1, fill=True, align='C')
+    pdf.cell(30, 7, "Status", border=1, fill=True, align='C'); pdf.ln()
+
+    pdf.set_font("helvetica", "", 8)
+    for cat in listas.get('geral', []):
+        # Alerta visual para muitas faltas
+        if cat.get('faltas', 0) >= 3: pdf.set_text_color(*LARANJA_P)
+        else: pdf.set_text_color(0, 0, 0)
+        
+        pdf.cell(80, 6, limpar_texto(cat['nome']), border=1)
+        pdf.cell(25, 6, limpar_texto(cat.get('batismo', 'N/A')), border=1, align='C')
+        pdf.cell(25, 6, limpar_texto(cat.get('eucaristia', 'N/A')), border=1, align='C')
+        pdf.cell(30, 6, f"{cat.get('faltas', 0)} faltas", border=1, align='C')
+        pdf.cell(30, 6, limpar_texto(cat.get('status', 'ATIVO')), border=1, align='C'); pdf.ln()
+        
+        if pdf.get_y() > 260: pdf.add_page()
+
+    # --- 4. PARECER TÉCNICO (IA) ---
+    pdf.set_text_color(0, 0, 0); pdf.ln(5)
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 8, limpar_texto("4. PARECER TÉCNICO E ORIENTAÇÃO PASTORAL (IA)"), ln=True, fill=True, align='C')
+    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
+    
+    # Se a IA falhar, gera um parecer técnico padrão baseado nos dados
+    if "indisponível" in analise_ia.lower():
+        analise_ia = f"Dossiê técnico da turma {nome_turma}. Frequência de {metricas.get('freq_global')}% com {metricas.get('pend_batismo')} pendências de batismo. Recomenda-se acompanhamento das famílias com baixa participação."
+        
+    pdf.multi_cell(190, 6, limpar_texto(analise_ia))
+    
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 11. MAPEAMENTO FINAL DE ALIASES (PONTOS DE ENTRADA)
 # ==============================================================================
