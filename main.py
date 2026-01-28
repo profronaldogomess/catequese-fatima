@@ -982,6 +982,12 @@ elif menu == "👤 Perfil Individual":
                     dados = filtro_dados.iloc[0]
                     nome_sel = dados['nome_completo']
                     status_atual = str(dados['status']).upper()
+
+                    # --- NOVO: BANNER DE CONTATO RÁPIDO NO PERFIL ---
+                    obs_p = str(dados.get('obs_pastoral_familia', ''))
+                    tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
+                    
+                    st.warning(f"🚨 **CONTATO DE EMERGÊNCIA:** {dados['nome_responsavel']} | **TEL:** {tel_e}")
                     
                     # Ícone de Status Dinâmico
                     icone = "🟢" if status_atual == "ATIVO" else "🔴" if status_atual == "DESISTENTE" else "🔵" if status_atual == "TRANSFERIDO" else "⚪"
@@ -2450,6 +2456,12 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
             if num.startswith("0"): num = num[1:]
             return f"5573{num}" if len(num) <= 9 else f"55{num}"
 
+        # Extração do Telefone de Emergência da Coluna AD
+        obs_raw = str(aluno_row.get('obs_pastoral_familia', ''))
+        tel_emergencia = None
+        if 'TEL: ' in obs_raw:
+            tel_emergencia = obs_raw.split('TEL: ')[-1].strip()
+
         with st.container():
             st.markdown(f"""
                 <div style='background-color:#f8f9f0; padding:15px; border-radius:10px; border-left:8px solid #417b99; margin-bottom:10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);'>
@@ -2458,19 +2470,27 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 </div>
             """, unsafe_allow_html=True)
             
-            link_proprio = limpar_whatsapp(aluno_row['contato_principal'])
-            if link_proprio:
-                st.markdown(f"""<a href="https://wa.me/{link_proprio}" target="_blank"><button style="background-color:#417b99; color:white; border:none; padding:12px; border-radius:8px; width:100%; cursor:pointer; font-weight:bold; margin-bottom:10px;">📲 Falar com o Catequizando (Direto)</button></a>""", unsafe_allow_html=True)
-
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
+            
             with c1:
                 st.markdown(f"<span style='font-size:12px;'><b>👩‍🦱 MÃE:</b> {aluno_row['nome_mae']}</span>", unsafe_allow_html=True)
                 link_mae = limpar_whatsapp(aluno_row['tel_mae'])
                 if link_mae: st.markdown(f"""<a href="https://wa.me/{link_mae}" target="_blank"><button style="background-color:#25d366; color:white; border:none; padding:8px; border-radius:5px; width:100%; cursor:pointer; font-size:11px;">WhatsApp Mãe</button></a>""", unsafe_allow_html=True)
+            
             with c2:
                 st.markdown(f"<span style='font-size:12px;'><b>👨‍🦱 PAI:</b> {aluno_row['nome_pai']}</span>", unsafe_allow_html=True)
                 link_pai = limpar_whatsapp(aluno_row['tel_pai'])
                 if link_pai: st.markdown(f"""<a href="https://wa.me/{link_pai}" target="_blank"><button style="background-color:#128c7e; color:white; border:none; padding:8px; border-radius:5px; width:100%; cursor:pointer; font-size:11px;">WhatsApp Pai</button></a>""", unsafe_allow_html=True)
+
+            with c3:
+                # BLOCO DE EMERGÊNCIA / RESPONSÁVEL
+                nome_resp = aluno_row.get('nome_responsavel', 'N/A')
+                st.markdown(f"<span style='font-size:12px;'><b>🚨 EMERGÊNCIA:</b> {nome_resp}</span>", unsafe_allow_html=True)
+                link_emerg = limpar_whatsapp(tel_emergencia)
+                if link_emerg: 
+                    st.markdown(f"""<a href="https://wa.me/{link_emerg}" target="_blank"><button style="background-color:#e03d11; color:white; border:none; padding:8px; border-radius:5px; width:100%; cursor:pointer; font-size:11px;">LIGAR EMERGÊNCIA</button></a>""", unsafe_allow_html=True)
+                else:
+                    st.caption("Sem tel. emergência")
 
     # --- 3. ABAS PRINCIPAIS ---
     if eh_gestor:
