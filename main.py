@@ -1771,28 +1771,34 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 st.rerun()
         else:
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
-                with st.spinner("O Auditor IA está sincronizando os dados reais..."):
+                with st.spinner("O Auditor IA está analisando impedimentos canônicos..."):
                     try:
-                        # Recalcula estatísticas para o PDF usando a lógica de idade
-                        df_censo_pdf = df_cat.copy()
-                        df_censo_pdf['idade_real'] = df_censo_pdf['data_nascimento'].apply(calcular_idade)
-                        
-                        df_k_pdf = df_censo_pdf[df_censo_pdf['idade_real'] < 18]
-                        df_a_pdf = df_censo_pdf[df_censo_pdf['idade_real'] >= 18]
+                        impedimentos_nominais = []
+                        # Varre todos os catequizandos em busca de impedimentos
+                        for _, cat in df_cat.iterrows():
+                            # 1. Impedimento Matrimonial (Adultos)
+                            est_civil = str(cat.get('estado_civil_pais_ou_proprio', '')).upper()
+                            idade_c = calcular_idade(cat['data_nascimento'])
+                            
+                            if idade_c >= 18 and est_civil in ['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)']:
+                                impedimentos_nominais.append({
+                                    'nome': cat['nome_completo'],
+                                    'turma': cat['etapa'],
+                                    'situacao': f"Matrimonial Irregular ({est_civil})"
+                                })
+                            
+                            # 2. Impedimento de Iniciação (Crianças na 3ª Etapa sem Batismo)
+                            if "3ª" in str(cat['etapa']) and cat['batizado_sn'] != "SIM":
+                                impedimentos_nominais.append({
+                                    'nome': cat['nome_completo'],
+                                    'turma': cat['etapa'],
+                                    'situacao': "Falta Batismo (Urgente)"
+                                })
 
-                        stats_gerais = {
-                            'bat_k': len(df_k_pdf[df_k_pdf['batizado_sn'].str.upper() == 'SIM']),
-                            'bat_a': len(df_a_pdf[df_a_pdf['batizado_sn'].str.upper() == 'SIM']),
-                            'total_k': len(df_k_pdf),
-                            'total_a': len(df_a_pdf),
-                            'euca_k': df_k_pdf['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum(),
-                            'euca_a': df_a_pdf['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum(),
-                            'crisma_a': df_a_pdf['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
-                        }
-
-                        analise_ia_sac = gerar_relatorio_sacramentos_ia(str(stats_gerais))
+                        # Gera o PDF com a nova lógica
+                        analise_ia_sac = gerar_relatorio_sacramentos_ia(str(impedimentos_nominais))
                         st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v2(
-                            stats_gerais, analise_detalhada_ia, [], analise_ia_sac
+                            {}, analise_detalhada_ia, impedimentos_nominais, analise_ia_sac
                         )
                         st.rerun()
                     except Exception as e:
