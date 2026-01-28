@@ -69,32 +69,29 @@ def verificar_status_sistema():
     return "ONLINE"
 
 def atualizar_session_id(email, novo_id):
-    """Grava o UUID da sessão na Coluna M (13) da aba usuarios."""
+    """Grava o UUID na Coluna N (14) para liberar a Coluna M para dados."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
             celula = aba.find(str(email))
             if celula:
-                aba.update_cell(celula.row, 13, str(novo_id))
-                st.cache_data.clear() # Limpa cache para validar a nova sessão
+                aba.update_cell(celula.row, 14, str(novo_id)) # Agora na 14
+                st.cache_data.clear()
                 return True
         except: pass
     return False
 
-@st.cache_data(ttl=30) # Validação rápida (30s) para evitar erro 429 em navegação
+@st.cache_data(ttl=30)
 def obter_session_id_db(email):
-    """Busca o UUID gravado na planilha. Usa ler_aba para aproveitar o cache."""
     if not email: return ""
     df_usuarios = ler_aba("usuarios")
     if not df_usuarios.empty and 'email' in df_usuarios.columns:
         usuario = df_usuarios[df_usuarios['email'] == email]
         if not usuario.empty:
-            # Tenta pegar a coluna 'session_id' ou a 13ª coluna (índice 12)
             try:
-                if 'session_id' in usuario.columns:
-                    return str(usuario.iloc[0]['session_id'])
-                return str(usuario.iloc[0].iloc[12]) # Coluna M
+                # Busca na 14ª coluna (índice 13)
+                return str(usuario.iloc[0].iloc[13]) 
             except: return ""
     return ""
 
@@ -217,8 +214,8 @@ def atualizar_usuario(email_original, novos_dados_lista):
             aba = planilha.worksheet("usuarios")
             celula = aba.find(str(email_original))
             if celula:
-                # RIGOR 12 COLUNAS: Atualiza de A até L (M é reservada ao UUID)
-                aba.update(f"A{celula.row}:L{celula.row}", [novos_dados_lista])
+                # NOVO RIGOR: 13 COLUNAS (A até M)
+                aba.update(f"A{celula.row}:M{celula.row}", [novos_dados_lista])
                 st.cache_data.clear(); return True
         except: return False
     return False
