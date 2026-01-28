@@ -2085,11 +2085,13 @@ elif menu == "🕊️ Gestão de Sacramentos":
         else:
             st.info("Nenhum evento registrado no histórico.")
 
-# --- PÁGINA: FAZER CHAMADA (FILTRO DINÂMICO PARA MULTI-TURMAS) ---
+# ==============================================================================
+# PÁGINA: ✅ CHAMADA INTELIGENTE (VERSÃO MOBILE-FIRST 2026)
+# ==============================================================================
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
-    
-    # 1. Identificação de Permissões (Mesma lógica robusta)
+
+    # 1. IDENTIFICAÇÃO DE PERMISSÕES
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -2097,58 +2099,118 @@ elif menu == "✅ Fazer Chamada":
         turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
     if not turmas_permitidas:
-        st.error("❌ Você não possui turmas vinculadas para realizar chamada.")
-        st.stop()
+        st.error("❌ Você não possui turmas vinculadas."); st.stop()
 
-    # 2. MECANISMO DE ESCOLHA DA TURMA PARA CHAMADA
-    if len(turmas_permitidas) > 1 or eh_gestor or vinculo_raw == "TODAS":
-        turma_selecionada = st.selectbox("Selecione a Turma para a Chamada:", turmas_permitidas, key="sel_turma_chamada_v7")
-    else:
-        turma_selecionada = turmas_permitidas[0]
-        st.info(f"📋 Realizando chamada para: **{turma_selecionada}**")
+    # 2. CABEÇALHO DE CONFIGURAÇÃO (MOBILE FRIENDLY)
+    with st.container():
+        c1, c2 = st.columns([1, 1])
+        turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
+        data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    # 3. Configuração do Encontro
-    c1, c2 = st.columns(2)
-    data_encontro = c1.date_input("Data do Encontro", date.today(), key="data_chamada_v7")
+    # 3. LÓGICA DE TEMA (SUGESTÃO DO CRONOGRAMA)
+    df_cron_c = ler_aba("cronograma")
+    sugestao_tema = ""
+    if not df_cron_c.empty:
+        # Busca o primeiro tema pendente daquela turma
+        filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
+        if not filtro_cron.empty:
+            sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
+            st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
+            if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
+                st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
+
+    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
+                             value=st.session_state.get(f"tema_input_{turma_sel}", ""), 
+                             key=f"tema_field_{turma_sel}").upper()
+
+    # 4. LISTA DE CATEQUIZANDOS (CARDS)
+    lista_cat = df_cat[(df_cat['etapa'] == turma_sel) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
     
-    tema_encontrado = buscar_encontro_por_data(turma_selecionada, data_encontro)
-    tema_dia = c2.text_input("Tema do Encontro:", value=tema_encontrado if tema_encontrado else "", key="tema_chamada_v7").upper()
-    
-    # 4. Lista de Chamada
-    lista_chamada = df_cat[(df_cat['etapa'] == turma_selecionada) & (df_cat['status'] == 'ATIVO')]
-    
-    if lista_chamada.empty:
-        st.warning(f"Nenhum catequizando ativo na turma {turma_selecionada}.")
+    if lista_cat.empty:
+        st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
     else:
         st.divider()
-        def toggle_presenca_total():
-            for _, row in lista_chamada.iterrows():
-                st.session_state[f"pres_v7_{row['id_catequizando']}_{data_encontro}"] = st.session_state.chk_marcar_todos_v7
-
-        st.checkbox("✅ MARCAR TODOS COMO PRESENTES", key="chk_marcar_todos_v7", on_change=toggle_presenca_total)
         
-        with st.form("form_chamada_v7_final"):
-            registros_presenca = []
-            for _, row in lista_chamada.iterrows():
-                col_nome, col_check, col_niver = st.columns([3, 1, 2])
-                col_nome.write(row['nome_completo'])
-                presente = col_check.checkbox("P", key=f"pres_v7_{row['id_catequizando']}_{data_encontro}")
+        # Botão Marcar Todos (Compacto)
+        if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
+            for _, r in lista_cat.iterrows():
+                st.session_state[f"p_{r['id_catequizando']}_{data_enc}"] = True
+        
+        st.markdown("---")
+        
+        registros_presenca = []
+        contador_p = 0
+        contador_a = 0
+        contador_niver = 0
+
+        # CSS para os Cards Mobile
+        st.markdown("""
+            <style>
+            .card-chamada {
+                background-color: #f8f9f0;
+                padding: 15px;
+                border-radius: 10px;
+                border-left: 8px solid #417b99;
+                margin-bottom: 10px;
+            }
+            .card-niver {
+                border-left: 8px solid #ffa000 !important;
+                background-color: #fff9e6 !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        for _, row in lista_cat.iterrows():
+            is_niver = eh_aniversariante_da_semana(row['data_nascimento'])
+            if is_niver: contador_niver += 1
+            
+            # Container do Card
+            with st.container():
+                # Estilização visual baseada no aniversário
+                classe_card = "card-niver" if is_niver else ""
                 
-                if eh_aniversariante_da_semana(row['data_nascimento']):
-                    col_niver.success("🎂 NIVER NA SEMANA!")
+                col_info, col_check = st.columns([3, 1])
                 
+                with col_info:
+                    niver_tag = "🎂 <b>NIVER!</b> " if is_niver else ""
+                    st.markdown(f"{niver_tag}{row['nome_completo']}", unsafe_allow_html=True)
+                    if is_niver:
+                        if st.button(f"🎨 Card Parabéns", key=f"btn_niver_{row['id_catequizando']}"):
+                            card_img = gerar_card_aniversario(f"{data_enc.day} | CATEQUIZANDO | {row['nome_completo']}", tipo="DIA")
+                            if card_img: st.image(card_img, width=150)
+
+                with col_check:
+                    # Toggle é melhor para mobile que checkbox
+                    presente = st.toggle("P", key=f"p_{row['id_catequizando']}_{data_enc}")
+                    if presente: contador_p += 1
+                    else: contador_a += 1
+
                 registros_presenca.append([
-                    str(data_encontro), row['id_catequizando'], row['nome_completo'], 
-                    turma_selecionada, "PRESENTE" if presente else "AUSENTE", 
+                    str(data_enc), row['id_catequizando'], row['nome_completo'], 
+                    turma_sel, "PRESENTE" if presente else "AUSENTE", 
                     tema_dia, st.session_state.usuario['nome']
                 ])
-            
-            if st.form_submit_button("🚀 FINALIZAR CHAMADA E SALVAR"):
-                if not tema_dia:
-                    st.error("⚠️ Informe o TEMA do encontro.")
-                else:
-                    if salvar_presencas(registros_presenca):
-                        st.success("✅ Chamada salva!"); st.balloons(); time.sleep(1); st.rerun()
+            st.markdown("---")
+
+        # 5. TERMÔMETRO E FINALIZAÇÃO
+        st.subheader("📊 Resumo da Chamada")
+        c_res1, c_res2, c_res3 = st.columns(3)
+        c_res1.metric("✅ Presentes", contador_p)
+        c_res2.metric("❌ Ausentes", contador_a)
+        c_res3.metric("🎂 Aniversariantes", contador_niver)
+
+        if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
+            if salvar_presencas(registros_presenca):
+                # Se o tema veio do cronograma, marca como realizado
+                if tema_dia == sugestao_tema:
+                    from database import marcar_tema_realizado_cronograma
+                    marcar_tema_realizado_cronograma(turma_sel, tema_dia)
+                
+                st.success(f"✅ Chamada de {turma_sel} salva com sucesso!"); st.balloons()
+                st.cache_data.clear(); time.sleep(1); st.rerun()
+        
+        if not tema_dia:
+            st.warning("⚠️ O botão de salvar será liberado após preencher o Tema do Encontro.")
 
 # ==============================================================================
 # BLOCO INTEGRAL: GESTÃO DE CATEQUISTAS (DASHBOARD + EDIÇÃO + NOVO ACESSO)
