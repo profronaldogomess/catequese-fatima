@@ -832,7 +832,8 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
 def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     """
     VERSÃO 5.0 - DEFINITIVA: Inteligência Sacramental Integrada.
-    ESTA FUNÇÃO É AUTOSSUFICIENTE. NÃO CHAMA V4 OU V2 PARA EVITAR RECURSÃO.
+    ESTA FUNÇÃO NÃO CHAMA NENHUMA OUTRA VERSÃO (V4, V2, ETC).
+    TODA A LÓGICA ESTÁ CONTIDA AQUI PARA EVITAR RECURSION ERROR.
     """
     from database import ler_aba 
     
