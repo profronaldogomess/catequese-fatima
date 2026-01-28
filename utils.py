@@ -264,7 +264,7 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
 # ==============================================================================
 
 def _desenhar_corpo_ficha(pdf, dados):
-    """Desenha o corpo moderno e completo da ficha de inscrição (30 colunas)."""
+    """Desenha o corpo moderno da ficha de inscrição sem emojis para evitar erro de interrogação."""
     y_base = pdf.get_y()
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_adulto = idade_real >= 18
@@ -295,12 +295,12 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_font("helvetica", "", 9)
     pdf.cell(50, 7, limpar_texto(f"TURNO: ( {mark_m} ) M  ( {mark_t} ) T  ( {mark_n} ) N"), ln=1, align='R')
 
-    # --- SEÇÃO 1: IDENTIFICAÇÃO (📍) ---
+    # --- SEÇÃO 1: IDENTIFICAÇÃO ---
     pdf.ln(5)
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 7, limpar_texto("  📍 1. IDENTIFICAÇÃO DO CATEQUIZANDO"), ln=True, fill=True)
+    pdf.cell(190, 7, limpar_texto("  1. IDENTIFICAÇÃO DO CATEQUIZANDO"), ln=True, fill=True)
     
     pdf.set_text_color(0, 0, 0)
     y = pdf.get_y() + 2
@@ -323,19 +323,19 @@ def _desenhar_corpo_ficha(pdf, dados):
     desenhar_campo_box(pdf, "WhatsApp / Contato:", dados.get('contato_principal', ''), 10, y, 60)
     desenhar_campo_box(pdf, "Saúde (Medicamentos/Alergias):", dados.get('toma_medicamento_sn', 'NÃO'), 75, y, 125)
 
-    # --- SEÇÃO 2: FAMÍLIA OU EMERGÊNCIA (👪 / 🚨) ---
+    # --- SEÇÃO 2: FAMÍLIA OU EMERGÊNCIA ---
     pdf.set_y(y + 16)
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     
     if is_adulto:
-        pdf.cell(190, 7, limpar_texto("  🚨 2. CONTATO DE EMERGÊNCIA / VÍNCULO"), ln=True, fill=True)
+        pdf.cell(190, 7, limpar_texto("  2. CONTATO DE EMERGÊNCIA / VÍNCULO"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0)
         y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome do Contato:", dados.get('nome_responsavel', 'N/A'), 10, y, 110)
         desenhar_campo_box(pdf, "Vínculo / Telefone:", dados.get('obs_pastoral_familia', 'N/A'), 125, y, 75)
     else:
-        pdf.cell(190, 7, limpar_texto("  👪 2. FILIAÇÃO E RESPONSÁVEIS"), ln=True, fill=True)
+        pdf.cell(190, 7, limpar_texto("  2. FILIAÇÃO E RESPONSÁVEIS"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0)
         y = pdf.get_y() + 2
         desenhar_campo_box(pdf, "Nome da Mãe:", dados.get('nome_mae', 'N/A'), 10, y, 110)
@@ -346,11 +346,11 @@ def _desenhar_corpo_ficha(pdf, dados):
         y += 14
         desenhar_campo_box(pdf, "Responsável Legal (Caso não more com pais):", dados.get('nome_responsavel', 'N/A'), 10, y, 190)
 
-    # --- SEÇÃO 3: VIDA ECLESIAL E DOCUMENTOS (⛪) ---
+    # --- SEÇÃO 3: VIDA ECLESIAL E DOCUMENTOS ---
     pdf.set_y(pdf.get_y() + 16)
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 7, limpar_texto("  ⛪ 3. VIDA ECLESIAL E DOCUMENTAÇÃO"), ln=True, fill=True)
+    pdf.cell(190, 7, limpar_texto("  3. VIDA ECLESIAL E DOCUMENTAÇÃO"), ln=True, fill=True)
     
     pdf.set_text_color(0, 0, 0)
     y_ec = pdf.get_y() + 2
@@ -365,7 +365,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_font("helvetica", "", 9)
     pdf.cell(0, 5, limpar_texto(dados.get('doc_em_falta', 'NADA')), ln=1)
 
-    # --- SEÇÃO 4: TERMO LGPD (🛡️) ---
+    # --- SEÇÃO 4: TERMO LGPD ---
     pdf.ln(5)
     pdf.set_font("helvetica", "B", 10)
     pdf.set_text_color(224, 61, 17) # Laranja Alerta
