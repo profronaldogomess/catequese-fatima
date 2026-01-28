@@ -1158,6 +1158,75 @@ def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, list
     
     return finalizar_pdf(pdf)
 
+def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
+    """Gera a Declaração de Matrícula ou Transferência baseada no modelo oficial."""
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # 1. CABEÇALHO (Brasão e Info da Paróquia)
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 10, 25)
+    
+    pdf.set_xy(40, 15)
+    pdf.set_font("helvetica", "B", 14)
+    pdf.cell(0, 7, limpar_texto("PARÓQUIA NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
+    pdf.set_font("helvetica", "", 10)
+    pdf.cell(0, 5, limpar_texto("DIOCESE DE ITABUNA - BAHIA"), ln=True, align='C')
+    pdf.cell(0, 5, limpar_texto("Rua São Francisco, Fátima | Tel: (73) XXXX-XXXX"), ln=True, align='C')
+    
+    # 2. TÍTULO
+    pdf.ln(25)
+    pdf.set_font("helvetica", "B", 22)
+    pdf.cell(0, 15, limpar_texto("Declaração"), ln=True, align='C')
+    pdf.ln(10)
+    
+    # 3. CORPO DO TEXTO
+    pdf.set_font("helvetica", "", 12)
+    
+    # Lógica de Sacramento alvo
+    etapa = str(dados.get('etapa', '')).upper()
+    preparacao = "Primeira Eucaristia" if "ETAPA" in etapa else "Crisma"
+    
+    texto = (
+        f"Declaro para os devidos fins que, até a presente data, o(a) catequizando(a) "
+        f"{dados['nome_completo']}, nascido em {formatar_data_br(dados['data_nascimento'])}, "
+        f"filho de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
+    )
+    
+    if "Transferência" in tipo:
+        texto += f"TRANSFERIDO da turma {etapa} desta Paróquia para a {destino}. "
+    else:
+        texto += f"MATRICULADO na turma {etapa} da Paróquia Nossa Senhora de Fátima. "
+        
+    texto += f"\n\nDesde: {formatar_data_br(dados.get('data_matricula', '2024-01-01'))}"
+    texto += f"\nem preparação para: {preparacao}."
+    
+    pdf.multi_cell(0, 8, limpar_texto(texto), align='J')
+    
+    pdf.ln(15)
+    pdf.cell(0, 10, limpar_texto("Para autenticar a veracidade das afirmações, assino abaixo:"), ln=True)
+    
+    # 4. ASSINATURAS
+    pdf.ln(20)
+    y_ass = pdf.get_y()
+    pdf.line(30, y_ass, 90, y_ass)
+    pdf.line(120, y_ass, 180, y_ass)
+    
+    pdf.set_xy(30, y_ass + 2)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(60, 5, "Pároco", align='C')
+    
+    pdf.set_xy(120, y_ass + 2)
+    pdf.cell(60, 5, "Secretaria Responsável", align='C')
+    
+    # 5. DATA FINAL
+    pdf.ln(20)
+    hoje = datetime.now()
+    data_f = f"Itabuna-BA, {hoje.day} de janeiro de {hoje.year}." # Ajustar lógica de mês se quiser
+    pdf.cell(0, 10, limpar_texto(data_f), ln=True, align='L')
+    
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 11. ALIASES DE COMPATIBILIDADE (NÃO REMOVER - DEFESA DE LEGADO)
 # ==============================================================================
