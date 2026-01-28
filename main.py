@@ -143,6 +143,20 @@ def mostrar_logo_login():
 
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
 
+# A. Auto-Login via Cookies (COM TRAVA DE LOGOUT)
+# Só tenta o auto-login se NÃO houver uma flag de 'logout_ativo' na sessão
+if not st.session_state.logado and not st.session_state.get('logout_ativo', False):
+    auth_cookie = cookie_manager.get("fatima_auth_v2")
+    if auth_cookie:
+        user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
+        if user:
+            new_sid = str(uuid.uuid4())
+            if atualizar_session_id(user['email'], new_sid):
+                st.session_state.logado = True
+                st.session_state.usuario = user
+                st.session_state.session_id = new_sid
+                st.rerun()
+
 # B. Validação de Sessão Única (COM TELA DE BLOQUEIO PERSISTENTE)
 if st.session_state.logado:
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
