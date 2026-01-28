@@ -449,30 +449,52 @@ elif menu == "📚 Minha Turma":
     df_enc_t = ler_aba("encontros")
     df_reu_t = ler_aba("presenca_reuniao")
 
-    # --- SEÇÃO 1: BANNER DE ACOLHIDA (ANIVERSARIANTES) ---
-    st.subheader("🎂 Aniversariantes do Mês")
+    # --- SEÇÃO 1: MURAL DE CELEBRAÇÃO (ANIVERSARIANTES HOJE E MÊS) ---
+    st.markdown("### 🎂 Mural de Celebração")
+    
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     df_niver_t = obter_aniversariantes_mes(meus_alunos)
     
-    if not df_niver_t.empty:
-        cols_n = st.columns(2) # Duas colunas para mobile ficar empilhado
-        for i, (_, niver) in enumerate(df_niver_t.iterrows()):
-            is_hoje = eh_aniversariante_da_semana(meus_alunos[meus_alunos['nome_completo'] == niver['nome']].iloc[0]['data_nascimento'])
-            cor_borda = "#ffa000" if is_hoje else "#417b99"
-            bg_card = "#fff9e6" if is_hoje else "#f0f2f6"
+    # 1.1 ANIVERSARIANTES DE HOJE (DESTAQUE TOTAL)
+    niver_hoje = []
+    if not meus_alunos.empty:
+        for _, r in meus_alunos.iterrows():
+            d_nasc = formatar_data_br(r['data_nascimento'])
+            if d_nasc != "N/A":
+                try:
+                    dt_n = dt_module.datetime.strptime(d_nasc, "%d/%m/%Y")
+                    if dt_n.day == hoje.day and dt_n.month == hoje.month:
+                        niver_hoje.append(r['nome_completo'])
+                except: pass
+
+    if niver_hoje:
+        for nome_n in niver_hoje:
+            st.balloons()
+            st.success(f"🌟 **HOJE É ANIVERSÁRIO DE: {nome_n}**")
+            if st.button(f"🎨 Gerar Card de Parabéns para {nome_n.split()[0]}", key=f"btn_niver_hoje_{nome_n}"):
+                card_img = gerar_card_aniversario(f"{hoje.day} | CATEQUIZANDO | {nome_n}", tipo="DIA")
+                if card_img:
+                    st.image(card_img, use_container_width=True)
+                    st.download_button("📥 Baixar Card", card_img, f"Parabens_{nome_n}.png", "image/png")
+    
+    # 1.2 ANIVERSARIANTES DO MÊS (LISTA ORGANIZADA)
+    with st.expander("📅 Ver todos os aniversariantes do mês", expanded=not niver_hoje):
+        if not df_niver_t.empty:
+            # Botão para Card Coletivo da Turma
+            if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (TURMA)", use_container_width=True):
+                lista_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome']}" for _, row in df_niver_t.iterrows()]
+                card_col = gerar_card_aniversario(lista_card, tipo="MES")
+                if card_col:
+                    st.image(card_col, use_container_width=True)
+                    st.download_button("📥 Baixar Card Coletivo", card_col, "Aniversariantes_Mes_Turma.png", "image/png")
             
-            with cols_n[i % 2]:
-                st.markdown(f"""
-                    <div style='background-color:{bg_card}; padding:10px; border-radius:10px; border-left:5px solid {cor_borda}; margin-bottom:10px;'>
-                        <span style='font-size:12px; color:#666;'>Dia {int(niver['dia'])}</span><br>
-                        <b style='color:{cor_borda};'>{niver['nome']}</b>
-                    </div>
-                """, unsafe_allow_html=True)
-                if is_hoje:
-                    if st.button(f"🎨 Card Parabéns", key=f"btn_niver_t_{i}"):
-                        card = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome']}", tipo="DIA")
-                        if card: st.image(card, width=150)
-    else:
-        st.info("Nenhum aniversariante este mês nesta turma.")
+            st.write("")
+            cols_n = st.columns(2) # Layout mobile-friendly
+            for i, (_, niver) in enumerate(df_niver_t.iterrows()):
+                with cols_n[i % 2]:
+                    st.info(f"🎁 **Dia {int(niver['dia'])}** - {niver['nome']}")
+        else:
+            st.write("Nenhum aniversariante este mês nesta turma.")
 
     st.divider()
 
