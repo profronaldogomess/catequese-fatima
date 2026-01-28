@@ -119,6 +119,7 @@ from utils import (
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
      gerar_lista_assinatura_reuniao_pdf,gerar_relatorio_diocesano_v5, gerar_relatorio_pastoral_v4,
     gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, gerar_relatorio_local_turma_v3,
+    gerar_relatorio_sacramentos_tecnico_v3,
     gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
     gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
     gerar_relatorio_local_turma_pdf
@@ -2119,38 +2120,37 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 st.rerun()
         else:
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
-                with st.spinner("O Auditor IA está analisando impedimentos canônicos..."):
-                    try:
-                        impedimentos_nominais = []
-                        # Varre todos os catequizandos em busca de impedimentos
-                        for _, cat in df_cat.iterrows():
-                            # 1. Impedimento Matrimonial (Adultos)
-                            est_civil = str(cat.get('estado_civil_pais_ou_proprio', '')).upper()
-                            idade_c = calcular_idade(cat['data_nascimento'])
-                            
-                            if idade_c >= 18 and est_civil in ['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)']:
-                                impedimentos_nominais.append({
-                                    'nome': cat['nome_completo'],
-                                    'turma': cat['etapa'],
-                                    'situacao': f"Matrimonial Irregular ({est_civil})"
-                                })
-                            
-                            # 2. Impedimento de Iniciação (Crianças na 3ª Etapa sem Batismo)
-                            if "3ª" in str(cat['etapa']) and cat['batizado_sn'] != "SIM":
-                                impedimentos_nominais.append({
-                                    'nome': cat['nome_completo'],
-                                    'turma': cat['etapa'],
-                                    'situacao': "Falta Batismo (Urgente)"
-                                })
-
-                        # Gera o PDF com a nova lógica
-                        analise_ia_sac = gerar_relatorio_sacramentos_ia(str(impedimentos_nominais))
-                        st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v2(
-                            {}, analise_detalhada_ia, impedimentos_nominais, analise_ia_sac
-                        )
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro na sincronização: {e}")
+                with st.spinner("O Auditor IA está analisando impedimentos canônicos e realidades familiares..."):
+                    # Coleta dados de Matrimônio dos Pais para o Dossiê
+                    resumo_familias = df_cat['est_civil_pais'].value_counts().to_dict()
+                    
+                    # Lista de Impedimentos Nominais (Melhorada)
+                    impedimentos_detalhados = []
+                    for _, cat in df_cat[df_cat['status'] == 'ATIVO'].iterrows():
+                        # Regra: 3ª Etapa ou Adultos sem Batismo = Crítico
+                        if ("3ª" in str(cat['etapa']) or "ADULTO" in str(cat['etapa']).upper()) and cat['batizado_sn'] != "SIM":
+                            impedimentos_detalhados.append({
+                                "nome": cat['nome_completo'],
+                                "turma": cat['etapa'],
+                                "motivo": "Falta Batismo (Impedimento de Iniciação)"
+                            })
+                    
+                    # Contexto rico para a IA
+                    contexto_ia = {
+                        "total_ativos": len(df_cat[df_cat['status'] == 'ATIVO']),
+                        "impedimentos": impedimentos_detalhados,
+                        "realidade_matrimonial_pais": resumo_familias
+                    }
+                    
+                    analise_ia_sac = gerar_relatorio_sacramentos_ia(str(contexto_ia))
+                    
+                    # Gera o PDF v3 (Vou te passar a função do utils abaixo)
+                    st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v3(
+                        analise_detalhada_ia, # Dados das turmas
+                        impedimentos_detalhados, 
+                        analise_ia_sac
+                    )
+                    st.rerun()
 
     # --- ABAS DE REGISTRO E HISTÓRICO ---
     with tab_reg:
