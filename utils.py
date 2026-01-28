@@ -1028,6 +1028,95 @@ def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedim
     
     return finalizar_pdf(pdf)
 
+def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
+    """
+    VERSÃO 4.0 - DOSSIÊ DE SAÚDE DO ITINERÁRIO
+    Substitua a função antiga por esta para ativar os indicadores e marcadores.
+    """
+    pdf = FPDF()
+    AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
+    
+    # Faixas etárias para o Radar de Alerta
+    faixas = {
+        "PRÉ": (4, 6), "1ª ETAPA": (7, 8), "PRIMEIRA ETAPA": (7, 8),
+        "2ª ETAPA": (9, 10), "SEGUNDA ETAPA": (9, 10),
+        "3ª ETAPA": (11, 13), "TERCEIRA ETAPA": (11, 13),
+        "PERSEVERANÇA": (14, 15), "ADULTOS": (16, 99)
+    }
+
+    for _, t in df_turmas.iterrows():
+        nome_t = t['nome_turma']
+        etapa_base = str(t['etapa']).upper()
+        
+        # Filtra dados da turma
+        alunos_t = df_cat[df_cat['etapa'] == nome_t]
+        if alunos_t.empty: continue
+        
+        pdf.add_page()
+        adicionar_cabecalho_diocesano(pdf, f"DOSSIÊ PASTORAL: {nome_t}")
+
+        # --- 1. QUADRO DE INDICADORES (MÉTRICAS) ---
+        ativos = alunos_t[alunos_t['status'] == 'ATIVO']
+        pres_t = df_pres[df_pres['id_turma'] == nome_t] if not df_pres.empty else pd.DataFrame()
+        
+        # Cálculo de Frequência Real
+        freq_val = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
+        # Cálculo de Documentos Completos
+        docs_ok = len(ativos[ativos['doc_em_falta'].isin(['COMPLETO', 'NADA', 'OK', 'NADA FALTANDO'])])
+        
+        pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+        pdf.cell(190, 8, limpar_texto("1. INDICADORES DE SAÚDE DA TURMA"), ln=True, fill=True, align='C')
+        
+        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 9); pdf.set_fill_color(*CINZA_F)
+        pdf.cell(63, 8, limpar_texto(f"Frequência: {freq_val:.1f}%"), border=1, fill=True, align='C')
+        pdf.cell(63, 8, limpar_texto(f"Docs OK: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
+        pdf.cell(64, 8, limpar_texto(f"Catequistas: {str(t['catequista_responsavel'])[:25]}"), border=1, fill=True, align='C')
+        pdf.ln(12)
+
+        # --- 2. LISTA NOMINAL COM MARCADORES TÉCNICOS ---
+        pdf.set_font("helvetica", "B", 10); pdf.set_text_color(*AZUL_P)
+        pdf.cell(0, 7, limpar_texto("2. CAMINHADA NOMINAL (B=Batizado | E=Eucaristia | D=Doc. OK)"), ln=True)
+        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
+        
+        nomes_ativos = ativos.sort_values('nome_completo')
+        for i, (_, r) in enumerate(nomes_ativos.iterrows()):
+            # Lógica dos Marcadores (Sem Emojis)
+            m_bat = "(B)" if r['batizado_sn'] == "SIM" else "( )"
+            m_euc = "(E)" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "( )"
+            m_doc = "(D)" if r['doc_em_falta'] in ['COMPLETO', 'NADA', 'OK'] else "( )"
+            
+            texto_linha = f"{i+1:02d}. {r['nome_completo'][:45]} {m_bat} {m_euc} {m_doc}"
+            pdf.cell(0, 6, limpar_texto(texto_linha), border="B", ln=True)
+            
+            if pdf.get_y() > 250: pdf.add_page()
+
+        # --- 3. RADAR DE ATENÇÃO PASTORAL (ALERTAS) ---
+        pdf.ln(10)
+        pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+        pdf.cell(190, 8, limpar_texto("3. RADAR DE ATENÇÃO (AÇÕES NECESSÁRIAS)"), ln=True, fill=True, align='C')
+        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
+        
+        tem_alerta = False
+        min_i, max_i = faixas.get(etapa_base, (0, 99))
+        
+        for _, r in ativos.iterrows():
+            idade_c = calcular_idade(r['data_nascimento'])
+            # Alerta de Idade fora da faixa
+            if idade_c < min_i or idade_c > max_i:
+                pdf.cell(0, 6, limpar_texto(f" - ATENÇÃO IDADE: {r['nome_completo']} ({idade_c} anos) - Fora da faixa da {etapa_base}"), ln=True)
+                tem_alerta = True
+            
+            # Alerta de Faltas (Evasão)
+            faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
+            if faltas >= 3:
+                pdf.cell(0, 6, limpar_texto(f" - RISCO EVASÃO: {r['nome_completo']} possui {faltas} faltas acumuladas."), ln=True)
+                tem_alerta = True
+
+        if not tem_alerta:
+            pdf.cell(0, 8, limpar_texto("Nenhum alerta crítico detectado para esta turma."), ln=True)
+
+    return finalizar_pdf(pdf)
+
 # ==============================================================================
 # 9. UTILITÁRIOS PASTORAIS E CENSO (ANIVERSARIANTES E STATUS)
 # ==============================================================================
@@ -1297,3 +1386,5 @@ gerar_relatorio_pastoral_v2 = gerar_relatorio_pastoral_v3
 gerar_relatorio_sacramentos_tecnico_pdf = gerar_relatorio_sacramentos_tecnico_v2
 gerar_pdf_perfil_turma = lambda n, m, a, l: finalizar_pdf(FPDF())
 gerar_relatorio_local_turma_pdf = gerar_relatorio_local_turma_v2
+gerar_relatorio_pastoral_pdf = gerar_relatorio_pastoral_v4
+gerar_relatorio_pastoral_v3 = gerar_relatorio_pastoral_v4
