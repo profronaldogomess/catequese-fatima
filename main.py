@@ -156,54 +156,61 @@ if not st.session_state.logado and not st.session_state.get('logout_em_curso', F
                 st.session_state.session_id = new_sid
                 st.rerun()
 
-# B. Validação de Sessão Única
-if st.session_state.logado:
+# B. Validação de Sessão Única (COM TELA DE BLOQUEIO PERSISTENTE)
+if st.session_state.logado and st.session_state.usuario:
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
     if sid_no_db and sid_no_db != st.session_state.session_id:
-        st.warning("⚠️ Esta conta foi conectada em outro dispositivo.")
-        st.info("Sua sessão atual foi encerrada por segurança.")
+        # Em vez de apenas deslogar, criamos um estado de bloqueio
+        st.session_state.sessao_derrubada = True
         st.session_state.logado = False
+        try: cookie_manager.delete("fatima_auth_v2")
+        except: pass
+
+# NOVA SEÇÃO: TELA DE AVISO ESTÁTICA (Para a mensagem não sumir)
+if st.session_state.get('sessao_derrubada'):
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.error("🚨 **ACESSO ENCERRADO: CONEXÃO DUPLICADA**")
+    st.markdown(f"""
+        <div style='background-color:#fff5f5; padding:20px; border-radius:10px; border:2px solid #e03d11;'>
+            <h3 style='color:#e03d11; margin-top:0;'>Sessão Encerrada</h3>
+            <p style='color:#333;'>Identificamos que sua conta foi conectada em <b>outro dispositivo ou navegador</b>.</p>
+            <p style='color:#333;'>Por segurança, esta conexão foi finalizada.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    if st.button("VOLTAR PARA A TELA DE LOGIN", use_container_width=True):
+        st.session_state.sessao_derrubada = False
+        st.session_state.usuario = None
         st.session_state.session_id = None
-        cookie_manager.delete("fatima_auth_v2")
-        if st.button("RECONECTAR"): st.rerun()
-        st.stop()
+        st.rerun()
+    st.stop() # Trava o código aqui. Nada abaixo será executado.
 
 # C. Tela de Login Manual
 if not st.session_state.logado:
-    # Se ele chegou na tela de login, resetamos a flag de logout para permitir novos logins
     if st.session_state.get('logout_em_curso'):
         st.session_state.logout_em_curso = False
         
-    st.container()
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        col_conteudo = st.columns([0.2, 2, 0.2])[1]
-        with col_conteudo:
-            st.markdown("<br>", unsafe_allow_html=True)
-            mostrar_logo_login()
-            st.markdown(f"<h2 style='text-align: center; color: {cor_sidebar};'>Acesso Restrito</h2>", unsafe_allow_html=True)
-            
-            email_login = st.text_input("E-mail")
-            senha_login = st.text_input("Senha", type="password")
-            lembrar = st.checkbox("Manter conectado por 30 dias")
-            
-            st.write("") 
-            if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-                user = verificar_login(email_login, senha_login)
-                if user:
-                    new_sid = str(uuid.uuid4())
-                    if atualizar_session_id(email_login, new_sid):
-                        st.session_state.logado = True
-                        st.session_state.usuario = user
-                        st.session_state.session_id = new_sid
-                        if lembrar:
-                            cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
-                        st.success(f"Bem-vindo(a), {user['nome']}!")
-                        time.sleep(1)
-                        st.rerun()
-                    else: st.error("Erro ao validar sessão única.")
-                else: st.error("🚫 Acesso negado. Verifique suas credenciais.")
-    st.stop() 
+        st.markdown("<br>", unsafe_allow_html=True)
+        mostrar_logo_login()
+        st.markdown(f"<h2 style='text-align: center; color: {cor_sidebar};'>Acesso Restrito</h2>", unsafe_allow_html=True)
+        email_login = st.text_input("E-mail")
+        senha_login = st.text_input("Senha", type="password")
+        lembrar = st.checkbox("Manter conectado por 30 dias")
+        if st.button("ENTRAR NO SISTEMA", use_container_width=True):
+            user = verificar_login(email_login, senha_login)
+            if user:
+                new_sid = str(uuid.uuid4())
+                if atualizar_session_id(email_login, new_sid):
+                    st.session_state.logado = True
+                    st.session_state.usuario = user
+                    st.session_state.session_id = new_sid
+                    if lembrar:
+                        cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
+                    st.rerun()
+                else: st.error("Erro ao validar sessão única.")
+            else: st.error("🚫 Acesso negado.")
+    st.stop()
 
 # --- 8. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
 df_cat = ler_aba("catequizandos")
@@ -218,7 +225,11 @@ equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios
 # --- 9. BARRA LATERAL E DEFINIÇÃO DE MENU ---
 mostrar_logo_sidebar() 
 st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
-st.sidebar.success(f"Bem-vindo(a),\n**{st.session_state.usuario['nome']}**")
+
+# PROTEÇÃO: Só tenta ler o nome se o objeto usuario existir
+if st.session_state.logado and st.session_state.usuario:
+    nome_exibicao = st.session_state.usuario.get('nome', 'Usuário')
+    st.sidebar.success(f"Bem-vindo(a),\n**{nome_exibicao}**")
 
 # Alertas de Ambiente e Manutenção
 if IS_HOMOLOGACAO:
