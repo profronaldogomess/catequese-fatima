@@ -1030,8 +1030,8 @@ def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedim
 
 def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
     """
-    Versão 5.0: Dossiê de Auditoria de Itinerário.
-    Nomes completos (sem cortes), sem abreviações e alertas agrupados.
+    Versão 6.0: Dossiê de Auditoria Profissional.
+    Catequistas em linhas separadas, sem abreviações e nomes completos.
     """
     pdf = FPDF()
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
@@ -1052,43 +1052,60 @@ def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
         pdf.add_page()
         adicionar_cabecalho_diocesano(pdf, f"DOSSIÊ PASTORAL: {nome_t}")
 
-        # --- 1. QUADRO DE INDICADORES ---
+        # --- 1. QUADRO DE INDICADORES (COM ALTURA DINÂMICA) ---
         ativos = alunos_t[alunos_t['status'] == 'ATIVO']
         pres_t = df_pres[df_pres['id_turma'] == nome_t] if not df_pres.empty else pd.DataFrame()
         freq_val = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
         docs_ok = len(ativos[ativos['doc_em_falta'].isin(['COMPLETO', 'NADA', 'OK', 'NADA FALTANDO'])])
         
+        # Processamento dos Catequistas (Um por linha)
+        cats_list = [c.strip() for c in str(t['catequista_responsavel']).split(',') if c.strip()]
+        cats_text = "\n".join(cats_list)
+        num_cats = len(cats_list) if len(cats_list) > 0 else 1
+        
+        # Cálculo da altura baseada no número de catequistas
+        h_header = num_cats * 6 
+        if h_header < 12: h_header = 12 # Altura mínima para não ficar espremido
+
         pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
         pdf.cell(190, 8, limpar_texto("1. INDICADORES DE ENGAJAMENTO E REGULARIZAÇÃO"), ln=True, fill=True, align='C')
         
-        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 9); pdf.set_fill_color(*CINZA_F)
-        pdf.cell(63, 8, limpar_texto(f"Frequência Média: {freq_val:.1f}%"), border=1, fill=True, align='C')
-        pdf.cell(63, 8, limpar_texto(f"Documentação Regularizada: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
-        pdf.cell(64, 8, limpar_texto(f"Catequistas: {str(t['catequista_responsavel'])[:25]}"), border=1, fill=True, align='C')
-        pdf.ln(12)
+        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
+        
+        # Salva posição para alinhar as células
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        
+        # Coluna 1: Frequência
+        pdf.cell(63, h_header, limpar_texto(f"Frequência Média: {freq_val:.1f}%"), border=1, fill=True, align='C')
+        # Coluna 2: Documentação
+        pdf.cell(63, h_header, limpar_texto(f"Documentação Regularizada: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
+        # Coluna 3: Catequistas (Multi-linha)
+        pdf.set_xy(x_start + 126, y_start)
+        pdf.multi_cell(64, h_header/num_cats, limpar_texto(cats_text), border=1, align='C', fill=True)
+        
+        pdf.set_y(y_start + h_header + 5)
 
         # --- 2. TABELA NOMINAL DE CAMINHADA ---
         pdf.set_font("helvetica", "B", 10); pdf.set_text_color(*AZUL_P)
         pdf.cell(0, 7, limpar_texto("2. RELAÇÃO NOMINAL E SITUAÇÃO SACRAMENTAL"), ln=True)
         
-        # Cabeçalho da Tabela
         pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8)
         pdf.cell(10, 7, "Nº", border=1, fill=True, align='C')
         pdf.cell(90, 7, "Nome Completo do Catequizando", border=1, fill=True, align='C')
         pdf.cell(30, 7, "Batismo", border=1, fill=True, align='C')
         pdf.cell(30, 7, "1ª Eucaristia", border=1, fill=True, align='C')
-        pdf.cell(30, 7, "Documentos", border=1, fill=True, align='C')
+        pdf.cell(30, 7, "Documentação", border=1, fill=True, align='C')
         pdf.ln()
 
         pdf.set_font("helvetica", "", 8)
         nomes_ativos = ativos.sort_values('nome_completo')
         for i, (_, r) in enumerate(nomes_ativos.iterrows(), 1):
-            # Lógica de Status por extenso
             status_bat = "Sim" if r['batizado_sn'] == "SIM" else "Pendente"
             status_euc = "Sim" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "Pendente"
             status_doc = "Regular" if r['doc_em_falta'] in ['COMPLETO', 'NADA', 'OK'] else "Pendente"
             
-            # Altura dinâmica para o nome não cortar
+            # Altura dinâmica para o nome
             inicio_y = pdf.get_y()
             pdf.set_xy(20, inicio_y)
             pdf.multi_cell(90, 6, limpar_texto(r['nome_completo']), border=0, align='L')
@@ -1096,10 +1113,9 @@ def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
             altura_linha = fim_y - inicio_y
             if altura_linha < 7: altura_linha = 7
             
-            # Desenha as bordas e o restante da linha
             pdf.set_xy(10, inicio_y)
             pdf.cell(10, altura_linha, f"{i:02d}", border=1, align='C')
-            pdf.cell(90, altura_linha, "", border=1) # Espaço do nome já preenchido pelo multi_cell
+            pdf.cell(90, altura_linha, "", border=1) 
             pdf.cell(30, altura_linha, status_bat, border=1, align='C')
             pdf.cell(30, altura_linha, status_euc, border=1, align='C')
             pdf.cell(30, altura_linha, status_doc, border=1, align='C')
@@ -1114,9 +1130,7 @@ def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
         
         min_i, max_i = faixas.get(etapa_base, (0, 99))
-        acima_idade = []
-        abaixo_idade = []
-        risco_evasao = []
+        acima_idade, abaixo_idade, risco_evasao = [], [], []
 
         for _, r in ativos.iterrows():
             idade_c = calcular_idade(r['data_nascimento'])
@@ -1126,7 +1140,6 @@ def gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao):
             faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
             if faltas >= 3: risco_evasao.append(f"{r['nome_completo']} ({faltas} faltas)")
 
-        # Exibição Agrupada
         tem_alerta = False
         if acima_idade:
             pdf.set_font("helvetica", "B", 9); pdf.write(6, "Catequizandos acima da idade ideal: "); pdf.set_font("helvetica", "", 9)
