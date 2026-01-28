@@ -825,10 +825,14 @@ def gerar_relatorio_diocesano_v4(df_turmas, df_cat, df_usuarios):
 
     return finalizar_pdf(pdf)
 
+# ==============================================================================
+# 8. RELATÓRIO DIOCESANO V5 - INTELIGÊNCIA SACRAMENTAL (VERSÃO CONSOLIDADA)
+# ==============================================================================
+
 def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     """
     VERSÃO 5.0 - DEFINITIVA: Inteligência Sacramental Integrada.
-    Esta função contém TODA a lógica, sem chamar versões anteriores para evitar RecursionError.
+    ESTA FUNÇÃO É AUTOSSUFICIENTE. NÃO CHAMA V4 OU V2 PARA EVITAR RECURSÃO.
     """
     from database import ler_aba 
     
@@ -837,7 +841,7 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
     adicionar_cabecalho_diocesano(pdf, "RELATÓRIO ESTATÍSTICO E PASTORAL DIOCESANO")
 
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
-    # Uso do dt_module para evitar conflitos de AttributeError
+    # Uso do dt_module para evitar conflitos de AttributeError (Diretriz de Blindagem)
     ANO_ATUAL = dt_module.datetime.now().year 
 
     # --- 1. TABELAS DE ITINERÁRIOS (INFANTIL E ADULTO) ---
@@ -926,7 +930,6 @@ def gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios):
             pdf.cell(45, 6, f"{(qtd/total_e)*100:.1f}%", border=1, align='C'); pdf.ln()
 
     return finalizar_pdf(pdf)
-
 
 def gerar_relatorio_sacramentos_tecnico_v2(stats_gerais, analise_turmas, impedimentos_lista, analise_ia):
     """Gera o Dossiê de Regularização Canônica e Preparação Pastoral."""
