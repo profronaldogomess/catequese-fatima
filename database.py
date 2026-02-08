@@ -69,14 +69,15 @@ def verificar_status_sistema():
     return "ONLINE"
 
 def atualizar_session_id(email, novo_id):
-    """Grava o UUID na Coluna N (14) para liberar a Coluna M para dados."""
+    """Grava o UUID estritamente na Coluna 13 (M)."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
             celula = aba.find(str(email))
             if celula:
-                aba.update_cell(celula.row, 14, str(novo_id)) # Agora na 14
+                # Força a gravação na Coluna 13 (M)
+                aba.update_cell(celula.row, 13, str(novo_id))
                 st.cache_data.clear()
                 return True
         except: pass
@@ -208,16 +209,22 @@ def atualizar_turma(id_turma, novos_dados_lista):
     return False
 
 def atualizar_usuario(email_original, novos_dados_lista):
+    """Atualiza o perfil completo respeitando as 14 colunas (A até N)."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
             celula = aba.find(str(email_original))
             if celula:
-                # NOVO RIGOR: 13 COLUNAS (A até M)
-                aba.update(f"A{celula.row}:M{celula.row}", [novos_dados_lista])
-                st.cache_data.clear(); return True
-        except: return False
+                # Garante que a lista tenha exatamente 14 itens antes de gravar
+                while len(novos_dados_lista) < 14:
+                    novos_dados_lista.append("")
+                
+                # Atualiza o intervalo exato de A até N
+                aba.update(f"A{celula.row}:N{celula.row}", [novos_dados_lista[:14]], value_input_option='USER_ENTERED')
+                st.cache_data.clear()
+                return True
+        except: pass
     return False
 
 def salvar_formacao(dados_lista):
@@ -438,26 +445,19 @@ def marcar_tema_realizado_cronograma(turma, tema):
     return False
 
 def adicionar_novo_usuario(dados_usuario):
-    """Adiciona um novo usuário calculando a próxima linha real (Blindado contra sobrescrita)."""
+    """Adiciona novo usuário calculando a próxima linha real (A até N)."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
+            proxima_linha = len(aba.col_values(1)) + 1
             
-            # 1. Pega todos os dados da coluna A para saber quantas linhas já existem
-            coluna_nome = aba.col_values(1)
-            proxima_linha = len(coluna_nome) + 1
-            
-            # 2. Define o intervalo exato da nova linha (A até N)
-            # Exemplo: se tem 13 nomes, ele vai gravar na linha 14
-            intervalo = f"A{proxima_linha}:N{proxima_linha}"
-            
-            # 3. Grava os dados diretamente naquela linha específica
-            aba.update(intervalo, [dados_usuario], value_input_option='USER_ENTERED')
-            
+            # Garante 14 colunas
+            while len(dados_usuario) < 14:
+                dados_usuario.append("")
+                
+            aba.update(f"A{proxima_linha}:N{proxima_linha}", [dados_usuario[:14]], value_input_option='USER_ENTERED')
             st.cache_data.clear()
             return True
-        except Exception as e:
-            st.error(f"Erro técnico ao salvar no banco: {e}")
-            return False
+        except: return False
     return False
