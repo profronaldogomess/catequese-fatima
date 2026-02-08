@@ -2566,16 +2566,11 @@ elif menu == "👥 Gestão de Catequistas":
                             dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                            # Montagem da lista com 13 colunas (A-M)
                             dados_up = [
                                 ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
-                                ed_tel, str(ed_nasc),
-                                str(dt_ini) if has_ini else "N/A",
-                                str(dt_bat) if has_bat else "N/A",
-                                str(dt_euc) if has_euc else "N/A",
-                                str(dt_cri) if has_cri else "N/A",
-                                str(dt_min) if has_min else "N/A",
-                                ed_emergencia # Coluna M (13)
+                                ed_tel, str(ed_nasc), dt_ini, dt_bat, dt_euc, dt_cri, dt_min, 
+                                str(u.iloc[12]) if len(u) > 12 else "", # Coluna 13 (M) - SessionID
+                                ed_emergencia                          # Coluna 14 (N) - Emergência
                             ]
                             if atualizar_usuario(u['email'], dados_up):
                                 st.success("✅ Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
@@ -2612,7 +2607,9 @@ elif menu == "👥 Gestão de Catequistas":
                         # A:Nome, B:Email, C:Senha, D:Papel, E:Turmas, F:Tel, G:Nasc, H:Ini, I:Bat, J:Euc, K:Cri, L:Min, M:SID, N:Emerg
                         novo_user_lista = [
                             n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
-                            n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia
+                            n_tel, str(n_nasc), "", "", "", "", "", 
+                            "",             # Coluna 13 (M) - Vazio para o primeiro login
+                            n_emergencia    # Coluna 14 (N) - Emergência
                         ]
                         
                         from database import adicionar_novo_usuario
