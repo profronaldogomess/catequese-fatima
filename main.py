@@ -127,7 +127,7 @@ from utils import (
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
     analisar_turma_local, gerar_relatorio_sacramentos_ia, analisar_saude_familiar_ia, 
-    gerar_mensagem_reacolhida_ia, gerar_mensagem_cobranca_doc_ia
+    gerar_mensagem_reacolhida_ia, gerar_mensagem_cobranca_doc_ia, gerar_mensagem_atualizacao_cadastral_ia
 )
 
 # --- 6. FUNÇÕES AUXILIARES DE INTERFACE ---
@@ -2876,11 +2876,40 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 sac_series = df_cat['sac_pais'].str.split(', ').explode()
                 st.bar_chart(sac_series.value_counts())
 
-        # --- ABA 3: AGENDA GERAL ---
+# --- ABA 3: AGENDA GERAL (COM DOIS MÉTODOS DE IA) ---
         with tab_agenda:
-            busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):").upper()
+            busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):", key="txt_busca_fam").upper()
             df_age = df_cat[df_cat['nome_completo'].str.contains(busca_g, na=False) | df_cat['nome_mae'].str.contains(busca_g, na=False)] if busca_g else df_cat
-            st.dataframe(df_age[['nome_completo', 'etapa', 'contato_principal', 'nome_mae', 'tel_mae', 'nome_pai', 'tel_pai']], use_container_width=True, hide_index=True)
+            
+            for _, row in df_age.iterrows():
+                with st.container():
+                    # Estilização do Card
+                    st.markdown(f"""
+                        <div style='background-color:#f8f9f0; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
+                            <b style='color:#417b99;'>{row['nome_completo']}</b> | Turma: {row['etapa']}
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
+                    
+                    # MÉTODO 1: COBRAR DOCUMENTOS
+                    if c_btn1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}"):
+                        nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
+                        msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], nome_alvo)
+                        st.info(f"**Mensagem de Cobrança:**\n\n{msg}")
+                    
+                    # MÉTODO 2: ATUALIZAR FICHA
+                    if c_btn2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}"):
+                        nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
+                        resumo = f"Endereço: {row['endereco_completo']} | Saúde: {row['toma_medicamento_sn']}"
+                        msg = gerar_mensagem_atualizacao_cadastral_ia(row['nome_completo'], resumo, nome_alvo)
+                        st.info(f"**Mensagem de Atualização:**\n\n{msg}")
+                    
+                    # WHATSAPP DIRETO
+                    tel_limpo = limpar_wa(row['contato_principal'])
+                    if tel_limpo:
+                        c_btn3.markdown(f'''<a href="https://wa.me/{tel_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 Abrir WhatsApp</div></a>''', unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
 
         # --- ABA 4: RELATOS DE VISITAS ---
         with tab_visitas:
