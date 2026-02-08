@@ -436,3 +436,18 @@ def marcar_tema_realizado_cronograma(turma, tema):
                     return True
         except: pass
     return False
+
+def adicionar_novo_usuario(dados_usuario):
+    """Adiciona um novo usuário garantindo que seja em uma nova linha (sem sobrescrever)."""
+    planilha = conectar_google_sheets()
+    if planilha:
+        try:
+            aba = planilha.worksheet("usuarios")
+            # append_row com value_input_option='USER_ENTERED' é o método mais seguro
+            aba.append_row(dados_usuario, value_input_option='USER_ENTERED')
+            st.cache_data.clear() # Limpa o cache para o novo usuário aparecer na lista
+            return True
+        except Exception as e:
+            st.error(f"Erro técnico ao salvar no banco: {e}")
+            return False
+    return False
