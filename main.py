@@ -2892,18 +2892,24 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     
                     c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
                     
-                    # MÉTODO 1: COBRAR DOCUMENTOS
+                    # --- No botão de COBRAR DOCS ---
                     if c_btn1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}"):
                         nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
                         msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], nome_alvo)
-                        st.info(f"**Mensagem de Cobrança:**\n\n{msg}")
-                    
-                    # MÉTODO 2: ATUALIZAR FICHA
+                        
+                        # BLINDAGEM CONTRA ERRO DE MATH SYNTAX
+                        msg_segura = msg.replace("$", "\$") 
+                        st.info(f"**Mensagem de Cobrança:**\n\n{msg_segura}")
+
+                    # --- No botão de ATUALIZAR FICHA ---
                     if c_btn2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}"):
                         nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
                         resumo = f"Endereço: {row['endereco_completo']} | Saúde: {row['toma_medicamento_sn']}"
                         msg = gerar_mensagem_atualizacao_cadastral_ia(row['nome_completo'], resumo, nome_alvo)
-                        st.info(f"**Mensagem de Atualização:**\n\n{msg}")
+                        
+                        # BLINDAGEM CONTRA ERRO DE MATH SYNTAX
+                        msg_segura = msg.replace("$", "\$")
+                        st.info(f"**Mensagem de Atualização:**\n\n{msg_segura}")
                     
                     # WHATSAPP DIRETO
                     tel_limpo = limpar_wa(row['contato_principal'])
