@@ -438,14 +438,24 @@ def marcar_tema_realizado_cronograma(turma, tema):
     return False
 
 def adicionar_novo_usuario(dados_usuario):
-    """Adiciona um novo usuário garantindo que seja em uma nova linha (sem sobrescrever)."""
+    """Adiciona um novo usuário calculando a próxima linha real (Blindado contra sobrescrita)."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
-            # append_row com value_input_option='USER_ENTERED' é o método mais seguro
-            aba.append_row(dados_usuario, value_input_option='USER_ENTERED')
-            st.cache_data.clear() # Limpa o cache para o novo usuário aparecer na lista
+            
+            # 1. Pega todos os dados da coluna A para saber quantas linhas já existem
+            coluna_nome = aba.col_values(1)
+            proxima_linha = len(coluna_nome) + 1
+            
+            # 2. Define o intervalo exato da nova linha (A até N)
+            # Exemplo: se tem 13 nomes, ele vai gravar na linha 14
+            intervalo = f"A{proxima_linha}:N{proxima_linha}"
+            
+            # 3. Grava os dados diretamente naquela linha específica
+            aba.update(intervalo, [dados_usuario], value_input_option='USER_ENTERED')
+            
+            st.cache_data.clear()
             return True
         except Exception as e:
             st.error(f"Erro técnico ao salvar no banco: {e}")
