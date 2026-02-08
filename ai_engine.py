@@ -2,6 +2,7 @@
 # MISSÃO: Motor de Inteligência Artificial para Auditoria Pastoral e Familiar.
 from google import genai
 import streamlit as st
+from datetime import date
 
 MODELO_IA = "gemini-2.0-flash-lite-preview-02-05" 
 
@@ -122,52 +123,31 @@ def gerar_mensagem_reacolhida_ia(nome_catequizando, nome_turma):
     except:
         return f"Olá! Sentimos muito a sua falta em nosso último encontro da catequese. A turma {nome_turma} não é a mesma sem você! Esperamos te ver no próximo encontro para continuarmos nossa caminhada de fé. Deus abençoe!"
 
-def gerar_mensagem_cobranca_doc_ia(nome_catequizando, docs, turma, nome_contato, vinculo):
-    """Gera mensagem personalizada para o responsável ou para o próprio adulto."""
+def gerar_mensagem_cobranca_doc_ia(nome_catequizando, docs, nome_contato):
+    """Método 1: Foco em Documentos Faltantes com Ano Automático."""
+    ano_atual = date.today().year
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        
-        # Ajusta o tom da conversa baseado no vínculo
-        if vinculo == "Próprio":
-            tratamento = f"Olá, {nome_contato}"
-            referencia = "sua inscrição"
-        else:
-            tratamento = f"Olá, {nome_contato} ({vinculo} do catequizando {nome_catequizando})"
-            referencia = f"a inscrição do(a) {nome_catequizando}"
-
         prompt = f"""
-        Você é o Secretário da Catequese da Paróquia Nossa Senhora de Fátima.
-        Escreva uma mensagem curta e gentil para {tratamento}.
-        O objetivo é solicitar a entrega dos documentos: {docs}, que faltam para completar {referencia} na turma {turma}.
-        
-        REGRAS:
-        1. Use um tom acolhedor e paroquial.
-        2. Não use termos escolares (aula, curso). Use 'itinerário' ou 'caminhada'.
-        3. NÃO use asteriscos (**) para negrito.
-        4. Termine com 'Deus abençoe'.
+        Escreva uma mensagem gentil para {nome_contato} cobrando os documentos: {docs} 
+        do catequizando {nome_catequizando} para a pasta do ano de {ano_atual}. 
+        Tom paroquial, sem asteriscos.
         """
-        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
-        return f"Paz e Bem! Notamos que faltam documentos ({docs}) para {nome_catequizando}. Poderia nos entregar? Deus abençoe!"
+        return client.models.generate_content(model=MODELO_IA, contents=prompt).text
+    except: 
+        return f"Paz e Bem! Faltam documentos de {nome_catequizando} para {ano_atual}. Pode nos entregar?"
 
 def gerar_mensagem_atualizacao_cadastral_ia(nome_catequizando, dados_atuais, nome_contato):
-    """Gera mensagem para conferência e atualização de dados cadastrais."""
+    """Método 2: Foco em Conferência de Dados com Ano Automático."""
+    ano_atual = date.today().year
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         prompt = f"""
         Você é o Secretário da Catequese da Paróquia Nossa Senhora de Fátima.
-        Escreva uma mensagem curta e muito gentil para {nome_contato}, responsável por {nome_catequizando}.
-        O objetivo é pedir que confirmem se os dados abaixo estão corretos para o ano de 2025:
-        DADOS ATUAIS: {dados_atuais}
-        
-        REGRAS:
-        1. Tom acolhedor (Igreja Doméstica).
-        2. Peça para informarem se algo mudou (telefone, endereço ou saúde).
-        3. NÃO use asteriscos (**).
-        4. Termine com 'Deus abençoe'.
+        Escreva uma mensagem para {nome_contato} pedindo para confirmar se o endereço e saúde de {nome_catequizando} 
+        continuam os mesmos para a caminhada de {ano_atual}: {dados_atuais}. 
+        Tom de acolhida, sem asteriscos e termine com 'Deus abençoe'.
         """
-        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
-        return f"Paz e Bem, {nome_contato}! Estamos atualizando o cadastro de {nome_catequizando} para 2025. Os dados continuam os mesmos? Deus abençoe!"
+        return client.models.generate_content(model=MODELO_IA, contents=prompt).text
+    except: 
+        return f"Olá! Poderia confirmar os dados de {nome_catequizando} para {ano_atual}? Deus abençoe!"
