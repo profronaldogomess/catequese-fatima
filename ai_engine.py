@@ -151,3 +151,23 @@ def gerar_mensagem_cobranca_doc_ia(nome_catequizando, docs, turma, nome_contato,
     except:
         return f"Paz e Bem! Notamos que faltam documentos ({docs}) para {nome_catequizando}. Poderia nos entregar? Deus abençoe!"
 
+def gerar_mensagem_atualizacao_cadastral_ia(nome_catequizando, dados_atuais, nome_contato):
+    """Gera mensagem para conferência e atualização de dados cadastrais."""
+    try:
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        prompt = f"""
+        Você é o Secretário da Catequese da Paróquia Nossa Senhora de Fátima.
+        Escreva uma mensagem curta e muito gentil para {nome_contato}, responsável por {nome_catequizando}.
+        O objetivo é pedir que confirmem se os dados abaixo estão corretos para o ano de 2025:
+        DADOS ATUAIS: {dados_atuais}
+        
+        REGRAS:
+        1. Tom acolhedor (Igreja Doméstica).
+        2. Peça para informarem se algo mudou (telefone, endereço ou saúde).
+        3. NÃO use asteriscos (**).
+        4. Termine com 'Deus abençoe'.
+        """
+        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
+        return response.text
+    except:
+        return f"Paz e Bem, {nome_contato}! Estamos atualizando o cadastro de {nome_catequizando} para 2025. Os dados continuam os mesmos? Deus abençoe!"
