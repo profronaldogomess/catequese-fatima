@@ -2607,14 +2607,35 @@ elif menu == "👥 Gestão de Catequistas":
             
             if st.form_submit_button("🚀 CRIAR ACESSO E DEFINIR PERMISSÕES"):
                 if n_nome and n_email and n_senha:
-                    try:
-                        planilha = conectar_google_sheets()
-                        # Ordem das 14 colunas: 12 originais + 1 SessionID + 1 Emergência
-                        novo_user = [n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia]
-                        planilha.worksheet("usuarios").append_row(novo_user)
-                        st.success(f"✅ {n_nome} cadastrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Erro: {e}")
-                else: st.warning("⚠️ Preencha Nome, E-mail e Senha.")
+                    with st.spinner("Criando novo acesso..."):
+                        # Montagem rigorosa das 14 colunas (A até N)
+                        # A:Nome, B:Email, C:Senha, D:Papel, E:Turmas, F:Tel, G:Nasc, H:Ini, I:Bat, J:Euc, K:Cri, L:Min, M:SID, N:Emerg
+                        novo_user_lista = [
+                            n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
+                            n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia
+                        ]
+                        
+                        from database import adicionar_novo_usuario
+                        if adicionar_novo_usuario(novo_user_lista):
+                            # Sincronização com a aba turmas (Opcional, mas mantido)
+                            try:
+                                planilha = conectar_google_sheets()
+                                if n_turmas:
+                                    aba_t = planilha.worksheet("turmas")
+                                    for t_nome in n_turmas:
+                                        cel_t = aba_t.find(t_nome)
+                                        if cel_t:
+                                            v_atual = aba_t.cell(cel_t.row, 5).value or ""
+                                            nova_v = f"{v_atual}, {n_nome}".strip(", ")
+                                            aba_t.update_cell(cel_t.row, 5, nova_v)
+                            except: pass
+                            
+                            st.success(f"✅ {n_nome} cadastrado com sucesso!")
+                            st.balloons()
+                            time.sleep(1)
+                            st.rerun()
+                else:
+                    st.warning("⚠️ Nome, E-mail e Senha são obrigatórios.")
 
     with tab_formacao:
         st.subheader("🎓 Itinerário de Formação Continuada")
