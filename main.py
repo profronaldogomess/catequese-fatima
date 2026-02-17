@@ -1,2990 +1,3878 @@
-# ARQUIVO: main.py
-# VERSÃO: 3.2.0 - INTEGRAL (HOMOLOGAÇÃO + ADMIN BYPASS + SEGURANÇA)
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime, timedelta
-import datetime as dt_module # Adicionar esta linha
+from datetime import date, datetime
+import database as db
+import ai_engine as ai
+import utils as util
+from google.genai import types
 import time
-import os 
-import uuid
-from fpdf import FPDF
+import os
 import plotly.express as px
-import extra_streamlit_components as stx
+import exporter
+import re
+import ai_engine as ai
+from datetime import date, datetime, timedelta
 
-# --- CONFIGURAÇÃO DE AMBIENTE (MUDE PARA FALSE NA BRANCH MAIN) ---
-IS_HOMOLOGACAO = False 
 
-# 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(
-    page_title="Catequese Fátima" if not IS_HOMOLOGACAO else "LABORATÓRIO - FÁTIMA", 
-    layout="wide", 
-    page_icon="✝️",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
-# --- 2. INICIALIZAÇÃO DE COMPONENTES DE SEGURANÇA ---
-def get_cookie_manager():
-    return stx.CookieManager(key="catequese_fatima_cookies_v3_2")
+# --- CONTROLE DE TEMA (DESIGN PREMIUM CORRIGIDO) ---
+with st.sidebar:
+    tema_selecionado = st.radio("Visual do Sistema:", ["🌙 Dark Mode", "🌞 Light Mode"], horizontal=True)
 
-cookie_manager = get_cookie_manager()
+# --- DEFINIÇÃO DA PALETA DE CORES ---
+BRAND_BLUE = "#2962FF" 
+BRAND_NAVY = "#000B1A" 
 
-if 'logado' not in st.session_state:
-    st.session_state.logado = False
-if 'session_id' not in st.session_state:
-    st.session_state.session_id = None
+if tema_selecionado == "🌙 Dark Mode":
+    cor_fundo = BRAND_NAVY
+    cor_texto = "#FFFFFF"
+    cor_sidebar = "#001226"
+    cor_card_bg = "#001E3C"
+    cor_card_borda = "#003366"
+    cor_titulo_card = "#A0AEC0"
+else:
+    cor_fundo = "#F8FAFC"
+    cor_texto = "#1A202C"  # Texto bem escuro para o Light Mode
+    cor_sidebar = "#FFFFFF"
+    cor_card_bg = "#FFFFFF"
+    cor_card_borda = "#E2E8F0"
+    cor_titulo_card = "#4A5568"
 
-# --- 3. MOTOR DE MANUTENÇÃO COM BYPASS DE ADMINISTRADOR ---
-from database import verificar_status_sistema, verificar_login, atualizar_session_id, obter_session_id_db
-status_sistema = verificar_status_sistema()
-
-# Verificação de Identidade para Bypass
-is_admin = (st.session_state.logado and st.session_state.usuario.get('papel') == 'ADMIN')
-
-# Banner de Homologação (Aparece apenas na branch de teste)
-if IS_HOMOLOGACAO:
-    st.warning("🧪 **AMBIENTE DE TESTES (HOMOLOGAÇÃO)** - As alterações feitas aqui podem não ser definitivas.")
-
-# Lógica de Bloqueio de Manutenção
-if status_sistema == "MANUTENCAO" and not is_admin:
-    from utils import exibir_tela_manutencao
-    exibir_tela_manutencao()
-    
-    # Porta de entrada para o Administrador
-    with st.expander("🔐 Acesso Técnico (Administração)"):
-        with st.form("login_admin_manutencao"):
-            u_adm = st.text_input("E-mail Admin")
-            s_adm = st.text_input("Senha", type="password")
-            if st.form_submit_button("ENTRAR EM MODO MANUTENÇÃO"):
-                user = verificar_login(u_adm, s_adm)
-                if user and user.get('papel') == 'ADMIN':
-                    st.session_state.logado = True
-                    st.session_state.usuario = user
-                    st.session_state.session_id = str(uuid.uuid4())
-                    atualizar_session_id(u_adm, st.session_state.session_id)
-                    st.rerun()
-                else:
-                    st.error("Apenas Administradores podem acessar durante a manutenção.")
-    st.stop()
-
-# --- VARIÁVEIS GLOBAIS DE PADRONIZAÇÃO ---
-MIN_DATA = date(1900, 1, 1)
-MAX_DATA = date(2030, 12, 31)
-
-# --- 4. INJEÇÃO DE CSS (ESTILIZAÇÃO DIFERENCIADA PARA HOMOLOGAÇÃO) ---
-cor_sidebar = "#417b99" if not IS_HOMOLOGACAO else "#5d4037" # Azul para oficial, Marrom para teste
-
+# --- INJEÇÃO DE CSS DINÂMICO (CORREÇÃO DE CONTRASTE) ---
 st.markdown(f"""
     <style>
-    .stApp {{ background-color: #ffffff; color: #333333; }}
-    .stTextInput input, .stDateInput input, .stNumberInput input, .stTextArea textarea {{
-        background-color: #f0f2f6 !important; color: #000000 !important; border: 1px solid #ccc;
-    }}
-    div[data-baseweb="select"] > div {{ background-color: #f0f2f6 !important; color: #000000 !important; }}
-    input, textarea, select {{ color: black !important; -webkit-text-fill-color: black !important; }}
-    [data-testid="stSidebar"] {{ background-color: {cor_sidebar}; }}
-    [data-testid="stSidebar"] * {{ color: white !important; }}
-    h1, h2, h3, h4 {{ color: {cor_sidebar} !important; font-family: 'Helvetica', sans-serif; }}
-    label, .stMarkdown p {{ color: {cor_sidebar} !important; font-weight: 600; }}
-    p, li {{ color: #333333; }}
-    div.stButton > button {{
-        background-color: #e03d11; color: white !important; border: none;
-        font-weight: bold; border-radius: 8px; padding: 10px 20px;
-    }}
-    div.stButton > button:hover {{ background-color: #c0320d; color: white !important; }}
-    [data-testid="stMetricValue"] {{ color: #e03d11 !important; }}
-    .block-container {{ padding-top: 2rem; padding-bottom: 5rem; }}
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        * {{ font-family: 'Inter', sans-serif; }}
+
+        .stApp {{
+            background-color: {cor_fundo} !important;
+            color: {cor_texto} !important;
+        }}
+
+        /* FORÇAR COR DO TEXTO EM TODO O SISTEMA */
+        p, span, label, h1, h2, h3, .stMarkdown {{
+            color: {cor_texto} !important;
+        }}
+        
+        /* SIDEBAR */
+        [data-testid="stSidebar"] {{
+            background-color: {cor_sidebar} !important;
+            border-right: 1px solid {cor_card_borda};
+        }}
+        
+        /* CORRIGIR TEXTO DOS BOTÕES DE RÁDIO (NAVEGAÇÃO) */
+        div[role="radiogroup"] label p {{
+            color: {cor_texto} !important;
+            font-weight: 500;
+        }}
+
+        /* BOTÃO SELECIONADO (AZUL DA LOGO) */
+        div[role="radiogroup"] label[aria-checked="true"] {{
+            background-color: {BRAND_BLUE}22 !important;
+            border: 1px solid {BRAND_BLUE} !important;
+        }}
+        
+        div[role="radiogroup"] label[aria-checked="true"] p {{
+            color: {BRAND_BLUE} !important;
+            font-weight: 700;
+        }}
+
+        /* CARDS DE MÉTRICAS */
+        div[data-testid="stMetric"] {{
+            background-color: {cor_card_bg} !important;
+            border: 1px solid {cor_card_borda} !important;
+            border-radius: 16px;
+        }}
+        
+        div[data-testid="stMetricLabel"] p {{
+            color: {cor_titulo_card} !important;
+        }}
+        
+        div[data-testid="stMetricValue"] div {{
+            color: {BRAND_BLUE} !important;
+        }}
+
+        /* INPUTS E SELECTBOXES */
+        .stSelectbox div[data-baseweb="select"] {{
+            background-color: {cor_card_bg} !important;
+            color: {cor_texto} !important;
+        }}
+        
+        /* CORRIGIR TEXTO DENTRO DO SELECTBOX */
+        div[data-testid="stSelectbox"] p {{
+            color: {cor_texto} !important;
+        }}
+
+        /* BOTÕES DE AÇÃO */
+        .stButton button {{
+            background-color: {BRAND_BLUE} !important;
+            color: white !important;
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+        }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. IMPORTAÇÕES DE MOTORES INTERNOS (INTEGRIDADE TOTAL) ---
-from database import (
-    ler_aba, salvar_lote_catequizandos, atualizar_catequizando, 
-    conectar_google_sheets, atualizar_turma, salvar_presencas, 
-    salvar_encontro, salvar_tema_cronograma, 
-    buscar_encontro_por_data, atualizar_usuario, salvar_formacao, 
-    salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
-    registrar_evento_sacramento_completo,salvar_reuniao_pais,salvar_presenca_reuniao_pais,atualizar_reuniao_pais
-)
-from utils import (
-    calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
-    obter_aniversariantes_mes, converter_para_data, verificar_status_ministerial, 
-    obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
-    gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, 
-    gerar_fichas_turma_completa, gerar_relatorio_diocesano_v4,
-    gerar_relatorio_pastoral_v3, gerar_relatorio_sacramentos_tecnico_v2,
-    formatar_data_br, gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
-    gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
-    gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
-    processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
-     gerar_lista_assinatura_reuniao_pdf,gerar_relatorio_diocesano_v5, gerar_relatorio_pastoral_v4,
-    gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, gerar_relatorio_local_turma_v3,
-    gerar_relatorio_sacramentos_tecnico_v3,
-    gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
-    gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
-    gerar_relatorio_local_turma_pdf
-)
-from ai_engine import (
-    gerar_analise_pastoral, gerar_mensagem_whatsapp, 
-    analisar_turma_local, gerar_relatorio_sacramentos_ia, analisar_saude_familiar_ia, 
-    gerar_mensagem_reacolhida_ia, gerar_mensagem_cobranca_doc_ia, gerar_mensagem_atualizacao_cadastral_ia
-)
+# --- CARREGAMENTO ---
+wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
+# --- SIDEBAR COM LOGOTIPO ---
+with st.sidebar:
+    try:
+        col_esq, col_meio, col_dir = st.columns([1, 2, 1])
+        with col_meio:
+            st.image("logo.png", width=100) 
+    except:
+        st.markdown("### 🏫 **SOSA**")
+    
+    st.markdown("<h3 style='text-align: center; margin-top: -15px; font-size: 14px;'>Maestro V14</h3>", unsafe_allow_html=True)
+    st.markdown("---")
 
-# --- 6. FUNÇÕES AUXILIARES DE INTERFACE ---
-def mostrar_logo_sidebar():
-    if os.path.exists("logo.png"):
-        c1, c2, c3 = st.sidebar.columns([1, 3, 1])
-        with c2: st.image("logo.png", width=130)
-    else: st.sidebar.title("Catequese Fátima")
-
-def mostrar_logo_login():
-    if os.path.exists("logo.png"): st.image("logo.png", width=150)
-    else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
-
-# --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
-
-# A. Auto-Login via Cookies (COM BLOQUEIO DE REENTRADA)
-if not st.session_state.logado and not st.session_state.get('logout_em_curso', False):
-    auth_cookie = cookie_manager.get("fatima_auth_v2")
-    if auth_cookie:
-        user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
-        if user:
-            new_sid = str(uuid.uuid4())
-            if atualizar_session_id(user['email'], new_sid):
-                st.session_state.logado = True
-                st.session_state.usuario = user
-                st.session_state.session_id = new_sid
-                st.rerun()
-
-# B. Validação de Sessão Única (COM TELA DE BLOQUEIO PERSISTENTE)
-if st.session_state.logado and st.session_state.usuario:
-    sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
-    if sid_no_db and sid_no_db != st.session_state.session_id:
-        # Em vez de apenas deslogar, criamos um estado de bloqueio
-        st.session_state.sessao_derrubada = True
-        st.session_state.logado = False
-        try: cookie_manager.delete("fatima_auth_v2")
-        except: pass
-
-# NOVA SEÇÃO: TELA DE AVISO ESTÁTICA (Para a mensagem não sumir)
-if st.session_state.get('sessao_derrubada'):
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.error("🚨 **ACESSO ENCERRADO: CONEXÃO DUPLICADA**")
-    st.markdown(f"""
-        <div style='background-color:#fff5f5; padding:20px; border-radius:10px; border:2px solid #e03d11;'>
-            <h3 style='color:#e03d11; margin-top:0;'>Sessão Encerrada</h3>
-            <p style='color:#333;'>Identificamos que sua conta foi conectada em <b>outro dispositivo ou navegador</b>.</p>
-            <p style='color:#333;'>Por segurança, esta conexão foi finalizada.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    if st.button("VOLTAR PARA A TELA DE LOGIN", use_container_width=True):
-        st.session_state.sessao_derrubada = False
-        st.session_state.usuario = None
-        st.session_state.session_id = None
+    if st.sidebar.button("🚨 Resetar Espaço do Drive"):
+        msg = db.limpar_todo_drive_da_conta_servico()
+        st.sidebar.success(msg)
+    
+    if st.button("🔄 Sincronizar Dados"):
+        st.cache_data.clear()
         st.rerun()
-    st.stop() # Trava o código aqui. Nada abaixo será executado.
+    
+def prensa_hidraulica_texto(texto, label):
+    # Remove o rótulo se a IA insistir em escrever, independente de maiúscula/minúscula ou acento
+    limpo = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "")
+    # Remove os dois pontos iniciais que costumam sobrar
+    if limpo.startswith(":") or limpo.startswith(" :"):
+        limpo = limpo.split(":", 1)[-1]
+    return limpo.strip()
 
-# C. Tela de Login Manual
-if not st.session_state.logado:
-    if st.session_state.get('logout_em_curso'):
-        st.session_state.logout_em_curso = False
+# MENU DE NAVEGAÇÃO
+menu = st.sidebar.radio("Navegação:", [
+    "📅 Planejamento (Ponto ID)",
+    "🧪 Criador de Aulas",
+    "📝 Central de Avaliações",
+    "📸 Scanner de Gabaritos",
+    "📝 Diário de Bordo Rápido",
+    "👤 Biografia do Estudante",
+    "📊 Painel de Notas & Vistos",
+    "📈 Boletim Anual & Conselho",
+    "👥 Gestão da Turma",
+    "📚 Base de Conhecimento",
+    "♿ Relatórios PEI / Perfil IA"
+])
+
+
+# ==============================================================================
+# FUNÇÃO AUXILIAR DE VISUALIZAÇÃO HÍBRIDA (VERSÃO V25.11 - CONTEXTUAL)
+# ==============================================================================
+# --- FUNÇÃO DE VISUALIZAÇÃO V25.85 ---
+def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
+    """
+    Versão V25.90: Híbrida e Blindada. 
+    Detecta automaticamente se é PLANEJAMENTO ou AULA.
+    """
+    if info_aula is None: info_aula = {}
+    
+    # Extração de Metadados
+    f_aula = info_aula.get("aula", "Aula Geral")
+    f_ano = info_aula.get("ano", "6")
+    f_semana = info_aula.get("semana", "Semana Geral")
+    f_trimestre = info_aula.get("trimestre", "I Trimestre")
+    f_categoria = f"{f_ano}ano" # Formato esperado pelo Apps Script
+
+    # --- LÓGICA DE DETECÇÃO DE CONTEÚDO ---
+    if dados_plano:
+        # MODO PLANEJAMENTO: Usa as tags MARKER_
+        ed_met = ai.extrair_tag(texto_raw, "METODOLOGIA")
+        ed_obj = ai.extrair_tag(texto_raw, "OBJETIVOS_ENSINO")
+        ed_ava = ai.extrair_tag(texto_raw, "AVALIACAO")
+        ed_pei_plan = ai.extrair_tag(texto_raw, "ADAPTACAO_PEI")
         
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        mostrar_logo_login()
-        st.markdown(f"<h2 style='text-align: center; color: {cor_sidebar};'>Acesso Restrito</h2>", unsafe_allow_html=True)
-        email_login = st.text_input("E-mail")
-        senha_login = st.text_input("Senha", type="password")
-        lembrar = st.checkbox("Manter conectado por 30 dias")
-        if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-            user = verificar_login(email_login, senha_login)
-            if user:
-                new_sid = str(uuid.uuid4())
-                if atualizar_session_id(email_login, new_sid):
-                    st.session_state.logado = True
-                    st.session_state.usuario = user
-                    st.session_state.session_id = new_sid
-                    if lembrar:
-                        cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
+        t1, t2, t3, t4, t_exp = st.tabs(["🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR/SYNC"])
+        
+        with t1: st.text_area("Roteiro das Aulas:", ed_met, height=400, key=f"{key_prefix}_met")
+        with t2: st.text_area("Objetivos Curriculares:", ed_obj, height=400, key=f"{key_prefix}_obj")
+        with t3: st.text_area("Critérios de Avaliação:", ed_ava, height=200, key=f"{key_prefix}_ava")
+        with t4: st.text_area("Adaptação PEI (Plano):", ed_pei_plan, height=300, key=f"{key_prefix}_pei_plan")
+        
+        modo_sync = "PLANEJAMENTO"
+        nome_base = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
+        # No planejamento, o 'ed_prof' para o banco será o próprio texto do plano
+        ed_prof_para_banco = texto_raw 
+
+    else:
+        # MODO CRIADOR DE AULAS: Usa as tags [PROFESSOR] e [ALUNO]
+        ed_prof = ai.extrair_tag(texto_raw, "PROFESSOR")
+        ed_alu = ai.extrair_tag(texto_raw, "ALUNO")
+        
+        t1, t2, t3, t4, t5, t_exp = st.tabs(["✍️ Lousa", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR/SYNC"])
+        
+        with t1: st.text_area("Esquema de Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa")
+        with t2: st.text_area("Folha do Aluno:", ed_alu, height=400, key=f"{key_prefix}_folha")
+        with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
+        with t4: st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
+        
+        with t5:
+            st.subheader("♿ Adaptação PEI (Material)")
+            if "lab_pei" not in st.session_state:
+                if st.button("♿ GERAR ADAPTAÇÃO PEI", use_container_width=True, key=f"{key_prefix}_gen_pei"):
+                    st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE: {ed_alu}")
                     st.rerun()
-                else: st.error("Erro ao validar sessão única.")
-            else: st.error("🚫 Acesso negado.")
-    st.stop()
-
-# --- 8. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
-df_cat = ler_aba("catequizandos")
-df_turmas = ler_aba("turmas")
-df_pres = ler_aba("presencas")
-df_usuarios = ler_aba("usuarios") 
-df_sac_eventos = ler_aba("sacramentos_eventos")
-df_pres_reuniao = ler_aba("presenca_reuniao") 
-
-equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
-
-# --- 9. BARRA LATERAL E DEFINIÇÃO DE MENU ---
-mostrar_logo_sidebar() 
-st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
-
-# PROTEÇÃO: Só tenta ler o nome se o objeto usuario existir
-if st.session_state.logado and st.session_state.usuario:
-    nome_exibicao = st.session_state.usuario.get('nome', 'Usuário')
-    st.sidebar.success(f"Bem-vindo(a),\n**{nome_exibicao}**")
-
-# Alertas de Ambiente e Manutenção
-if IS_HOMOLOGACAO:
-    st.sidebar.info("🧪 MODO HOMOLOGAÇÃO")
-if status_sistema == "MANUTENCAO":
-    st.sidebar.warning("⚠️ MANUTENÇÃO ATIVA")
-
-st.sidebar.divider()
-
-if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_99x"):
-    st.cache_data.clear(); st.toast("Dados atualizados!", icon="✅"); time.sleep(1); st.rerun()
-
-if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_99x"):
-    # 1. Ativa flag para impedir que o auto-login te conecte de volta no próximo ciclo
-    st.session_state.logout_em_curso = True
-    
-    # 2. Deleta o cookie no navegador
-    cookie_manager.delete("fatima_auth_v2")
-    
-    # 3. Limpa o estado da sessão atual
-    st.session_state.logado = False
-    st.session_state.session_id = None
-    st.session_state.usuario = None
-    
-    # 4. Força o reinício para a tela de login
-    st.rerun()
-
-papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
-turma_do_catequista = st.session_state.usuario.get('turma_vinculada', 'TODAS')
-eh_gestor = papel_usuario in ["COORDENADOR", "ADMIN"]
-
-if eh_gestor:
-    menu = st.sidebar.radio("MENU PRINCIPAL", [
-        "🏠 Início / Dashboard", "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
-        "📖 Diário de Encontros", "📝 Cadastrar Catequizando", "👤 Perfil Individual", 
-        "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada"
-    ])
-else:
-    menu = st.sidebar.radio("MENU DO CATEQUISTA", [
-        "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", "📖 Diário de Encontros", 
-        "✅ Fazer Chamada", "📝 Cadastrar Catequizando"
-    ])
-
-# ==============================================================================
-# PÁGINA 1: DASHBOARD DE INTELIGÊNCIA PASTORAL (VERSÃO ATIVA 2026)
-# ==============================================================================
-if menu == "🏠 Início / Dashboard":
-    st.title("📊 Radar de Gestão Pastoral")
-
-    # --- 1. MURAL DE CELEBRAÇÃO PAROQUIAL (ANIVERSARIANTES) ---
-    st.markdown("### 🎂 Mural de Celebração")
-    
-    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
-    aniversariantes_agora = obter_aniversariantes_hoje(df_cat, df_usuarios)
-    df_niver_mes_geral = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
-
-    # 1.1 DESTAQUE DE HOJE (CATEQUISTAS E CATEQUIZANDOS)
-    if aniversariantes_agora:
-        for item in aniversariantes_agora:
-            partes = item.split(" | ")
-            papel = partes[1]
-            nome_completo = partes[2]
-            icone = "🛡️" if papel == "CATEQUISTA" else "😇"
-            
-            st.balloons()
-            st.success(f"🌟 **HOJE É ANIVERSÁRIO!** {icone} {papel}: **{nome_completo}**")
-            
-            if st.button(f"🎨 Gerar Card de Parabéns para {nome_completo.split()[0]}", key=f"btn_hoje_dash_{nome_completo}"):
-                card_img = gerar_card_aniversario(item, tipo="DIA")
-                if card_img:
-                    st.image(card_img, use_container_width=True)
-                    st.download_button("📥 Baixar Card", card_img, f"Parabens_Hoje_{nome_completo}.png", "image/png")
-    
-    # 1.2 MURAL DO MÊS (TODA A PARÓQUIA)
-    with st.expander("📅 Ver todos os aniversariantes do mês (Paróquia)", expanded=not aniversariantes_agora):
-        if not df_niver_mes_geral.empty:
-            # Botão para Card Coletivo Paroquial
-            if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (GERAL)", use_container_width=True):
-                lista_para_card = [f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_mes_geral.iterrows()]
-                card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
-                if card_coletivo:
-                    st.image(card_coletivo, caption="Aniversariantes do Mês - Paróquia de Fátima")
-                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, "Aniversariantes_do_Mes_Geral.png", "image/png")
-            
-            st.write("")
-            st.markdown("---")
-            
-            # LISTA COM CARDS INDIVIDUAIS (4 colunas para caber mais gente)
-            cols_dash = st.columns(4)
-            for i, (_, niver) in enumerate(df_niver_mes_geral.iterrows()):
-                with cols_dash[i % 4]:
-                    icone_m = "🛡️" if niver['tipo'] == 'CATEQUISTA' else "🎁"
-                    st.markdown(f"""
-                        <div style='background-color:#f0f2f6; padding:8px; border-radius:10px; border-left:4px solid #417b99; margin-bottom:5px; min-height:80px;'>
-                            <small style='color:#666;'>Dia {int(niver['dia'])}</small><br>
-                            <b style='font-size:13px;'>{icone_m} {niver['nome'].split()[0]} {niver['nome'].split()[-1] if len(niver['nome'].split()) > 1 else ''}</b>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    if st.button(f"🎨 Card", key=f"btn_indiv_dash_{i}"):
-                        dados_envio = f"{int(niver['dia'])} | {niver['tipo']} | {niver['nome']}"
-                        card_indiv = gerar_card_aniversario(dados_envio, tipo="DIA")
-                        if card_indiv:
-                            st.image(card_indiv, use_container_width=True)
-                            st.download_button(f"📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_dash_{i}")
-        else:
-            st.write("Nenhum aniversariante este mês nos registros.")
-
-    st.divider()
-
-    # --- 2. RADAR DE URGÊNCIAS (A INTELIGÊNCIA ATIVA) ---
-    st.subheader("🚩 Radar de Atenção Imediata")
-    r1, r2, r3, r4 = st.columns(4)
-
-    # Lógica de Cálculo das Urgências
-    df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
-    
-    # Urgência 1: Documentação
-    pend_doc = len(df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
-    r1.metric("📄 Doc. Pendente", pend_doc, delta="Ação Necessária", delta_color="inverse")
-
-    # Urgência 2: Evasão (Baseado em faltas)
-    risco_c, _ = processar_alertas_evasao(df_pres)
-    r2.metric("🚩 Risco de Evasão", len(risco_c), delta="Visita Urgente", delta_color="inverse")
-
-    # Urgência 3: Sacramentos (Crianças sem Batismo)
-    sem_batismo = len(df_ativos[df_ativos['batizado_sn'] == 'NÃO'])
-    r3.metric("🕊️ Sem Batismo", sem_batismo, delta="Regularizar", delta_color="inverse")
-
-    # Urgência 4: Família (Situação Matrimonial)
-    fam_reg = len(df_cat[df_cat['est_civil_pais'].isin(['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)'])])
-    r4.metric("🏠 Famílias Irregulares", fam_reg, delta="Pastoral Familiar", delta_color="inverse")
-
-    st.divider()
-
-    # --- 3. CENSO VISUAL E DESEMPENHO ---
-    tab_censo, tab_equipe, tab_evasao = st.tabs(["📈 Censo Sacramental", "👥 Saúde da Equipe", "🚩 Cuidado e Evasão"])
-
-    with tab_censo:
-        c1, c2 = st.columns([1, 1])
-        
-        with c1:
-            st.markdown("#### 🕊️ Cobertura de Batismo (Ativos)")
-            if not df_ativos.empty:
-                bat_sim = len(df_ativos[df_ativos['batizado_sn'] == 'SIM'])
-                bat_nao = len(df_ativos[df_ativos['batizado_sn'] == 'NÃO'])
-                fig_bat = px.pie(values=[bat_sim, bat_nao], names=['Batizados', 'Não Batizados'], 
-                                 color_discrete_sequence=['#417b99', '#e03d11'], hole=0.5)
-                fig_bat.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250)
-                st.plotly_chart(fig_bat, use_container_width=True)
-            else: st.info("Sem dados ativos.")
-
-        with c2:
-            st.markdown("#### 🍞 1ª Eucaristia (Ativos)")
-            if not df_ativos.empty:
-                euc_sim = df_ativos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False).sum()
-                euc_nao = len(df_ativos) - euc_sim
-                fig_euc = px.pie(values=[euc_sim, euc_nao], names=['Já Receberam', 'Em Preparação'], 
-                                 color_discrete_sequence=['#2e7d32', '#ffa000'], hole=0.5)
-                fig_euc.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250)
-                st.plotly_chart(fig_euc, use_container_width=True)
-            else: st.info("Sem dados ativos.")
-
-        st.markdown("#### 📊 Frequência por Turma (%)")
-        if not df_pres.empty:
-            df_pres['status_num'] = df_pres['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
-            freq_turma = df_pres.groupby('id_turma')['status_num'].mean() * 100
-            freq_turma = freq_turma.reset_index().rename(columns={'status_num': 'Freq %', 'id_turma': 'Turma'})
-            fig_freq = px.bar(freq_turma, x='Turma', y='Freq %', color='Freq %', color_continuous_scale='RdYlGn')
-            fig_freq.update_layout(height=300, margin=dict(t=20, b=20))
-            st.plotly_chart(fig_freq, use_container_width=True)
-
-    with tab_equipe:
-        st.markdown("#### 🛡️ Maturidade Ministerial da Equipe")
-        if not equipe_tecnica.empty:
-            col_e1, col_e2 = st.columns(2)
-            
-            # Cálculo de Maturidade
-            status_list = []
-            for _, row in equipe_tecnica.iterrows():
-                status, _ = verificar_status_ministerial(row.get('data_inicio_catequese', ''), row.get('data_batismo', ''), 
-                                                        row.get('data_eucaristia', ''), row.get('data_crisma', ''), 
-                                                        row.get('data_ministerio', ''))
-                status_list.append(status)
-            
-            df_maturidade = pd.DataFrame({"Status": status_list})
-            fig_mat = px.bar(df_maturidade['Status'].value_counts().reset_index(), x='Status', y='count', 
-                             color='Status', color_discrete_map={'MINISTRO': '#2e7d32', 'APTO': '#417b99', 'EM_CAMINHADA': '#ffa000'})
-            col_e1.plotly_chart(fig_mat, use_container_width=True)
-            
-            with col_e2:
-                st.write("**Resumo da Equipe:**")
-                st.write(f"✅ Ministros: {status_list.count('MINISTRO')}")
-                st.write(f"🎓 Aptos: {status_list.count('APTO')}")
-                st.write(f"⏳ Em Formação: {status_list.count('EM_CAMINHADA')}")
-                if st.button("🗂️ Gerar Dossiê da Equipe", use_container_width=True):
-                    st.session_state.pdf_equipe = gerar_fichas_catequistas_lote(equipe_tecnica, ler_aba("presenca_formacao"), ler_aba("formacoes"))
-                if "pdf_equipe" in st.session_state:
-                    st.download_button("📥 Baixar Dossiê", st.session_state.pdf_equipe, "Equipe.pdf", use_container_width=True)
-
-    with tab_evasao:
-        st.subheader("🚩 Diagnóstico de Interrupção de Itinerário")
-        df_fora = df_cat[df_cat['status'].isin(['DESISTENTE', 'TRANSFERIDO', 'INATIVO'])]
-        if df_fora.empty:
-            st.success("Glória a Deus! Não há registros de evasão no momento.")
-        else:
-            st.dataframe(df_fora[['nome_completo', 'status', 'etapa', 'contato_principal']], use_container_width=True, hide_index=True)
-            if st.button("📄 Gerar Relatório de Evasão (PDF)", use_container_width=True):
-                st.session_state.pdf_evasao = gerar_relatorio_evasao_pdf(df_fora)
-            if "pdf_evasao" in st.session_state:
-                st.download_button("📥 Baixar Diagnóstico", st.session_state.pdf_evasao, "Evasao.pdf", use_container_width=True)
-
-    st.divider()
-
-    # --- 4. CENTRAL DE DOCUMENTAÇÃO (ESTAÇÃO DE IMPRESSÃO) ---
-    st.subheader("🏛️ Estação de Impressão e Auditoria")
-    
-    col_doc_sec, col_doc_past, col_doc_lote = st.columns(3)
-    
-    with col_doc_sec:
-        st.markdown("**🏛️ Secretaria**")
-        if st.button("🏛️ Relatório Diocesano v5", use_container_width=True):
-            st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios)
-        if "pdf_diocesano" in st.session_state:
-            st.download_button("📥 Baixar Diocesano", st.session_state.pdf_diocesano, "Diocesano.pdf", use_container_width=True)
-
-    with col_doc_past:
-        st.markdown("**📋 Pastoral**")
-        if st.button("📋 Relatório Pastoral v4", use_container_width=True):
-            st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao)
-        if "pdf_pastoral" in st.session_state:
-            st.download_button("📥 Baixar Pastoral", st.session_state.pdf_pastoral, "Pastoral.pdf", use_container_width=True)
-
-    with col_doc_lote:
-        st.markdown("**📦 Processamento em Lote**")
-        if st.button("🗂️ Todas as Fichas (Lote)", use_container_width=True):
-            st.session_state.pdf_lote_f = gerar_fichas_paroquia_total(df_cat)
-        if "pdf_lote_f" in st.session_state:
-            st.download_button("📥 Baixar Fichas", st.session_state.pdf_lote_f, "Fichas_Lote.pdf", use_container_width=True)
-
-# ==============================================================================
-# PÁGINA: 📚 MINHA TURMA (COCKPIT DO CATEQUISTA 2026 - FOCO EM PESSOAS)
-# ==============================================================================
-elif menu == "📚 Minha Turma":
-    # 1. IDENTIFICAÇÃO DE PERMISSÕES
-    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    if eh_gestor or vinculo_raw == "TODAS":
-        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-    else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
-
-    if not turmas_permitidas:
-        st.warning("⚠️ Nenhuma turma vinculada ao seu perfil."); st.stop()
-
-    if len(turmas_permitidas) > 1 or eh_gestor:
-        turma_ativa = st.selectbox("🔍 Selecione a Turma para Visualizar:", turmas_permitidas, key="sel_t_minha")
-    else:
-        turma_ativa = turmas_permitidas[0]
-
-    st.title(f"📚 Painel: {turma_ativa}")
-
-    # 2. CARREGAMENTO DE DADOS ESPECÍFICOS
-    meus_alunos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
-    minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
-    df_cron_t = ler_aba("cronograma")
-    df_enc_t = ler_aba("encontros")
-    df_reu_t = ler_aba("presenca_reuniao")
-
-    # --- SEÇÃO 1: MURAL DE CELEBRAÇÃO (ANIVERSARIANTES HOJE E MÊS) ---
-    st.markdown("### 🎂 Mural de Celebração")
-    
-    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
-    df_niver_t = obter_aniversariantes_mes(meus_alunos)
-    
-    # 1.1 DESTAQUE DE HOJE
-    niver_hoje = []
-    if not meus_alunos.empty:
-        for _, r in meus_alunos.iterrows():
-            d_nasc = formatar_data_br(r['data_nascimento'])
-            if d_nasc != "N/A":
-                try:
-                    dt_n = dt_module.datetime.strptime(d_nasc, "%d/%m/%Y")
-                    if dt_n.day == hoje.day and dt_n.month == hoje.month:
-                        niver_hoje.append(r['nome_completo'])
-                except: pass
-
-    if niver_hoje:
-        for nome_n in niver_hoje:
-            st.balloons()
-            st.success(f"🌟 **HOJE É ANIVERSÁRIO DE: {nome_n}**")
-            if st.button(f"🎨 Gerar Card de Parabéns para {nome_n.split()[0]}", key=f"btn_niver_hoje_{nome_n}"):
-                card_img = gerar_card_aniversario(f"{hoje.day} | CATEQUIZANDO | {nome_n}", tipo="DIA")
-                if card_img:
-                    st.image(card_img, use_container_width=True)
-                    st.download_button("📥 Baixar Card", card_img, f"Parabens_{nome_n}.png", "image/png")
-    
-    # 1.2 MURAL DO MÊS COM OPÇÕES INDIVIDUAIS E COLETIVAS
-    with st.expander("📅 Ver todos os aniversariantes do mês", expanded=not niver_hoje):
-        if not df_niver_t.empty:
-            # Botão para Card Coletivo
-            if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True):
-                lista_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome']}" for _, row in df_niver_t.iterrows()]
-                card_col = gerar_card_aniversario(lista_card, tipo="MES")
-                if card_col:
-                    st.image(card_col, use_container_width=True)
-                    st.download_button("📥 Baixar Card Coletivo", card_col, "Aniversariantes_Mes_Turma.png", "image/png")
-            
-            st.write("")
-            st.markdown("---")
-            
-            # LISTA COM CARDS INDIVIDUAIS
-            cols_n = st.columns(2) 
-            for i, (_, niver) in enumerate(df_niver_t.iterrows()):
-                with cols_n[i % 2]:
-                    # Container visual para cada aniversariante
-                    st.markdown(f"""
-                        <div style='background-color:#f0f2f6; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
-                            <b style='color:#417b99;'>Dia {int(niver['dia'])}</b> - {niver['nome']}
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Botão para gerar o card individual deste catequizando
-                    if st.button(f"🎨 Gerar Card Individual", key=f"btn_indiv_t_{i}"):
-                        # Busca o dia correto para o card
-                        card_indiv = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome']}", tipo="DIA")
-                        if card_indiv:
-                            st.image(card_indiv, use_container_width=True)
-                            st.download_button(f"📥 Baixar Card de {niver['nome'].split()[0]}", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{i}")
-                    st.write("") # Espaçador
-        else:
-            st.write("Nenhum aniversariante este mês nesta turma.")
-
-    st.divider()
-
-    # --- SEÇÃO 2: SAÚDE DA TURMA (MÉTRICAS) ---
-    c1, c2, c3 = st.columns(3)
-    
-    # Itinerário
-    total_planejado = len(df_cron_t[df_cron_t['etapa'] == turma_ativa]) if not df_cron_t.empty else 0
-    total_feito = len(df_enc_t[df_enc_t['turma'] == turma_ativa]) if not df_enc_t.empty else 0
-    progresso = (total_feito / (total_feito + total_planejado)) if (total_feito + total_planejado) > 0 else 0
-    c1.metric("Caminhada da Fé", f"{total_feito} temas", f"{progresso*100:.0f}% concluído")
-
-    # Frequência
-    if not minhas_pres.empty:
-        freq = (minhas_pres['status'] == 'PRESENTE').mean() * 100
-        c2.metric("Frequência Média", f"{freq:.1f}%")
-    else:
-        c2.metric("Frequência Média", "0%")
-
-    # Engajamento Familiar
-    if not df_reu_t.empty and not meus_alunos.empty:
-        pais_presentes = df_reu_t[df_reu_t.iloc[:, 3] == turma_ativa].iloc[:, 1].nunique()
-        perc_pais = (pais_presentes / len(meus_alunos)) * 100
-        c3.metric("Engajamento Pais", f"{perc_pais:.0f}%")
-    else:
-        c3.metric("Engajamento Pais", "0%")
-
-    st.divider()
-
-    # --- SEÇÃO 3: RADAR DE ATENÇÃO (AGORA COM LISTA DE NOMES) ---
-    st.subheader("🚩 Radar de Atenção")
-    risco_c, atencao_p = processar_alertas_evasao(minhas_pres)
-    
-    # 1. Alerta de Evasão
-    if risco_c:
-        with st.expander(f"🔴 {len(risco_c)} em Risco Crítico (3+ faltas)"):
-            for r in risco_c:
-                st.write(f"• {r}")
-    
-    # 2. Alerta de Documentos
-    df_pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
-    if not df_pend_doc.empty:
-        with st.expander(f"⚠️ {len(df_pend_doc)} com Documentos Pendentes"):
-            for n in df_pend_doc['nome_completo'].tolist():
-                st.write(f"• {n}")
-    
-    # 3. Alerta de Batismo
-    df_sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
-    if not df_sem_batismo.empty:
-        with st.expander(f"🕊️ {len(df_sem_batismo)} sem registro de Batismo"):
-            for n in df_sem_batismo['nome_completo'].tolist():
-                st.write(f"• {n}")
-
-    if not risco_c and df_pend_doc.empty and df_sem_batismo.empty:
-        st.success("✨ Turma em caminhada estável. Nenhum alerta crítico.")
-
-    st.divider()
-
-    # --- SEÇÃO 4: CAMINHADA INDIVIDUAL (FILTRO POR NOME - UM POR VEZ) ---
-    st.subheader("👥 Consulta Individual")
-    
-    lista_nomes = sorted(meus_alunos['nome_completo'].tolist())
-    nome_sel = st.selectbox("🔍 Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t")
-
-    if nome_sel:
-        row = meus_alunos[meus_alunos['nome_completo'] == nome_sel].iloc[0]
-        
-        # Lógica de Ícones Sacramentais
-        bat = "💧" if row['batizado_sn'] == "SIM" else "⚪"
-        euc = "🍞" if "EUCARISTIA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-        cri = "🔥" if "CRISMA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-        
-        # Lógica de Família
-        tem_reu = "👪 Ativos" if not df_reu_t.empty and row['id_catequizando'] in df_reu_t.iloc[:, 1].values else "👪 Ausentes"
-        
-        # Card Único em Destaque
-        st.markdown(f"""
-            <div style='background-color:#ffffff; padding:20px; border-radius:15px; border-left:10px solid #417b99; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                <h3 style='margin:0; color:#417b99;'>{row['nome_completo']}</h3>
-                <p style='margin:5px 0; color:#666;'>{bat} Batismo | {euc} Eucaristia | {cri} Crisma</p>
-                <p style='margin:0; font-size:14px;'><b>Situação Familiar:</b> {tem_reu}</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Dossiê já aberto para facilitar no mobile
-        st.markdown("#### 📋 Dossiê Rápido")
-        idade_c = calcular_idade(row['data_nascimento'])
-        c_d1, c_d2 = st.columns(2)
-        c_d1.write(f"🎂 **Idade:** {idade_c} anos")
-        c_d1.write(f"🏥 **Saúde:** {row.get('toma_medicamento_sn', 'NÃO')}")
-        c_d2.write(f"📄 **Docs:** {row.get('doc_em_falta', 'OK')}")
-        
-        st.info(f"📝 **Última Obs. Pastoral:**\n{row.get('obs_pastoral_familia', 'Sem registros.')}")
-        
-        # Botão WhatsApp
-        num_limpo = "".join(filter(str.isdigit, str(row['contato_principal'])))
-        if num_limpo:
-            st.markdown(f'''<a href="https://wa.me/5573{num_limpo[-9:]}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-weight:bold;">📲 Falar com Responsável</div></a>''', unsafe_allow_html=True)
-    else:
-        st.info("👆 Use a busca acima para ver a ficha de um catequizando específico.")
-
-    st.divider()
-    # ... (Seção 5: Itinerário continua igual)
-
-    # --- SEÇÃO 5: PRÓXIMOS PASSOS ---
-    st.subheader("🎯 Itinerário")
-    col_p1, col_p2 = st.columns(2)
-    
-    with col_p1:
-        st.info("**Último Tema Dado:**")
-        if not df_enc_t.empty:
-            ultimo = df_enc_t[df_enc_t['turma'] == turma_ativa].sort_values('data', ascending=False)
-            if not ultimo.empty: st.write(ultimo.iloc[0]['tema'])
-            else: st.write("Nenhum registro.")
-    
-    with col_p2:
-        st.success("**Próximo Tema Planejado:**")
-        if not df_cron_t.empty:
-            proximo = df_cron_t[(df_cron_t['etapa'] == turma_ativa) & (df_cron_t.get('status', '') != 'REALIZADO')]
-            if not proximo.empty: st.write(proximo.iloc[0]['titulo_tema'])
-            else: st.write("Cronograma em dia!")
-
-# ==============================================================================
-# PÁGINA: 📖 DIÁRIO DE ENCONTROS (VERSÃO 5.3 - CORREÇÃO DE KEYERROR + DATAS BR)
-# ==============================================================================
-elif menu == "📖 Diário de Encontros":
-    st.title("📖 Central de Itinerário e Encontros")
-    
-    # 1. FILTRO DE TURMA
-    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    if eh_gestor or vinculo_raw == "TODAS":
-        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-    else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
-
-    if not turmas_permitidas:
-        st.error("⚠️ Nenhuma turma vinculada."); st.stop()
-
-    turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
-
-    # --- 2. BARRA DE PROGRESSO (COM BLINDAGEM CONTRA KEYERROR) ---
-    df_cron_p = ler_aba("cronograma")
-    if not df_cron_p.empty:
-        cron_turma = df_cron_p[df_cron_p['etapa'] == turma_focal]
-        if not cron_turma.empty:
-            total_temas = len(cron_turma)
-            # Verifica se a coluna 'status' existe para não quebrar o sistema
-            if 'status' in cron_turma.columns:
-                realizados = len(cron_turma[cron_turma['status'] == 'REALIZADO'])
             else:
-                realizados = 0
-            
-            progresso = realizados / total_temas if total_temas > 0 else 0
-            st.write(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
-            st.progress(progresso)
-
-    # --- 3. INBOX DE PENDÊNCIAS (DATAS EM FORMATO BR) ---
-    df_pres_local = ler_aba("presencas")
-    df_enc_local = ler_aba("encontros")
-    
-    if not df_pres_local.empty:
-        chamadas_turma = df_pres_local[df_pres_local['id_turma'] == turma_focal]['data_encontro'].unique().tolist()
-        temas_turma = df_enc_local[df_enc_local['turma'] == turma_focal]['data'].unique().tolist() if not df_enc_local.empty else []
+                st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400, key=f"{key_prefix}_pei_area")
         
-        pendencias = [d for d in chamadas_turma if d not in temas_turma]
+        modo_sync = "AULA"
+        nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
+        ed_prof_para_banco = ed_prof
+
+# --- ABA DE EXPORTAÇÃO E SINCRONIA (UNIFICADA V25.96) ---
+    with t_exp:
+        st.subheader("🚀 Sincronia de Elite SOSA")
         
-        if pendencias:
-            pendencias.sort()
-            st.warning(f"⚠️ **Atenção:** Identificamos {len(pendencias)} encontro(s) com chamada realizada, mas sem tema registrado.")
-            for p_data in pendencias:
-                data_br = formatar_data_br(p_data)
-                with st.expander(f"📝 Registrar tema pendente para o dia {data_br}"):
-                    with st.form(f"form_pendencia_{p_data}"):
-                        t_pend = st.text_input("Título do Tema Ministrado").upper()
-                        o_pend = st.text_area("Observações Pastorais")
-                        if st.form_submit_button(f"💾 SALVAR REGISTRO DE {data_br}"):
-                            if t_pend:
-                                if salvar_encontro([str(p_data), turma_focal, t_pend, st.session_state.usuario['nome'], o_pend]):
-                                    st.success("Registrado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        # Definição do nome base para os arquivos
+        if modo_sync == "PLANEJAMENTO":
+            nome_base = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
+        else:
+            nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
 
-    st.divider()
-
-    # --- 4. PLANEJAMENTO E REGISTRO (DATA_INPUT BR) ---
-    col_plan, col_reg = st.columns([1, 1])
-
-    with col_plan:
-        st.subheader("📅 Planejar Próximos Temas")
-        with st.form("form_plan_v5", clear_on_submit=True):
-            novo_tema = st.text_input("Título do Tema").upper()
-            detalhes_tema = st.text_area("Objetivo (Opcional)", height=100)
-            if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
-                if novo_tema:
-                    # Salva com o status PENDENTE para a barra de progresso funcionar no futuro
-                    if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_focal, novo_tema, detalhes_tema, "PENDENTE"]):
-                        st.success("Planejado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-    with col_reg:
-        st.subheader("✅ Registrar Encontro de Hoje")
-        temas_sugeridos = [""]
-        if not df_cron_p.empty:
-            # Filtro seguro para temas não realizados
-            if 'status' in df_cron_p.columns:
-                temas_sugeridos += df_cron_p[(df_cron_p['etapa'] == turma_focal) & (df_cron_p['status'] != 'REALIZADO')]['titulo_tema'].tolist()
-            else:
-                temas_sugeridos += df_cron_p[df_cron_p['etapa'] == turma_focal]['titulo_tema'].tolist()
-
-        with st.form("form_reg_v5", clear_on_submit=True):
-            data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
-            tema_selecionado = st.selectbox("Selecionar do Cronograma:", temas_sugeridos)
-            tema_manual = st.text_input("Ou digite o Tema:", value=tema_selecionado).upper()
-            obs_e = st.text_area("Observações", height=68)
-            
-            if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
-                if tema_manual:
-                    if salvar_encontro([str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
-                        from database import marcar_tema_realizado_cronograma
-                        marcar_tema_realizado_cronograma(turma_sel=turma_focal, tema=tema_manual)
-                        st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-    # --- 5. LINHA DO TEMPO (DATAS BR + BUSCA) ---
-    st.divider()
-    st.subheader(f"📜 Linha do Tempo: {turma_focal}")
-    
-    if not df_enc_local.empty:
-        hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
-        
-        busca_h = st.text_input("🔍 Pesquisar tema no histórico:").upper()
-        if busca_h:
-            hist_turma = hist_turma[hist_turma['tema'].str.contains(busca_h, na=False)]
-
-        for _, row in hist_turma.iterrows():
-            data_val = row['data']
-            data_br_h = formatar_data_br(data_val)
-            
-            with st.expander(f"📅 {data_br_h} - {row['tema']}"):
-                st.write(f"**Catequista:** {row['catequista']}")
-                # Busca flexível pela coluna de observações
-                obs_val = row.get('obs', row.get('observações', row.get('observacoes', 'Sem relato')))
-                st.write(f"**Relato:** {obs_val}")
+        if st.button("☁️ SINCRONIZAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary", key=f"{key_prefix}_btn_sync"):
+            with st.status("Iniciando Protocolo de Sincronia e Limpeza...", expanded=True) as status:
                 
-                dias_p = (date.today() - converter_para_data(data_val)).days
-                if eh_gestor or dias_p <= 7:
-                    if st.button(f"✏️ Editar", key=f"ed_{data_val}_{turma_focal}"):
-                        st.session_state[f"edit_{data_val}"] = True
-                    
-                    if st.session_state.get(f"edit_{data_val}", False):
-                        with st.form(f"f_ed_{data_val}_{turma_focal}"):
-                            nt = st.text_input("Tema", value=row['tema']).upper()
-                            no = st.text_area("Relato", value=obs_val)
-                            if st.form_submit_button("💾 SALVAR"):
-                                from database import atualizar_encontro_existente
-                                if atualizar_encontro_existente(data_val, turma_focal, [str(data_val), turma_focal, nt, row['catequista'], no]):
-                                    st.success("Atualizado!"); del st.session_state[f"edit_{data_val}"]
-                                    st.cache_data.clear(); time.sleep(1); st.rerun()
-    else:
-        st.info("Nenhum encontro registrado ainda.")
-
-# ==================================================================================
-# BLOCO ATUALIZADO: CADASTRO INTELIGENTE 2025 (COM FORMATAÇÃO BR E INTERATIVIDADE)
-# ==================================================================================
-elif menu == "📝 Cadastrar Catequizando":
-    st.title("📝 Cadastro de Catequizandos")
-    
-    # 1. ORIENTAÇÕES DE PREENCHIMENTO (BANNER DE AJUDA)
-    with st.expander("💡 GUIA DE PREENCHIMENTO (LEIA ANTES DE COMEÇAR)", expanded=True):
-        st.markdown("""
-            *   **Nomes:** Escreva sempre em **MAIÚSCULAS** (Ex: JOÃO DA SILVA).
-            *   **Endereço:** Siga o padrão: **Rua/Avenida, Número, Bairro** (Ex: RUA SÃO JOÃO, 500, FÁTIMA).
-            *   **WhatsApp:** Coloque apenas o **DDD + Número**. Não precisa do 55 (Ex: 73988887777).
-            *   **Documentos:** Marque no checklist apenas o que a pessoa **entregou a cópia (Xerox)** hoje.
-        """)
-
-    tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
-
-    with tab_manual:
-        tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
-        
-        st.info("""
-            **📋 Documentação Necessária (Xerox para a Pasta):**
-            ✔ RG ou Certidão  |  ✔ Comprovante de Residência  |  ✔ Batistério  |  ✔ Certidão de Eucaristia
-        """)
-
-        # --- INÍCIO DOS CAMPOS ---
-        st.subheader("📍 1. Identificação")
-        c1, c2, c3 = st.columns([2, 1, 1])
-        nome = c1.text_input("Nome Completo (EM MAIÚSCULAS)").upper()
-        # Formato de data brasileiro no widget
-        data_nasc = c2.date_input("Data de Nascimento", value=date(2010, 1, 1), format="DD/MM/YYYY")
-        
-        lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-        etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
-
-        c4, c5, c6 = st.columns([1.5, 1, 1.5])
-        label_fone = "WhatsApp do Catequizando (DDD+Nº)" if tipo_ficha == "Adulto" else "WhatsApp do Responsável (DDD+Nº)"
-        contato = c4.text_input(label_fone, help="Ex: 73988887777")
-        batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
-        endereco = c6.text_input("Endereço (Rua, Nº, Bairro)").upper()
-
-        # 2. BLOCO DINÂMICO: FAMÍLIA OU EMERGÊNCIA
-        st.divider()
-        if tipo_ficha == "Adulto":
-            st.subheader("🚨 2. Contato de Emergência")
-            ce1, ce2, ce3 = st.columns([2, 1, 1])
-            nome_emergencia = ce1.text_input("Nome do Contato (Cônjuge, Filho, Amigo)").upper()
-            vinculo_emergencia = ce2.selectbox("Vínculo", ["CÔNJUGE", "FILHO(A)", "IRMÃO/Ã", "PAI/MÃE", "AMIGO(A)", "OUTRO"])
-            tel_emergencia = ce3.text_input("Telefone de Emergência")
-            
-            nome_mae, prof_mae, tel_mae = "N/A", "N/A", "N/A"
-            nome_pai, prof_pai, tel_pai = "N/A", "N/A", "N/A"
-            responsavel_nome, vinculo_resp, tel_responsavel = nome_emergencia, vinculo_emergencia, tel_emergencia
-        else:
-            st.subheader("👪 2. Filiação e Responsáveis")
-            col_mae, col_pai = st.columns(2)
-            with col_mae:
-                st.markdown("##### 👩‍🦱 Dados da Mãe")
-                nome_mae = st.text_input("Nome da Mãe").upper()
-                prof_mae = st.text_input("Profissão da Mãe").upper()
-                tel_mae = st.text_input("WhatsApp da Mãe")
-            with col_pai:
-                st.markdown("##### 👨‍ Dados do Pai")
-                nome_pai = st.text_input("Nome do Pai").upper()
-                prof_pai = st.text_input("Profissão do Pai").upper()
-                tel_pai = st.text_input("WhatsApp do Pai")
-
-            st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
-            cr1, cr2, cr3 = st.columns([2, 1, 1])
-            responsavel_nome = cr1.text_input("Nome do Cuidador").upper()
-            vinculo_resp = cr2.selectbox("Vínculo", ["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
-            tel_responsavel = cr3.text_input("Telefone do Cuidador")
-
-        # 3. VIDA ECLESIAL E GRUPOS (COM CAIXA DINÂMICA)
-        st.divider()
-        st.subheader("⛪ 3. Vida Eclesial e Engajamento")
-        fe1, fe2 = st.columns(2)
-        
-        if tipo_ficha == "Adulto":
-            estado_civil = fe1.selectbox("Seu Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"])
-            sacramentos_list = fe2.multiselect("Sacramentos que VOCÊ já possui:", ["BATISMO", "EUCARISTIA", "MATRIMÔNIO"])
-            sacramentos = ", ".join(sacramentos_list)
-            est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", "NÃO", 0
-        else:
-            est_civil_pais = fe1.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"])
-            sac_pais_list = fe2.multiselect("Sacramentos dos Pais:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
-            sac_pais = ", ".join(sac_pais_list)
-            tem_irmaos = fe1.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
-            qtd_irmaos = fe2.number_input("Quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
-            estado_civil, sacramentos = "N/A", "N/A"
-
-        # --- CORREÇÃO: CAIXA DE GRUPO APARECE SE MARCAR SIM ---
-        part_grupo = st.radio("Participa (ou a família participa) de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
-        qual_grupo = "N/A"
-        if part_grupo == "SIM":
-            qual_grupo = st.text_input("Qual grupo/pastoral e quem participa?").upper()
-
-        # 4. SAÚDE E CHECKLIST
-        st.divider()
-        st.subheader("🏥 4. Saúde e Documentação")
-        s1, s2 = st.columns(2)
-        
-        # --- CORREÇÃO: MEDICAMENTO COM PERGUNTA SIM/NÃO ---
-        tem_med = s1.radio("Toma algum medicamento ou tem alergia?", ["NÃO", "SIM"], horizontal=True)
-        medicamento = "NÃO"
-        if tem_med == "SIM":
-            medicamento = s1.text_input("Descreva o medicamento/alergia:").upper()
-            
-        tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"])
-        
-        st.markdown("---")
-        st.markdown("**📁 Checklist de Documentos Entregues (Xerox):**")
-        docs_obrigatorios = ["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
-        docs_entregues = st.multiselect("Marque o que foi entregue HOJE:", docs_obrigatorios)
-        
-        faltando = [d for d in docs_obrigatorios if d not in docs_entregues]
-        doc_status_k = ", ".join(faltando) if faltando else "COMPLETO"
-
-        c_pref1, c_pref2 = st.columns(2)
-        turno = c_pref1.selectbox("Turno de preferência", ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
-        local_enc = c_pref2.text_input("Local do Encontro (Sala/Setor)").upper()
-
-        # BOTÃO DE SALVAR (FORA DE UM FORM PARA PERMITIR A INTERATIVIDADE ACIMA)
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("💾 FINALIZAR E SALVAR INSCRIÇÃO 2025", use_container_width=True):
-            if nome and contato and etapa_inscricao != "CATEQUIZANDOS SEM TURMA":
-                with st.spinner("Gravando no Banco de Dados..."):
-                    novo_id = f"CAT-{int(time.time())}"
-                    
-                    # Lógica de Responsável e Observação
-                    if tipo_ficha == "Adulto":
-                        resp_final = nome_emergencia
-                        obs_familia = f"EMERGÊNCIA: {vinculo_emergencia} - TEL: {tel_emergencia}"
-                    else:
-                        resp_final = responsavel_nome if responsavel_nome else f"{nome_mae} / {nome_pai}"
-                        obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
-
-                    # Montagem das 30 colunas (A-AD)
-                    registro = [[
-                        novo_id, etapa_inscricao, nome, str(data_nasc), batizado, 
-                        contato, endereco, nome_mae, nome_pai, resp_final, 
-                        doc_status_k, qual_grupo, "ATIVO", medicamento, tgo, 
-                        estado_civil, sacramentos, prof_mae, tel_mae, prof_pai, 
-                        tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo, 
-                        tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia
-                    ]]
-                    
-                    if salvar_lote_catequizandos(registro):
-                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
-            else:
-                st.error("⚠️ Por favor, preencha o Nome, WhatsApp e selecione uma Turma.")
-
-    with tab_csv:
-        st.subheader("📂 Importação em Massa (CSV)")
-        
-        with st.expander("📖 LEIA AS INSTRUÇÕES DE FORMATAÇÃO", expanded=True):
-            st.markdown("""
-                **Para que a importação funcione corretamente, seu arquivo CSV deve seguir estas regras:**
-                1. **Colunas Obrigatórias:** `nome_completo` e `etapa`.
-                2. **Formato de Data:** Use o padrão `DD/MM/AAAA`.
-                3. **Turmas:** Se a turma escrita no CSV não existir no sistema, o catequizando será movido para **'CATEQUIZANDOS SEM TURMA'**.
-                4. **Rigor:** O sistema processará as 30 colunas. Colunas ausentes no CSV serão preenchidas como 'N/A'.
-            """)
-
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_v2025_final")
-        
-        if arquivo_csv:
-            try:
-                df_import = pd.read_csv(arquivo_csv, encoding='utf-8').fillna("N/A")
-                df_import.columns = [c.strip().lower() for c in df_import.columns]
-                
-                col_nome = 'nome_completo' if 'nome_completo' in df_import.columns else ('nome' if 'nome' in df_import.columns else None)
-                col_etapa = 'etapa' if 'etapa' in df_import.columns else None
-
-                if not col_nome or not col_etapa:
-                    st.error("❌ Erro: O arquivo precisa ter as colunas 'nome_completo' e 'etapa'.")
+                # 1. LÓGICA ANTI-DUPLICIDADE (UPSERT)
+                status.write("🧹 Verificando e removendo versões obsoletas...")
+                if modo_sync == "PLANEJAMENTO":
+                    filtro = df_planos[(df_planos['SEMANA'] == f_semana) & (df_planos['ANO'] == f"{f_ano}º")]
+                    for _, row_antiga in filtro.iterrows():
+                        db.excluir_registro_com_drive("DB_PLANOS", row_antiga['PLANO_TEXTO'])
                 else:
-                    turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
+                    filtro = df_aulas[(df_aulas['SEMANA_REF'] == f_semana) & (df_aulas['TIPO_MATERIAL'].str.contains(f_aula))]
+                    for _, row_antiga in filtro.iterrows():
+                        db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
+
+                # 2. PROCESSAMENTO POR MODO
+                if modo_sync == "PLANEJAMENTO":
+                    # Geração do DOCX do Plano
+                    doc_plano = exporter.gerar_docx_plano_pedagogico_ELITE(nome_base, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana, "trimestre": f_trimestre})
                     
-                    st.markdown("### 🔍 Revisão dos Dados")
-                    st.write(f"Total de registros: {len(df_import)}")
-                    st.dataframe(df_import.head(10), use_container_width=True)
+                    status.write("📤 Enviando Novo Plano para a Hierarquia Oficial...")
+                    link = db.subir_e_converter_para_google_docs(doc_plano, nome_base, trimestre=f_trimestre, categoria=f"{f_ano}º Ano", semana=f_semana, modo="PLANEJAMENTO")
+                    
+                    if "https" in str(link):
+                        final_txt = (
+                            f"MARKER_CONTEUDO_GERAL {dados_plano['geral']} \n"
+                            f"MARKER_CONTEUDOS_ESPECIFICOS {dados_plano['especificos']} \n"
+                            f"MARKER_OBJETIVOS_ENSINO {dados_plano['objetivos']} \n"
+                            f"MARKER_METODOLOGIA {dados_plano['metodologia']} \n"
+                            f"MARKER_AVALIACAO {dados_plano['avaliacao']} \n"
+                            f"MARKER_ADAPTACAO_PEI {dados_plano['pei']} \n"
+                            f"MARKER_MODALIDADE {info_aula.get('modalidade', 'MANUAL')} \n"
+                            f"--- LINK DRIVE --- {link}"
+                        )
+                        
+                        sucesso = db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_ano}º", f_trimestre, "PADRÃO", final_txt, link])
+                        if sucesso:
+                            status.update(label="✅ Plano Sincronizado!", state="complete")
+                            st.balloons()
+                    else:
+                        status.update(label="❌ Falha na Ponte Google.", state="error")
+                        st.error(link)
 
-                    if st.button("🚀 CONFIRMAR IMPORTAÇÃO E GRAVAR NO BANCO", use_container_width=True):
-                        with st.spinner("Processando 30 colunas..."):
-                            lista_final = []
-                            for i, linha in df_import.iterrows():
-                                t_csv = str(linha.get(col_etapa, 'CATEQUIZANDOS SEM TURMA')).upper().strip()
-                                t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
-                                
-                                registro = [
-                                    f"CAT-CSV-{int(time.time()) + i}", # A: ID
-                                    t_final,                            # B: Etapa
-                                    str(linha.get(col_nome, 'SEM NOME')).upper(), # C: Nome
-                                    str(linha.get('data_nascimento', '01/01/2000')), # D
-                                    str(linha.get('batizado_sn', 'NÃO')).upper(), # E
-                                    str(linha.get('contato_principal', 'N/A')), # F
-                                    str(linha.get('endereco_completo', 'N/A')).upper(), # G
-                                    str(linha.get('nome_mae', 'N/A')).upper(), # H
-                                    str(linha.get('nome_pai', 'N/A')).upper(), # I
-                                    str(linha.get('nome_responsavel', 'N/A')).upper(), # J
-                                    str(linha.get('doc_em_falta', 'NADA')).upper(), # K
-                                    str(linha.get('engajado_grupo', 'N/A')).upper(), # L
-                                    "ATIVO", # M
-                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), # N
-                                    str(linha.get('tgo_sn', 'NÃO')).upper(), # O
-                                    str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(), # P
-                                    str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(), # Q
-                                    str(linha.get('profissao_mae', 'N/A')).upper(), # R
-                                    str(linha.get('tel_mae', 'N/A')), # S
-                                    str(linha.get('profissao_pai', 'N/A')).upper(), # T
-                                    str(linha.get('tel_pai', 'N/A')), # U
-                                    str(linha.get('est_civil_pais', 'N/A')).upper(), # V
-                                    str(linha.get('sac_pais', 'N/A')).upper(), # W
-                                    str(linha.get('participa_grupo', 'NÃO')).upper(), # X
-                                    str(linha.get('qual_grupo', 'N/A')).upper(), # Y
-                                    str(linha.get('tem_irmaos', 'NÃO')).upper(), # Z
-                                    linha.get('qtd_irmaos', 0), # AA
-                                    str(linha.get('turno', 'N/A')).upper(), # AB
-                                    str(linha.get('local_encontro', 'N/A')).upper(), # AC
-                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}" # AD
-                                ]
-                                lista_final.append(registro)
-                            
-                            if salvar_lote_catequizandos(lista_final):
-                                st.success(f"✅ {len(lista_final)} catequizandos importados!")
-                                st.balloons()
-                                time.sleep(2)
-                                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro: {e}")
+                else:
+                    # MODO AULA (CRIADOR DE AULAS)
+                    status.write("📄 Gerando Materiais (Fluxo Nativo)...")
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana, "trimestre": f_trimestre})
+                    
+                    status.write("📤 Enviando Material do Aluno...")
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
+                    
+                    status.write("📤 Enviando Guia do Professor...")
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
+                    
+                    link_pei = "N/A"
+                    if "lab_pei" in st.session_state:
+                        status.write("♿ Enviando Material PEI Adaptado...")
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
 
+                    if "https" in str(link_alu) and "https" in str(link_prof):
+                        # CONTEÚDO ESTRUTURADO PARA AULAS (Sem variáveis de prova)
+                        conteudo_banco = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
+                        
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                            datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula}", conteudo_banco, f"{f_ano}º", link_alu
+                        ])
+                        status.update(label="✅ Aula Sincronizada!", state="complete")
+                        st.balloons()
+                    else:
+                        status.update(label="❌ Erro no Upload da Aula.", state="error")
+                        st.error(f"Falha no envio dos arquivos.")
+                       
 # ==============================================================================
-# PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO INTEGRAL - GESTÃO, AUDITORIA E EVASÃO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V42.1 - INTEGRADO & BLINDADO)
 # ==============================================================================
-elif menu == "👤 Perfil Individual":
-    st.title("👤 Gestão de Perfis e Documentação")
+if menu == "🧪 Criador de Aulas":
+    st.title("🧪 Laboratório de Produção Semiótica (V42.1)")
+    st.markdown("---")
     
-    if df_cat.empty:
-        st.warning("⚠️ Base de dados vazia. Cadastre catequizandos para acessar esta área.")
+    def reset_laboratorio():
+        keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem"]
+        for k in keys_to_del:
+            if k in st.session_state: del st.session_state[k]
+        st.cache_data.clear() 
+        st.session_state.v_lab = int(time.time())
+        st.rerun()
+
+    if "v_lab" not in st.session_state: 
+        st.session_state.v_lab = int(time.time())
+    v = st.session_state.v_lab
+
+    # 1. INICIALIZAÇÃO DE SEGURANÇA
+    meta = st.session_state.get("lab_meta", {})
+    is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
+    ed_prof, ed_alu, ed_res, ed_dua = "", "", "", ""
+    s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+
+# --- ÁREA DE EXIBIÇÃO E REFINO (VERSÃO V42.2 - FIX DUPLICIDADE & NOMENCLATURA) ---
+    if "lab_temp" in st.session_state:
+        txt_base = st.session_state.lab_temp
+        
+        # 1. EXTRAÇÃO DE SEGURANÇA E IDENTIFICAÇÃO
+        s_id_extraido = ai.extrair_tag(txt_base, "SOSA_ID")
+        # Se a IA gerou um ID feio, mantemos o que o sistema criou originalmente
+        s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+        
+        is_recomp = "RECOMP" in s_id.upper()
+        is_projeto = "PROJETO" in s_id.upper() or "[JUSTIFICATIVA_PHC]" in txt_base
+
+        # 2. MOTOR DE DISTRIBUIÇÃO DE VARIÁVEIS (PREVENTIVO)
+        ed_prof = ai.extrair_tag(txt_base, "PROFESSOR")
+        ed_alu = ai.extrair_tag(txt_base, "ALUNO")
+        ed_res = ai.extrair_tag(txt_base, "RESPOSTAS_PEDAGOGICAS") or ai.extrair_tag(txt_base, "GABARITO")
+        ed_dua = ai.extrair_tag(txt_base, "PEI")
+        ed_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+
+        st.success(f"💎 Material em Edição: **{s_id}**")
+
+        # --- 🤖 REFINADOR MAESTRO ---
+        with st.container(border=True):
+            st.subheader("🤖 Refinador Maestro (Perícia V31)")
+            cmd_refine_lab = st.chat_input("Solicite ajustes...", key=f"chat_lab_ref_{v}")
+            if cmd_refine_lab:
+                with st.spinner("Reengenharia..."):
+                    persona_refino = "REFINADOR_PROJETOS_V31" if is_projeto else "REFINADOR_MATERIAIS"
+                    st.session_state.lab_temp = ai.gerar_ia(persona_refino, f"ORDEM: {cmd_refine_lab}\n\nATUAL:\n{txt_base}")
+                    st.session_state.v_lab = int(time.time()); st.rerun()
+            if st.button("🗑️ DESCARTAR EDIÇÃO"): reset_laboratorio()
+        
+        # --- 🗂️ TABS DINÂMICAS (BLOCO ÚNICO E PROTEGIDO) --
+        if is_recomp:
+            t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Tratado do Professor", "📝 Folha do Aluno", "✅ Respostas Pedagógicas", "♿ Material PEI", "☁️ SINCRONIA"])
+            with t_prof: 
+                st.info("🔬 Gênese Científica e Perícia de Mediação (BNCC/PHC)")
+                st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"p_recomp_area_{v}")
+            with t_alu: 
+                st.warning("📸 SOBERANIA VISUAL: Verifique os [ PROMPT IMAGEM ]")
+                st.text_area("Questões Regulares:", ed_alu, height=450, key=f"a_recomp_area_{v}")
+            with t_gab: 
+                st.subheader("✅ Expectativa de Aprendizagem")
+                st.text_area("Respostas Detalhadas:", ed_res, height=300, key=f"g_recomp_area_{v}")
+                st.divider()
+                st.subheader("🔍 Grade de Perícia (Descritores)")
+                # Extrai a grade que agora virá em formato de lista
+                val_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+                st.text_area("Análise por Item:", val_grade, height=300, key=f"grade_recomp_area_{v}")
+            with t_pei: 
+                st.info("♿ Simetria 50%: Andaime Cognitivo por Questão.")
+                st.text_area("Atividade Adaptada:", ed_dua, height=450, key=f"pei_recomp_area_{v}")
+
+# ... (No Triple-Sync, o código permanece o mesmo da V42.1, pois ele já é robusto)
+        
+        elif is_projeto:
+            t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
+            with t_prof:
+                st.text_area("Justificativa e Rubrica:", ed_prof, height=450, key=f"p_proj_area_{v}")
+            with t_alu:
+                st.text_area("Roteiro Investigativo:", ed_alu, height=450, key=f"a_proj_area_{v}")
+            with t_dua:
+                st.text_area("Estratégia DUA:", ed_dua, height=450, key=f"dua_proj_area_{v}")
+        
+        else:
+            t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
+            with t_prof: st.text_area("Lousa:", ed_prof, height=450, key=f"ed_prof_reg_{v}")
+            with t_alu: st.text_area("Folha:", ed_alu, height=450, key=f"ed_alu_reg_{v}")
+            with t_gab: st.text_area("Gabarito:", ed_res, height=200, key=f"ed_res_reg_{v}")
+            with t_pei: st.text_area("PEI:", ed_dua, height=400, key=f"ed_pei_reg_{v}")
+
+        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V45) ---
+        with t_sync:
+            st.subheader("🚀 Protocolo de Custódia Digital V45")
+            if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
+                with st.status("Sincronizando Ativos de Elite...") as status:
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
+                    ano_str = f"{meta.get('ano', '6')}º"
+                    sem_ref = meta.get('semana_ref', 'RECOMPOSIÇÃO')
+                    info_doc = {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre'), "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 10}
+
+                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
+                    
+                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ed_dua, info_doc)
+                    link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
+                    
+                    txt_prof_final = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ed_res}\n\n[GRADE_DE_CORRECAO]\n{ed_grade}"
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_final, {"ano": ano_str, "semana": sem_ref, "trimestre": info_doc['trimestre']})
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
+                    
+                    links_f = f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, txt_base + f"\n\n{links_f}", ano_str, link_alu])
+                    status.update(label="✅ Sincronizado!", state="complete")
+                    st.balloons(); time.sleep(1); reset_laboratorio()
+
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
-        # 1. CRIAÇÃO DAS ABAS PRINCIPAIS (ORGANIZAÇÃO TOTAL)
-        tab_individual, tab_auditoria_geral, tab_evasao_gestao = st.tabs([
-            "👤 Consulta e Edição Individual", 
-            "🚩 Auditoria de Documentos por Turma",
-            "📄 Gestão de Evasão e Declarações"
+        tab_producao, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
+            "🚀 Produção (Aula 1/2)", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
         ])
 
-        # --- ABA 1: CONSULTA E EDIÇÃO INDIVIDUAL ---
-        with tab_individual:
-            st.subheader("🔍 Localizar e Visualizar Perfil")
-            c1, c2 = st.columns([2, 1])
-            busca = c1.text_input("Pesquisar por nome:", key="busca_perfil_v6").upper()
-            lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-            filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil_v6")
-
-            df_f = df_cat.copy()
-            if busca: 
-                df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
-            if filtro_t != "TODAS": 
-                df_f = df_f[df_f['etapa'] == filtro_t]
-            
-            # Exibe a tabela de busca rápida
-            cols_necessarias = ['nome_completo', 'etapa', 'status']
-            st.dataframe(df_f[cols_necessarias], use_container_width=True, hide_index=True)
-            
-            st.divider()
-
-            # SELEÇÃO DO CATEQUIZANDO PARA AÇÕES
-            df_f['display_select'] = df_f['nome_completo'] + " | Turma: " + df_f['etapa'] + " | ID: " + df_f['id_catequizando']
-            escolha_display = st.selectbox("Selecione para VER PRÉVIA, EDITAR ou GERAR FICHA:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil_v6")
-
-            if escolha_display:
-                id_sel = escolha_display.split(" | ID: ")[-1]
-                filtro_dados = df_cat[df_cat['id_catequizando'] == id_sel]
-                
-                if not filtro_dados.empty:
-                    dados = filtro_dados.iloc[0]
-                    nome_sel = dados['nome_completo']
-                    status_atual = str(dados['status']).upper()
-
-                    # --- NOVO: BANNER DE CONTATO RÁPIDO NO PERFIL ---
-                    obs_p = str(dados.get('obs_pastoral_familia', ''))
-                    tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
+        with tab_producao:
+            if is_hub:
+                st.info("📬 **PLANO IMPORTADO DO DASHBOARD**")
+                with st.container(border=True):
+                    c1, c2 = st.columns([2, 1])
+                    plano_txt = st.session_state.lab_temp
+                    eixo_p = ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                    sem_ref = st.session_state.lab_meta.get('semana_ref')
+                    ano_ref_hub = st.session_state.lab_meta.get('ano')
                     
-                    st.warning(f"🚨 **CONTATO DE EMERGÊNCIA:** {dados['nome_responsavel']} | **TEL:** {tel_e}")
+                    c1.markdown(f"### 🎯 {eixo_p}")
+                    c1.caption(f"Semana: {sem_ref} | Série: {ano_ref_hub}º")
+                    st.warning(f"📖 **Herança Detectada:** {sem_ref}")
                     
-                    # Ícone de Status Dinâmico
-                    icone = "🟢" if status_atual == "ATIVO" else "🔴" if status_atual == "DESISTENTE" else "🔵" if status_atual == "TRANSFERIDO" else "⚪"
-                    st.markdown(f"### {icone} {dados['nome_completo']} ({status_atual})")
-
-                    # SUB-ABAS DE AÇÃO INDIVIDUAL
-                    sub_tab_edit, sub_tab_doc = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Ficha de Inscrição (PDF)"])
+                    aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'].str.contains(str(ano_ref_hub)))]
+                    opcoes_aula = []
+                    if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
+                    if not any("Aula 2" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 2")
+                    if not any("Sábado" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Sábado Letivo")
                     
-                    with sub_tab_edit:
-                        st.subheader("✏️ Atualizar Dados do Catequizando")
-                        idade_atual = calcular_idade(dados['data_nascimento'])
-                        is_adulto = idade_atual >= 18
-
-                        # --- 1. IDENTIFICAÇÃO E STATUS ---
-                        st.markdown("#### 📍 1. Identificação e Status")
-                        ce1, ce2 = st.columns([2, 1])
-                        ed_nome = ce1.text_input("Nome Completo", value=dados['nome_completo']).upper()
-                        opcoes_status = ["ATIVO", "TRANSFERIDO", "DESISTENTE", "INATIVO"]
-                        idx_status = opcoes_status.index(status_atual) if status_atual in opcoes_status else 0
-                        ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status)
-
-                        c3, c4, c5 = st.columns([1, 1, 2])
-                        ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), format="DD/MM/YYYY")
-                        ed_batizado = c4.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
-                        ed_etapa = c5.selectbox("Turma Atual", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']])
-
-                        st.divider()
-
-                        # --- 2. CONTATOS E FAMÍLIA (ADAPTATIVO) ---
-                        if is_adulto:
-                            st.markdown("#### 🚨 2. Contato de Emergência / Vínculo")
-                            cx1, cx2, cx3 = st.columns([2, 1, 1])
-                            ed_contato = cx1.text_input("WhatsApp do Catequizando", value=dados['contato_principal'])
-                            ed_resp = cx2.text_input("Nome do Contato", value=dados['nome_responsavel']).upper()
-                            # Tenta extrair o telefone da observação pastoral
-                            obs_raw = str(dados.get('obs_pastoral_familia', ''))
-                            tel_emerg_val = obs_raw.split('TEL: ')[-1] if 'TEL: ' in obs_raw else ""
-                            ed_tel_resp = cx3.text_input("Telefone de Emergência", value=tel_emerg_val)
-                            
-                            ed_mae, ed_prof_m, ed_tel_m = dados['nome_mae'], dados.get('profissao_mae', 'N/A'), dados.get('tel_mae', 'N/A')
-                            ed_pai, ed_prof_p, ed_tel_p = dados['nome_pai'], dados.get('profissao_pai', 'N/A'), dados.get('tel_pai', 'N/A')
-                            ed_end = st.text_input("Endereço Completo", value=dados['endereco_completo']).upper()
-                        else:
-                            st.markdown("#### 👪 2. Contatos e Filiação")
-                            f1, f2 = st.columns(2)
-                            ed_contato = f1.text_input("WhatsApp Principal", value=dados['contato_principal'])
-                            ed_end = f2.text_input("Endereço Completo", value=dados['endereco_completo']).upper()
-                            m1, m2, m3 = st.columns(3)
-                            ed_mae = m1.text_input("Nome da Mãe", value=dados['nome_mae']).upper()
-                            ed_prof_m = m2.text_input("Profissão Mãe", value=dados.get('profissao_mae', 'N/A')).upper()
-                            ed_tel_m = m3.text_input("Tel. Mãe", value=dados.get('tel_mae', 'N/A'))
-                            p1, p2, p3 = st.columns(3)
-                            ed_pai = p1.text_input("Nome do Pai", value=dados['nome_pai']).upper()
-                            ed_prof_p = p2.text_input("Profissão Pai", value=dados.get('profissao_pai', 'N/A')).upper()
-                            ed_tel_p = p3.text_input("Tel. Pai", value=dados.get('tel_pai', 'N/A'))
-                            ed_resp = st.text_input("Responsável Legal / Cuidador", value=dados['nome_responsavel']).upper()
-
-                        st.divider()
-
-                        # --- 3. VIDA ECLESIAL ---
-                        st.markdown("#### ⛪ 3. Vida Eclesial e Engajamento")
-                        fe1, fe2 = st.columns(2)
-                        part_grupo_init = str(dados.get('participa_grupo', 'NÃO')).upper()
-                        ed_part_grupo = fe1.radio("Participa de algum Grupo/Pastoral?", ["NÃO", "SIM"], index=0 if part_grupo_init == "NÃO" else 1, horizontal=True)
-                        ed_qual_grupo = "N/A"
-                        if ed_part_grupo == "SIM":
-                            ed_qual_grupo = fe1.text_input("Qual grupo/pastoral?", value=dados.get('qual_grupo', '') if dados.get('qual_grupo') != "N/A" else "").upper()
-
-                        if is_adulto:
-                            ed_est_civil = fe2.selectbox("Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"], index=0)
-                            ed_est_civil_pais = "N/A"
-                        else:
-                            ed_est_civil_pais = fe2.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"], index=0)
-                            ed_est_civil = "N/A"
-
-                        st.divider()
-
-                        # --- 4. SAÚDE E CHECKLIST DE DOCUMENTOS ---
-                        st.markdown("#### 🏥 4. Saúde e Documentação")
-                        s1, s2 = st.columns(2)
-                        med_atual = str(dados.get('toma_medicamento_sn', 'NÃO')).upper()
-                        ed_tem_med = s1.radio("Toma algum medicamento?", ["NÃO", "SIM"], index=0 if med_atual == "NÃO" else 1, horizontal=True)
-                        ed_med = s1.text_input("Descreva:", value=med_atual if med_atual != "NÃO" else "").upper() if ed_tem_med == "SIM" else "NÃO"
-                        ed_tgo = s2.selectbox("Possui TGO?", ["NÃO", "SIM"], index=0 if dados['tgo_sn'] == "NÃO" else 1)
-
-                        st.markdown("**📁 Checklist de Documentos (Xerox):**")
-                        docs_obrigatorios = ["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
-                        faltas_atuais = str(dados.get('doc_em_falta', '')).upper()
-                        entregues_pre = [d for d in docs_obrigatorios if d not in faltas_atuais]
-                        ed_docs_entregues = st.multiselect("Marque o que JÁ ESTÁ NA PASTA:", docs_obrigatorios, default=entregues_pre)
-                        novas_faltas = [d for d in docs_obrigatorios if d not in ed_docs_entregues]
-                        ed_doc_status_k = ", ".join(novas_faltas) if novas_faltas else "COMPLETO"
-
-                        if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True):
-                            # Montagem rigorosa das 30 colunas (A-AD)
-                            lista_up = [
-                                dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
-                                ed_contato, ed_end, ed_mae, ed_pai, ed_resp, ed_doc_status_k, 
-                                ed_qual_grupo, ed_status, ed_med, ed_tgo, ed_est_civil, 
-                                dados.get('sacramentos_ja_feitos', 'N/A'), ed_prof_m, ed_tel_m, 
-                                ed_prof_p, ed_tel_p, ed_est_civil_pais, dados.get('sac_pais', 'N/A'), 
-                                ed_part_grupo, ed_qual_grupo, dados.get('tem_irmaos', 'NÃO'), 
-                                dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), 
-                                dados.get('local_encontro', 'N/A'), dados.get('obs_pastoral_familia', '')
-                            ]
-                            if atualizar_catequizando(dados['id_catequizando'], lista_up):
-                                st.success(f"✅ Cadastro de {ed_nome} atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-                    with sub_tab_doc:
-                        st.subheader("📄 Documentação Cadastral e Oficial")
-                        st.write(f"Gerar documentos para: **{nome_sel}**")
-                        
-                        col_doc_a, col_doc_b = st.columns(2)
-                        
-                        with col_doc_a:
-                            # BOTÃO 1: FICHA DE INSCRIÇÃO (A que já existia)
-                            if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_v6", use_container_width=True):
-                                with st.spinner("Gerando ficha..."):
-                                    st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
-                            
-                            if "pdf_catequizando" in st.session_state:
-                                st.download_button(
-                                    label="📥 BAIXAR FICHA PDF", 
-                                    data=st.session_state.pdf_catequizando, 
-                                    file_name=f"Ficha_{nome_sel}.pdf", 
-                                    mime="application/pdf", 
-                                    use_container_width=True
-                                )
-                        
-                        with col_doc_b:
-                            # BOTÃO 2: DECLARAÇÃO DE MATRÍCULA (A nova funcionalidade)
-                            if st.button("📜 Gerar Declaração de Matrícula", key="btn_decl_matr_v6", use_container_width=True):
-                                with st.spinner("Gerando declaração oficial..."):
-                                    # Utiliza a função oficial que configuramos no utils.py
-                                    st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
-                            
-                            if "pdf_decl_matr" in st.session_state:
-                                st.download_button(
-                                    label="📥 BAIXAR DECLARAÇÃO PDF", 
-                                    data=st.session_state.pdf_decl_matr, 
-                                    file_name=f"Declaracao_Matricula_{nome_sel}.pdf", 
-                                    mime="application/pdf", 
-                                    use_container_width=True
-                                )
-
-        # --- ABA 2: AUDITORIA DE DOCUMENTAÇÃO POR TURMA ---
-        with tab_auditoria_geral:
-            st.subheader("🚩 Diagnóstico de Pendências por Turma")
-            lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-            turma_auditoria = st.selectbox("🔍 Selecione a Turma para Diagnóstico:", lista_turmas_auditoria, key="sel_auditoria_doc_turma")
-
-            if turma_auditoria:
-                df_turma_focal = df_cat[df_cat['etapa'] == turma_auditoria]
-                df_pendentes_turma = df_turma_focal[
-                    (df_turma_focal['doc_em_falta'].str.len() > 2) & 
-                    (~df_turma_focal['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
-                ]
-
-                c_met1, c_met2, c_met3 = st.columns(3)
-                total_t = len(df_turma_focal)
-                pendentes_t = len(df_pendentes_turma)
-                em_dia_t = total_t - pendentes_t
-                
-                c_met1.metric("Total na Turma", total_t)
-                c_met2.metric("Pendentes", pendentes_t, delta=f"{pendentes_t} faltam docs", delta_color="inverse")
-                c_met3.metric("Em Dia", em_dia_t)
-
-                st.markdown("---")
-
-                if df_pendentes_turma.empty:
-                    st.success(f"✅ **Excelente!** Todos os {total_t} catequizandos da turma **{turma_auditoria}** estão com a documentação completa.")
-                else:
-                    st.markdown(f"#### 📋 Lista de Pendências: {turma_auditoria}")
-                    for _, p in df_pendentes_turma.iterrows():
-                        with st.container():
-                            idade_p = calcular_idade(p['data_nascimento'])
-                            is_adulto_p = idade_p >= 18
-                            
-                            # Lógica de quem cobrar (Mãe, Pai ou Próprio)
-                            if is_adulto_p:
-                                nome_alvo, vinculo_alvo, tel_alvo = p['nome_completo'], "Próprio", p['contato_principal']
-                            else:
-                                if str(p['tel_mae']) not in ["N/A", "", "None"]:
-                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_mae'], "Mãe", p['tel_mae']
-                                elif str(p['tel_pai']) not in ["N/A", "", "None"]:
-                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_pai'], "Pai", p['tel_pai']
-                                else:
-                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_responsavel'], "Responsável", p['contato_principal']
-
-                            st.markdown(f"""
-                                <div style='background-color:#fff5f5; padding:15px; border-radius:10px; border-left:8px solid #e03d11; margin-bottom:10px;'>
-                                    <b style='color:#e03d11; font-size:16px;'>{p['nome_completo']}</b><br>
-                                    <span style='font-size:13px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span><br>
-                                    <span style='font-size:12px; color:#666;'>👤 <b>Cobrar de:</b> {nome_alvo} ({vinculo_alvo})</span>
-                                </div>
-                            """, unsafe_allow_html=True)
-                            
-                            col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
-                            
-                            if col_p1.button(f"✨ IA: Cobrar {vinculo_alvo}", key=f"msg_aud_{p['id_catequizando']}"):
-                                msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], nome_alvo, vinculo_alvo)
-                                st.info(f"**Mensagem para {nome_alvo}:**\n\n{msg_doc}")
-                            
-                            if col_p2.button("✅ Entregue", key=f"btn_ok_aud_{p['id_catequizando']}", use_container_width=True):
-                                lista_up = p.tolist()
-                                while len(lista_up) < 30: lista_up.append("N/A")
-                                lista_up[10] = "COMPLETO"
-                                if atualizar_catequizando(p['id_catequizando'], lista_up):
-                                    st.success("Atualizado!"); time.sleep(0.5); st.rerun()
-
-                            num_limpo = "".join(filter(str.isdigit, str(tel_alvo)))
-                            if num_limpo:
-                                if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
-                                if not num_limpo.startswith("55"):
-                                    num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
-                                col_p3.markdown(f'''<a href="https://wa.me/{num_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">📲 WhatsApp</div></a>''', unsafe_allow_html=True)
-                            else:
-                                col_p3.caption("Sem Tel.")
-                            st.markdown("<br>", unsafe_allow_html=True)
-
-        # --- ABA 3: GESTÃO DE EVASÃO E DECLARAÇÕES ---
-        with tab_evasao_gestao:
-            st.subheader("🚩 Gestão de Evasão e Documentos de Saída")
-            
-            # Métricas de Evasão
-            df_saidas = df_cat[df_cat['status'] != 'ATIVO']
-            c_ev1, c_ev2, c_ev3 = st.columns(3)
-            c_ev1.metric("🔴 Desistentes", len(df_saidas[df_saidas['status'] == 'DESISTENTE']))
-            c_ev2.metric("🔵 Transferidos", len(df_saidas[df_saidas['status'] == 'TRANSFERIDO']))
-            c_ev3.metric("⚪ Inativos", len(df_saidas[df_saidas['status'] == 'INATIVO']))
-            
-            st.divider()
-            
-            if df_saidas.empty:
-                st.success("Glória a Deus! Não há registros de evasão no momento.")
+                    if not opcoes_aula:
+                        st.success(f"✅ **Safra Concluída!**")
+                        if st.button("🔄 REPRODUZIR (SOBREPOR)"): reset_laboratorio()
+                    else:
+                        aula_alvo_hub = c2.radio("Selecione a Aula:", opcoes_aula, key=f"hub_aula_{v}")
+                        instr_extra = st.text_area("📝 Informações Extras:", key=f"hub_extra_{v}")
+                        qtd_q_hub = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
+                        if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
+                            with st.spinner(f"Expandindo {aula_alvo_hub}..."):
+                                nome_elite = util.gerar_nome_material_elite(ano_ref_hub, aula_alvo_hub, sem_ref)
+                                st.session_state.sosa_id_atual = nome_elite
+                                st.session_state.lab_meta['aula_alvo'] = aula_alvo_hub
+                                tag_aula = "AULA_1" if "Aula 1" in aula_alvo_hub else "AULA_2" if "Aula 2" in aula_alvo_hub else "SABADO_LETIVO"
+                                prompt_expansao = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\nSÉRIE: {ano_ref_hub}º. ALVO: {aula_alvo_hub}. QTD: {qtd_q_hub}.\n--- HERANÇA TÉCNICA ---\nROTEIRO DO PLANO: {ai.extrair_tag(plano_txt, tag_aula)}.\nESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\nEXTRAS: {instr_extra}.\n\nMISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
+                                st.rerun()
             else:
-                st.markdown("#### 📋 Lista de Caminhadas Interrompidas")
-                st.dataframe(df_saidas[['nome_completo', 'etapa', 'status', 'obs_pastoral_familia']], use_container_width=True, hide_index=True)
-                
-                st.divider()
-                st.markdown("#### 📄 Gerar Declaração Oficial (Transferência ou Matrícula)")
-                
-                # Seleção para Documento
-                sel_cat_ev = st.selectbox("Selecione o Catequizando para o Documento:", [""] + df_saidas['nome_completo'].tolist(), key="sel_ev_doc")
-                
-                if sel_cat_ev:
-                    dados_ev = df_saidas[df_saidas['nome_completo'] == sel_cat_ev].iloc[0]
+                st.markdown("### ⚙️ Configurar Produção de Aula (Herança Didática)")
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([1, 2, 1])
+                    ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
+                    ano_ref_prod = f"{ano_lab}º"
                     
-                    col_d1, col_d2 = st.columns(2)
-                    tipo_doc = col_d1.selectbox("Tipo de Documento:", ["Declaração de Transferência", "Declaração de Matrícula"])
-                    paroquia_dest = ""
-                    if "Transferência" in tipo_doc:
-                        paroquia_dest = col_d2.text_input("Transferido para a Paróquia:", placeholder="Ex: Paróquia Santa Rita")
-
-                    if st.button(f"📥 GERAR {tipo_doc.upper()}", use_container_width=True):
-                        with st.spinner("Renderizando documento oficial..."):
-                            # Chama a função no utils.py (Certifique-se de que ela existe lá)
-                            pdf_ev_final = gerar_declaracao_pastoral_pdf(dados_ev.to_dict(), tipo_doc, paroquia_dest)
-                            st.session_state.pdf_declaracao_saida = pdf_ev_final
+                    planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
                     
-                    if "pdf_declaracao_saida" in st.session_state:
-                        st.download_button("💾 BAIXAR DECLARAÇÃO (PDF)", st.session_state.pdf_declaracao_saida, f"Declaracao_{sel_cat_ev}.pdf", use_container_width=True)
-                    
-                    st.divider()
-                    # Ação de Reativação
-                    if st.button(f"🔄 REATIVAR {sel_cat_ev} (Voltou para a Catequese)", type="primary"):
-                        lista_up_v = dados_ev.tolist()
-                        while len(lista_up_v) < 30: lista_up_v.append("N/A")
-                        lista_up_v[12] = "ATIVO" # Coluna M
-                        if atualizar_catequizando(dados_ev['id_catequizando'], lista_up_v):
-                            st.success(f"{sel_cat_ev} reativado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    if planos_ano.empty: 
+                        st.error("❌ Nenhum planejamento encontrado para esta série.")
+                    else:
+                        # --- 1. SELEÇÃO DA BASE ---
+                        c2.markdown("### 📅 Cronograma")
+                        sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
+                        plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
+                        with st.expander("📡 Radar de Regência (Memória das Turmas)", expanded=True):
+                            # Criamos uma variável para guardar o texto que enviaremos para a IA
+                            contexto_turmas_ia = ""
                             
-# ==============================================================================
-# --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) 
-# ==============================================================================
+                            # Filtramos os registros de aula que pertencem a este ano (Ex: 6º ano)
+                            reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
+                            
+                            if not reg_ano.empty:
+                                st.markdown("##### 🚦 Status de Execução por Turma:")
+                                for t_nome in sorted(reg_ano['TURMA'].unique()):
+                                    # Pega o registro mais recente daquela turma específica
+                                    dados_t = reg_ano[reg_ano['TURMA'] == t_nome].iloc[-1]
+                                    est = dados_t.get('STATUS_EXECUCAO', 'Não Iniciado')
+                                    pnt = dados_t.get('PONTE_PEDAGOGICA', 'Sem pendências.')
+                                    
+                                    # Define o emoji baseado no status
+                                    emoji = "🟢" if "Concluído" in est else "🟡" if "Parcial" in est else "🔴"
+                                    
+                                    # Mostra na tela para o professor
+                                    st.write(f"{emoji} **{t_nome}:** {est}")
+                                    st.caption(f"↳ {pnt}")
+                                    
+                                    # Adiciona ao texto que a IA vai ler
+                                    contexto_turmas_ia += f"- Turma {t_nome}: Status {est}. Pendência: {pnt}\n"
+                            else:
+                                st.info("ℹ️ Nenhuma regência anterior encontrada para esta série.")
+                                contexto_turmas_ia = "Nenhum histórico anterior."
+                        plano_txt = str(plano_row['PLANO_TEXTO'])
+                        
+                        # Extração de Metadados para o Cockpit
+                        obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                        hab_bncc = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                        
+                        # --- 2. MOTOR DE FILTRAGEM DE SAFRA ---
+                        aulas_existentes = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref_prod)]
+                        lista_prontas = aulas_existentes['TIPO_MATERIAL'].astype(str).tolist()
+                        
+                        opcoes_pendentes = []
+                        if not any("Aula 1" in t for t in lista_prontas): opcoes_pendentes.append("Aula 1")
+                        if not any("Aula 2" in t for t in lista_prontas): opcoes_pendentes.append("Aula 2")
+                        
+                        if not opcoes_pendentes:
+                            st.balloons()
+                            st.success(f"✅ **Safra Concluída!** Todas as aulas da {sem_lab} já estão no acervo.")
+                            if st.button("🔄 REGERAR MATERIAL (SOBREPOR)"): st.rerun()
+                        else:
+                            # --- 3. COCKPIT DE HERANÇA DIDÁTICA (MODERNO & CLEAN) ---
+                            with st.container(border=True):
+                                st.markdown(f"#### 🎯 Alvo Curricular: {obj_geral}")
+                                st.caption(f"🆔 **BNCC:** {hab_bncc}")
+                                
+                                # Linha de Configuração de Aula
+                                col_config1, col_config2 = st.columns([1, 1])
+                                with col_config1:
+                                    aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_pendentes, horizontal=True, key=f"prod_alvo_{v}")
+                                with col_config2:
+                                    # Novo Slider de precisão unitária
+                                    qtd_q_prod = st.slider("Nº de Questões:", 1, 20, 10, step=1, key=f"prod_q_{v}")
 
-elif menu == "🏫 Gestão de Turmas":
-    st.title("🏫 Gestão de Turmas e Fila de Espera")
+
+                                # Expansor de Roteiro Herdado (Responsivo)
+                                tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                                roteiro_herdado = ai.extrair_tag(plano_txt, tag_previa)
+                                
+                                with st.expander(f"👁️ Visualizar Roteiro do Plano ({aula_alvo_prod})", expanded=False):
+                                    st.info(roteiro_herdado if roteiro_herdado else "Roteiro não detalhado no plano.")
+
+                            # --- 4. SENSOR DE NEURODIVERSIDADE ATIVO ---
+                            filtro_ano = str(ano_lab)
+                            alunos_foco = df_alunos[
+                                (df_alunos['TURMA'].str.contains(filtro_ano)) & 
+                                (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))
+                            ]
+
+                            if not alunos_foco.empty:
+                                lista_needs = alunos_foco['NECESSIDADES'].unique().tolist()
+                                st.warning(f"♿ **Sensor PEI Ativo:** Este material será adaptado para: {', '.join(lista_needs)}")
+                            
+                            # --- 5. INPUTS FINAIS E GERAÇÃO ---
+                            instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", 
+                                                         placeholder="Ex: Foque mais em exemplos práticos de Itabuna...",
+                                                         key=f"prod_extra_{v}")
+
+                            if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Sosa arquitetando material com Sensor Clínico e Herança de Safra..."):
+                                    
+                                    # Lógica do Sensor para o Prompt
+                                    if not alunos_foco.empty:
+                                        texto_clinico = ", ".join(lista_needs)
+                                        aviso_sensor = f"DETECTADO: {texto_clinico}"
+                                    else:
+                                        texto_clinico = "PADRÃO"
+                                        aviso_sensor = "Nenhuma necessidade específica detectada."
+
+                                    nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
+                                    st.session_state.sosa_id_atual = nome_elite
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_lab, 
+                                        "trimestre": plano_row.get('TURMA', 'I Trimestre'), 
+                                        "tipo": aula_alvo_prod, 
+                                        "semana_ref": sem_lab, 
+                                        "aula_alvo": aula_alvo_prod
+                                    }
+                                    
+                                    # Prompt com Injeção de Soberania
+                                    prompt_manual = (
+                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                        f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
+                                        f"--- HERANÇA DO PLANO ---\n{roteiro_herdado}\n"
+                                        f"--- STATUS DE REGÊNCIA POR TURMA ---\n{contexto_turmas_ia}\n" # <--- ESTA LINHA É A CHAVE
+                                        f"--- SENSOR DE INCLUSÃO (TURMA REAL) ---\n"
+                                        f"A turma possui alunos com: {texto_clinico}.\n"
+                                        f"--- MISSÃO DIFERENCIADA ---\n"
+                                        "No campo [PROFESSOR], crie uma seção 'DIRETRIZES DE REGÊNCIA' específica. "
+                                        "Se uma turma estiver com status 'Parcial', diga o que o professor deve retomar primeiro. "
+                                        "Se estiver 'Concluído', diga como avançar."
+                                        f"--- EXTRAS ---\n{instr_extra_prod}"
+                                    )
+                                    
+                                    st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                                    st.toast(f"🧬 Sensor Ativado: {aviso_sensor}", icon="♿")
+                                    st.rerun()
+
+# --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
+        with tab_trabalhos:
+            st.subheader("📋 Engenharia de Projetos e Semanários (BNCC Elite)")
+            
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([1.5, 1, 1])
+                natureza_p = c1.selectbox("Natureza do Ativo:", 
+                    ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Investigação Científica", "Projeto BNCC Livre"], 
+                    key=f"t_nat_{v}")
+                ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"t_ano_{v}")
+                modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)", "Interdisciplinar"], key=f"t_modo_{v}")
+
+            with st.container(border=True):
+                st.markdown("#### 🌟 Alinhamento de Competências Gerais (BNCC)")
+                comps_proj = st.multiselect("Selecione as Competências Âncora do Projeto:", [
+                    "1. Conhecimento", "2. Pensamento Crítico e Criativo", "3. Repertório Cultural",
+                    "4. Comunicação", "5. Cultura Digital", "6. Trabalho e Projeto de Vida",
+                    "7. Argumentação", "8. Autoconhecimento", "9. Empatia e Cooperação", "10. Responsabilidade e Cidadania"
+                ], key=f"t_comp_bncc_{v}")
+
+            with st.container(border=True):
+                c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
+                tema_t = c_t1.text_input("Título do Projeto/Tema:", placeholder="Ex: A Matemática do Cacau...", key=f"t_tema_{v}")
+                valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
+                qtd_aulas_t = c_t3.slider("Duração (Aulas):", 1, 10, 2, key=f"t_q_aulas_{v}")
+                
+            df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
+            if not df_cur_t.empty:
+                lista_eixos_t = sorted(df_cur_t["EIXO"].unique().tolist())
+                eixos_sel_t = st.multiselect("Eixos da Matriz para Integrar:", lista_eixos_t, key=f"t_eixos_multi_{v}")
+                
+                if eixos_sel_t:
+                    df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel_t)]
+                    conts_t = st.multiselect("Conteúdos Específicos (Itabuna):", 
+                                           sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), 
+                                           key=f"t_cont_multi_{v}")
+                    
+                    instr_extra_p = st.text_area("📝 Instruções de Pesquisa / Contexto Adicional:", key=f"t_extra_proj_{v}")
+
+                    if st.button("🚀 MATERIALIZAR PROJETO DE ELITE", use_container_width=True, type="primary"):
+                        if not tema_t or not conts_t:
+                            st.error("Defina o Título e selecione ao menos um Conteúdo da Matriz.")
+                        else:
+                            with st.spinner("Maestro Sosa arquitetando roteiro investigativo..."):
+                                nome_legivel = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
+                                
+                                st.session_state.sosa_id_atual = nome_legivel
+                                st.session_state.lab_meta = {
+                                    "ano": ano_t, "trimestre": "I Trimestre", 
+                                    "tipo": "PROJETO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
+                                }
+                                
+                                prompt_t = (
+                                    f"ID_FORNECIDO: {nome_legivel}.\n"
+                                    f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
+                                    f"SÉRIE: {ano_t}º Ano. MODO: {modo_t}.\n"
+                                    f"COMPETÊNCIAS BNCC: {', '.join(comps_proj)}.\n"
+                                    f"CONTEÚDOS ITABUNA: {', '.join(conts_t)}.\n"
+                                    f"VALOR: {util.sosa_to_str(valor_t)} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
+                                    f"EXTRAS: {instr_extra_p}.\n\n"
+                                    f"🚨 AVISO CRÍTICO DE FORMATAÇÃO:\n"
+                                    f"NÃO USE TABELAS DE CARACTERES (BORDAS). O Word quebra a formatação.\n"
+                                    f"Entregue a [RUBRICA_DE_MERITO] em formato de lista de tópicos clara.\n\n"
+                                    f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [COMPETENCIAS_BNCC], [HABILIDADES_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO]."
+                                )
+                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V31_ELITE", prompt_t, usar_busca=True)
+                                st.session_state.v_lab = int(time.time())
+                                st.rerun()
+
+# --- ABA 4: ATIVIDADES COMPLEMENTARES (VERSÃO V32.0 - CLÍNICA PEDAGÓGICA) ---
+        with tab_complementar:
+            st.subheader("📚 Atividades Complementares e Recomposição (Ponte Curricular)")
+            
+            with st.container(border=True):
+                c1, c2 = st.columns([1, 2])
+                ano_alvo = c1.selectbox("Série Alvo (Sua Turma):", [6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
+                
+                origem_tipo = c2.radio("Origem do Conteúdo (DNA Curricular):", 
+                    ["Série Atual (Safra/Consolidação)", "Ano Anterior (Intervenção/Recomposição)"], 
+                    horizontal=True, key=f"comp_origem_tipo_{v}")
+            
+            # --- LÓGICA DE INTERVENÇÃO CLÍNICA (SCANNER LOOKUP) ---
+            contexto_scanner = ""
+            if "Ano Anterior" in origem_tipo:
+                with st.container(border=True):
+                    st.markdown("#### 🔍 1. Análise de Evidências (Scanner)")
+                    c_t1, c_t2 = st.columns([1, 1])
+                    turma_interv = c_t1.selectbox("Selecione a Turma para Diagnóstico:", sorted(df_alunos['TURMA'].unique()), key=f"comp_turma_{v}")
+                    ano_origem = c_t2.selectbox("Buscar base em qual série?", [1, 2, 3, 4, 5, 6, 7, 8], index=ano_alvo-2, key=f"comp_ano_orig_{v}")
+                    
+                    # Busca erros reais no Scanner para esta turma
+                    if not df_diagnosticos.empty:
+                        erros_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_interv]
+                        if not erros_turma.empty:
+                            media_baixa = erros_turma[erros_turma['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0]
+                            if not media_baixa.empty:
+                                lista_avs = media_baixa['ID_AVALIACAO'].unique()
+                                st.error(f"🚨 **Lacunas Detectadas:** A turma teve baixo desempenho em: {', '.join(lista_avs[:2])}")
+                                contexto_scanner = f"A Turma {turma_interv} apresentou dificuldades reais nas avaliações: {lista_avs}. Foque em resgatar a base do {ano_origem}º ano."
+                            else:
+                                st.success("✅ Turma com bom desempenho médio no Scanner.")
+            else:
+                ano_origem = ano_alvo
+                st.info(f"📖 **Modo Safra:** Consolidando o conteúdo planejado para o {ano_alvo}º Ano.")
+
+            # --- FILTRAGEM DA MATRIZ ---
+            df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_origem))]
+            
+            if not df_cur_comp.empty:
+                with st.container(border=True):
+                    c_f1, c_f2 = st.columns(2)
+                    sel_eixo_c = c_f1.multiselect("2. Eixo da Matriz:", sorted(df_cur_comp["EIXO"].unique().tolist()), key=f"comp_eixo_{v}")
+                    if sel_eixo_c:
+                        sel_cont_c = c_f2.multiselect("3. Conteúdo Base:", sorted(df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
+                        if sel_cont_c:
+                            sel_obj_c = st.multiselect("4. Objetivos Oficiais:", sorted(df_cur_comp[df_cur_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
+                            
+                            st.divider()
+                            c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
+                            tipo_comp = c_q1.selectbox("Objetivo:", ["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
+                            qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
+                            instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
+
+                            if st.button("🚀 GERAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Maestro Sosa arquitetando material com DNA único..."):
+                                    
+                                    # 1. GERAÇÃO DO DNA ÚNICO (SOSA-ID)
+                                    # O util.gerar_sosa_id já traz o fuso de Itabuna e um hash aleatório
+                                    sosa_id_hash = util.gerar_sosa_id(tipo_comp, ano_alvo, "I") 
+                                    
+                                    # 2. DEFINIÇÃO DA NOMENCLATURA DE SOBERANIA
+                                    if "Ano Anterior" in origem_tipo:
+                                        # PADRÃO: RECOMP - {TURMA} - ID
+                                        nome_elite_c = f"RECOMP - {turma_interv} - {sosa_id_hash}"
+                                        persona_alvo = "ARQUITETO_RECOMPOSICAO_V68_ELITE"
+                                    else:
+                                        # PADRÃO: {ANO}º Ano - {TIPO} - ID
+                                        nome_elite_c = f"{ano_alvo}º Ano - {tipo_comp} - {sosa_id_hash}"
+                                        persona_alvo = "MAESTRO_SOSA_V28_ELITE"
+
+                                    # 3. CARREGAMENTO NO ESTADO DO SISTEMA
+                                    st.session_state.sosa_id_atual = nome_elite_c
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_alvo, 
+                                        "trimestre": "I Trimestre", 
+                                        "tipo": tipo_comp.upper(), 
+                                        "semana_ref": "RECOMPOSIÇÃO" if "Ano Anterior" in origem_tipo else "SAFRA"
+                                    }
+                                    
+                                    # 4. DISPARO DA IA COM O ID FORNECIDO
+                                    prompt_c = (
+                                        f"ID_FORNECIDO: {nome_elite_c}.\n"
+                                        f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE ORIGEM: {ano_origem}º Ano.\n"
+                                        f"OBJETIVO: {tipo_comp}. CONTEXTO SCANNER: {contexto_scanner}.\n"
+                                        f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
+                                        f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
+                                        f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere com as TAGS [VALOR: 0.0], [SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO], [RESPOSTAS_PEDAGOGICAS], [GRADE_DE_CORRECAO], [PEI]."
+                                    )
+                                    
+                                    st.session_state.lab_temp = ai.gerar_ia(persona_alvo, prompt_c, usar_busca=True)
+                                    st.session_state.v_lab = int(time.time())
+                                    st.rerun()
+
+# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V88 - SEGREGAÇÃO DE ATIVOS DIDÁTICOS) ---
+        with tab_acervo_lab:
+            st.subheader("📂 Gestão de Acervo de Materiais (Aulas, Projetos e Complementares)")
+            
+            # 1. FILTROS DE BUSCA DE ELITE
+            c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
+            f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
+            f_ano_m = c_m2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
+            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição"], key="m_tipo_filter")
+
+            # 2. MOTOR DE FILTRAGEM DE SOBERANIA (EXCLUSÃO DE AVALIAÇÕES)
+            # Filtro A: Remove o que está marcado como AVALIAÇÃO ou REVISÃO na semana de referência
+            df_m = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
+
+            # Filtro B: Remove por palavras-chave no título (Segurança contra contaminação)
+            termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA", "2CHAMADA"]
+            pattern_excluir = '|'.join(termos_proibidos)
+            df_m = df_m[~df_m['TIPO_MATERIAL'].str.upper().str.contains(pattern_excluir, na=False)]
+
+            # 3. APLICAÇÃO DOS FILTROS DE USUÁRIO
+            if f_trim_m != "Todos":
+                df_m = df_m[df_m['CONTEUDO'].str.contains(f_trim_m, na=False)]
+            if f_ano_m != "Todos":
+                df_m = df_m[df_m['ANO'] == f_ano_m]
+            if f_tipo_m != "Todos":
+                df_m = df_m[df_m['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
+
+            df_m = df_m.iloc[::-1] # Mais recentes no topo
+
+            if not df_m.empty:
+                st.write(f"📚 **Materiais Didáticos Localizados:** {len(df_m)}")
+                for _, row in df_m.iterrows():
+                    with st.container(border=True):
+                        txt_f = str(row['CONTEUDO'])
+                        identificador = row['TIPO_MATERIAL']
+                        
+                        # DETECÇÃO DE TIPO (AULA VS PROJETO)
+                        is_projeto_h = "[JUSTIFICATIVA_PHC]" in txt_f or "PROJETO" in identificador.upper()
+                        
+                        st.markdown(f"#### 📘 {identificador}")
+                        
+                        # EXTRAÇÃO DE METADADOS BNCC (Se for projeto)
+                        if is_projeto_h:
+                            val_hab = ai.extrair_tag(txt_f, "HABILIDADES_BNCC") or ai.extrair_tag(txt_f, "HABILIDADE_BNCC")
+                            if val_hab: st.caption(f"🆔 **Habilidades:** {re.sub(r'[*#\[\]]', '', val_hab)}")
+
+                        # 3. EXTRAÇÃO DE LINKS
+                        l_alu = re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f).group(1) if re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f) else row.get('LINK_DRIVE')
+                        l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
+                        l_prof = re.search(r"Prof\((.*?)\)", txt_f).group(1) if "Prof(" in txt_f and "Prof(N/A)" not in txt_f else None
+
+                        c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                        if l_alu: c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
+                        if l_pei: c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
+                        else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                        if l_prof: c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
+                        else: c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
+                        
+                        if c_b4.button("🔄 REFINAR", key=f"ref_mat_h_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = txt_f
+                            st.session_state.sosa_id_atual = identificador
+                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "tipo": "REFINO", "aula_alvo": row['TIPO_MATERIAL'], "semana_ref": row['SEMANA_REF']}
+                            st.success("Material carregado!"); time.sleep(0.5); st.rerun()
+                            
+                        if c_b5.button("🗑️ APAGAR", key=f"del_mat_h_{row.name}", use_container_width=True):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador):
+                                st.rerun()
+
+                        # 4. EXPANDER DE CONTEÚDO (VISÃO HÍBRIDA)
+                        with st.expander("👁️ VER DETALHES DO MATERIAL"):
+                            col_v1, col_v2 = st.columns(2)
+                            if is_projeto_h:
+                                with col_v1:
+                                    st.markdown("**👨‍🏫 Seção do Professor (PHC)**")
+                                    st.info(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'JUSTIFICATIVA_PHC')))
+                                with col_v2:
+                                    st.markdown("**📝 Roteiro do Aluno**")
+                                    st.success(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'MISSÃO_DE_PESQUISA')))
+                            else:
+                                with col_v1:
+                                    st.markdown("#### 👨‍🏫 Seção do Professor")
+                                    st.write(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "PROFESSOR") or "Conteúdo não formatado."))
+                                with col_v2:
+                                    st.markdown("#### 📝 Seção do Aluno")
+                                    st.write(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "ALUNO") or "Conteúdo não formatado."))
+            else:
+                st.info("📭 Nenhum material didático encontrado. (Avaliações são exibidas na Central de Avaliações)")
+                
+# ==============================================================================
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V31.9 (FULL INTEGRATION)
+# ==============================================================================
+if menu == "📅 Planejamento (Ponto ID)":
+    st.title("📅 Engenharia de Planejamento (Ponto ID)")
+    st.markdown("---")
+
+    # 1. DEFINIÇÃO DA FUNÇÃO DE RESET (Resolve o erro reportUndefinedVariable)
+    def reset_planejamento():
+        keys_to_clear = ["p_temp", "refino_ativo"]
+        for k in keys_to_clear:
+            if k in st.session_state: del st.session_state[k]
+        st.session_state.v_plano = int(time.time())
+        st.rerun()
+
+    if "v_plano" not in st.session_state: 
+        st.session_state.v_plano = int(time.time())
     
-    t0, t1, t2, t3, t4, t5 = st.tabs([
-        "⏳ Fila de Espera", "📋 Visualizar Turmas", "➕ Criar Nova Turma", 
-        "✏️ Detalhes e Edição", "📊 Dashboard Local", "🚀 Movimentação em Massa"
+    v = st.session_state.v_plano 
+
+    tab_gerar, tab_producao, tab_acervo, tab_matriz, tab_auditoria = st.tabs([
+        "🚀 Engenharia de Planejamento", "🏗️ Dashboard de Produção", "📂 Gestão de Acervo (PIP)", "📖 Matriz Curricular Ativa", "📈 Auditoria de Cobertura"
     ])
     
-    dias_opcoes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-    etapas_lista = [
-        "PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", 
-        "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"
-    ]
+    with tab_gerar:
+        # --- 🛡️ STATUS E NATUREZA ---
+        with st.container(border=True):
+            st.markdown("### 🛡️ 1. Status e Natureza da Semana")
+            cg1, cg2, cg3 = st.columns([1.5, 1, 1])
+            tipo_semana = cg1.selectbox("Natureza:", ["Aula Regular", "Avaliação / Trabalho", "Evento Extraordinário"], key=f"gate_tipo_{v}")
+            tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
+            carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-    with t0:
-        st.subheader("⏳ Fila de Espera")
-        if df_cat.empty:
-            st.info("Nenhum catequizando cadastrado no sistema.")
-        else:
-            # Identifica turmas que realmente existem no banco para achar os 'órfãos'
-            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+        # --- ⚙️ PARÂMETROS DE REGÊNCIA ---
+        with st.container(border=True):
+            st.markdown("### ⚙️ 2. Parâmetros de Regência")
+            c1, c2, c3 = st.columns([1, 2, 1.5])
+            ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}")
+            todas_semanas = util.gerar_semanas()
+            sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
+            sem_limpa = sem_p.split(" (")[0]
+            trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             
-            # Filtra quem está sem turma ou em turma que não existe mais
-            fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
-            
-            if not fila_espera.empty:
-                # Blindagem: Só tenta filtrar colunas se o DataFrame não estiver vazio
-                colunas_para_exibir = ['nome_completo', 'etapa', 'contato_principal']
-                # Garante que só usaremos colunas que realmente existem no DF
-                cols_existentes = [c for c in colunas_para_exibir if c in fila_espera.columns]
-                
-                st.dataframe(fila_espera[cols_existentes], use_container_width=True, hide_index=True)
-            else:
-                st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
-
-    with t1:
-        st.subheader("📋 Turmas Cadastradas")
-        st.dataframe(df_turmas, use_container_width=True, hide_index=True)
-
-    with t2:
-        st.subheader("➕ Cadastrar Nova Turma")
-        with st.form("form_criar_t_v15"):
-            c1, c2 = st.columns(2)
-            n_t = c1.text_input("Nome da Turma (Ex: PRÉ ETAPA 2026)").upper()
-            e_t = c1.selectbox("Etapa Base", etapas_lista)
-            ano = c2.number_input("Ano Letivo", value=2026)
-            n_dias = st.multiselect("Dias de Encontro", dias_opcoes)
-            
-            st.markdown("---")
-            c3, c4 = st.columns(2)
-            turno_t = c3.selectbox("Turno do Encontro", ["MANHÃ", "TARDE", "NOITE"])
-            local_t = c4.text_input("Local/Sala do Encontro", value="SALA").upper()
-            
-            # Catequistas agora são opcionais na criação
-            cats_selecionados = st.multiselect("Catequistas Responsáveis (Opcional)", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [])
-            
-            if st.form_submit_button("🚀 SALVAR NOVA TURMA"):
-                # Validação: Apenas Nome e Dias são obrigatórios para a turma existir
-                if n_t and n_dias:
-                    try:
-                        planilha = conectar_google_sheets()
-                        if planilha:
-                            # 1. Grava na aba 'turmas' (A turma nasce aqui, independente de catequista)
-                            nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
-                            planilha.worksheet("turmas").append_row(nova_t)
-                            
-                            # 2. Sincroniza Perfis (Apenas se houver catequistas selecionados)
-                            if cats_selecionados:
-                                aba_u = planilha.worksheet("usuarios")
-                                for c_nome in cats_selecionados:
-                                    celula = aba_u.find(c_nome, in_column=1)
-                                    if celula:
-                                        v_atual = aba_u.cell(celula.row, 5).value or ""
-                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                        if n_t not in v_list:
-                                            v_list.append(n_t)
-                                            aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                            
-                            st.success(f"✅ Turma '{n_t}' criada com sucesso!")
-                            st.cache_data.clear()
-                            time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Erro ao salvar: {e}")
-                else: st.warning("⚠️ O Nome da Turma e os Dias de Encontro são obrigatórios.")
-
-    with t3:
-        st.subheader("✏️ Detalhes e Edição da Turma")
-        if not df_turmas.empty:
-            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_final_v15")
-            
-            if sel_t:
-                d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
-                nome_turma_original = str(d['nome_turma'])
-                
-                c1, c2 = st.columns(2)
-                en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="edit_nome_v15").upper()
-                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="edit_etapa_v15")
-                ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="edit_ano_v15")
-                
-                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
-                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes], key="edit_dias_v15")
-                
-                st.markdown("---")
-                c3, c4 = st.columns(2)
-                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
-                turno_atual = str(d.get('turno', 'MANHÃ')).upper()
-                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0, key="edit_turno_v15")
-                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA'), key="edit_local_v15").upper()
-                
-                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="edit_pe_v15")
-                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="edit_pc_v15")
-                
-                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
-                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
-                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_v15")
-                
-                col_btn_save, col_btn_del = st.columns([3, 1])
-                
-                with col_btn_save:
-                    if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15", use_container_width=True):
-                        with st.spinner("Processando atualizações e movendo catequizandos..."):
-                            # 1. Atualiza os dados da Turma
-                            lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
-                            
-                            if atualizar_turma(d['id_turma'], lista_up):
-                                # 2. SE O NOME MUDOU: Sincroniza os catequizandos (Cascata)
-                                if en != nome_turma_original:
-                                    from database import sincronizar_renomeacao_turma_catequizandos
-                                    sincronizar_renomeacao_turma_catequizandos(nome_turma_original, en)
-                                
-                                # 3. Sincroniza Perfis dos Catequistas (Lógica original mantida)
-                                planilha = conectar_google_sheets()
-                                aba_u = planilha.worksheet("usuarios")
-                                for _, cat_row in equipe_tecnica.iterrows():
-                                    c_nome = cat_row['nome']
-                                    celula = aba_u.find(c_nome, in_column=1)
-                                    if celula:
-                                        v_atual = aba_u.cell(celula.row, 5).value or ""
-                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                        mudou = False
-                                        if c_nome in ed_cats:
-                                            if en not in v_list: v_list.append(en); mudou = True
-                                            if nome_turma_original in v_list and en != nome_turma_original:
-                                                v_list.remove(nome_turma_original); mudou = True
-                                        else:
-                                            if en in v_list: v_list.remove(en); mudou = True
-                                            if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
-                                        if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                                
-                                st.success(f"✅ Turma e Catequizandos atualizados para '{en}'!")
-                                st.cache_data.clear()
-                                time.sleep(1)
-                                st.rerun()
-
-                # --- NOVO MECANISMO: EXCLUIR TURMA ---
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
-                    st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
-                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_t")
-                    
-                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
-                        with st.spinner("Movendo catequizandos e excluindo itinerário..."):
-                            # 1. Localiza e move catequizandos para a Fila de Espera
-                            alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
-                            if not alunos_da_turma.empty:
-                                ids_para_mover = alunos_da_turma['id_catequizando'].tolist()
-                                mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
-                            
-                            # 2. Remove vínculo dos catequistas na aba usuarios
-                            planilha = conectar_google_sheets()
-                            aba_u = planilha.worksheet("usuarios")
-                            for _, cat_row in equipe_tecnica.iterrows():
-                                v_atual = str(cat_row.get('turma_vinculada', ''))
-                                if sel_t in v_atual:
-                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                    if sel_t in v_list:
-                                        v_list.remove(sel_t)
-                                        celula_u = aba_u.find(cat_row['nome'], in_column=1)
-                                        if celula_u:
-                                            aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
-                            
-                            # 3. Exclui a turma da aba turmas
-                            if excluir_turma(d['id_turma']):
-                                st.success(f"Turma excluída! {len(alunos_da_turma)} catequizandos movidos para a Fila de Espera.")
-                                st.cache_data.clear()
-                                time.sleep(2)
-                                st.rerun()
-
-    with t4:
-        st.subheader("📊 Inteligência Pastoral da Turma")
-        if not df_turmas.empty:
-            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v7_final")
-            
-            # --- CARREGAMENTO DE DADOS ---
-            alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
-            info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
-            pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
-            df_cron_local = ler_aba("cronograma")
-            df_enc_local = ler_aba("encontros")
-            df_pres_reu = ler_aba("presenca_reuniao")
-            
-            if not alunos_t.empty:
-                # --- 1. MÉTRICAS EXPANDIDAS (ORIGINAIS + NOVAS) ---
-                m1, m2, m3, m4, m5, m6 = st.columns(6)
-                
-                # Catequistas (Original)
-                qtd_cats_real = len(str(info_t['catequista_responsavel']).split(','))
-                m1.metric("Catequistas", qtd_cats_real)
-                
-                # Catequizandos (Original)
-                m2.metric("Catequizandos", len(alunos_t))
-                
-                # Frequência (Original)
-                freq_global = 0.0
-                if not pres_t.empty:
-                    pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
-                    freq_global = round(pres_t['status_num'].mean() * 100, 1)
-                m3.metric("Frequência", f"{freq_global}%")
-                
-                # Idade Média (Original)
-                idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
-                idade_media_val = round(sum(idades)/len(idades), 1) if idades else 0
-                m4.metric("Idade Média", f"{idade_media_val}a")
-
-                # Engajamento Familiar (NOVO)
-                perc_pais = 0
-                if not df_pres_reu.empty:
-                    pais_presentes = df_pres_reu[df_pres_reu.iloc[:, 3] == t_alvo].iloc[:, 1].nunique()
-                    perc_pais = int((pais_presentes / len(alunos_t)) * 100) if len(alunos_t) > 0 else 0
-                m5.metric("Engajamento Pais", f"{perc_pais}%")
-
-                # Progresso Itinerário (NOVO)
-                total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
-                total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
-                progresso = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
-                m6.metric("Itinerário", f"{progresso}%")
-
-                # --- 2. RADAR DE ENTURMAÇÃO (ORIGINAL MANTIDO) ---
-                st.divider()
-                st.markdown("#### 🚀 Radar de Enturmação (Sugestão de Movimentação)")
-                etapa_base = str(info_t['etapa']).upper()
-                faixas = {"PRÉ": (4, 6), "PRIMEIRA ETAPA": (7, 8), "SEGUNDA ETAPA": (9, 10), "TERCEIRA ETAPA": (11, 13), "PERSEVERANÇA": (14, 15), "ADULTOS": (16, 99)}
-                min_ideal, max_ideal = faixas.get(etapa_base, (0, 99))
-                
-                fora_da_faixa = []
-                for _, r in alunos_t.iterrows():
-                    idade_c = calcular_idade(r['data_nascimento'])
-                    if idade_c < min_ideal: fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔽 Abaixo"})
-                    elif idade_c > max_ideal: fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔼 Acima"})
-                
-                if fora_da_faixa:
-                    st.warning(f"⚠️ {len(fora_da_faixa)} catequizandos fora da faixa etária para {etapa_base}.")
-                    with st.expander("🔍 Ver quem precisa de atenção para movimentação"):
-                        for item in fora_da_faixa: st.write(f"**{item['nome']}** - {item['idade']} anos ({item['aviso']})")
+            ctx_ia = ""
+            if tipo_semana == "Avaliação / Trabalho":
+                st.markdown("#### 📦 Vincular Ativo de Safra (Lookup)")
+                mats_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_p))]
+                if not mats_ano.empty:
+                    ativo_sel = st.selectbox("Selecione o Material Pronto:", mats_ano['TIPO_MATERIAL'].tolist(), key=f"ativo_lookup_{v}")
+                    dados_ativo = mats_ano[mats_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
+                    ctx_ia = f"MODO AVALIAÇÃO. ATIVO VINCULADO: {ativo_sel}. CONTEÚDO DO ATIVO: {dados_ativo['CONTEUDO']}"
                 else:
-                    st.success(f"✅ Todos na faixa etária ideal.")
-
-                # --- 3. PRONTIDÃO SACRAMENTAL E SAÚDE (NOVA INTEGRAÇÃO) ---
-                st.divider()
-                col_sac, col_sau = st.columns(2)
-                
-                with col_sac:
-                    st.markdown("#### 🕊️ Prontidão Sacramental")
-                    sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
-                    if sem_batismo > 0:
-                        st.error(f"🚨 **{sem_batismo}** catequizandos sem Batismo.")
-                    else:
-                        st.success("✅ Todos os catequizandos são batizados.")
-                    
-                    # Checa documentos
-                    docs_pend = len(alunos_t[~alunos_t['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
-                    if docs_pend > 0:
-                        st.warning(f"📄 **{docs_pend}** com pendência de documentos.")
-
-                with col_sau:
-                    st.markdown("#### 🏥 Cuidado e Inclusão")
-                    tgo_count = len(alunos_t[alunos_t['tgo_sn'] == 'SIM'])
-                    med_count = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
-                    if tgo_count > 0: st.info(f"💙 **{tgo_count}** catequizando(s) com TGO (Inclusão).")
-                    if med_count > 0: st.warning(f"💊 **{med_count}** fazem uso de medicamento/alergia.")
-                    if tgo_count == 0 and med_count == 0: st.write("Nenhuma observação de saúde registrada.")
-
-                # --- 4. LINHA DO TEMPO PEDAGÓGICA (NOVA INTEGRAÇÃO) ---
-                st.divider()
-                st.markdown("#### 📖 Itinerário Pedagógico")
-                c_it1, c_it2 = st.columns(2)
-                with c_it1:
-                    st.caption("Últimos Temas Ministrados")
-                    if not df_enc_local.empty:
-                        ultimos = df_enc_local[df_enc_local['turma'] == t_alvo].sort_values('data', ascending=False).head(3)
-                        for _, u in ultimos.iterrows(): st.write(f"✅ {formatar_data_br(u['data'])} - {u['tema']}")
-                    else: st.write("Nenhum encontro registrado.")
-                with c_it2:
-                    st.caption("Próximos Temas Planejados")
-                    if not df_cron_local.empty:
-                        proximos = df_cron_local[(df_cron_local['etapa'] == t_alvo) & (df_cron_local.get('status','') != 'REALIZADO')].head(3)
-                        for _, p in proximos.iterrows(): st.write(f"📌 {p['titulo_tema']}")
-                    else: st.write("Cronograma concluído ou vazio.")
-
-                # --- 5. DOCUMENTAÇÃO E AUDITORIA (ORIGINAL MANTIDO) ---
-                st.divider()
-                st.markdown("#### 📄 Documentação e Auditoria")
-                col_doc1, col_doc2 = st.columns(2)
-                
-                with col_doc1:
-                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_v7"):
-                        with st.spinner("Analisando prontidão da turma..."):
-                            # 1. Coleta de Métricas Avançadas
-                            sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
-                            batizados = len(alunos_t) - sem_batismo
-                            tgo_c = len(alunos_t[alunos_t['tgo_sn'] == 'SIM'])
-                            saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
-                            
-                            # Engajamento Pais
-                            perc_pais = 0
-                            if not df_pres_reu.empty:
-                                pais_presentes = df_pres_reu[df_pres_reu.iloc[:, 3] == t_alvo].iloc[:, 1].nunique()
-                                perc_pais = int((pais_presentes / len(alunos_t)) * 100) if len(alunos_t) > 0 else 0
-
-                            # Progresso Itinerário
-                            total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
-                            total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
-                            prog_it = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
-
-                            # 2. Preparação da Lista Nominal Enriquecida
-                            lista_geral = []
-                            for _, r in alunos_t.iterrows():
-                                f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-                                has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
-                                lista_geral.append({
-                                    'nome': r['nome_completo'], 
-                                    'faltas': f,
-                                    'batismo': r['batizado_sn'],
-                                    'eucaristia': has_euc,
-                                    'status': r['status']
-                                })
-
-                            # 3. Chamada da IA com contexto rico
-                            resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%. Pais: {perc_pais}%. Batizados: {batizados}. Pendentes Batismo: {sem_batismo}. TGO: {tgo_c}."
-                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
-
-                            # 4. Geração do PDF v3
-                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v3(
-                                t_alvo, 
-                                {
-                                    'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 
-                                    'freq_global': freq_global, 'idade_media': idade_media_val,
-                                    'engaj_pais': perc_pais, 'progresso_it': prog_it,
-                                    'batizados': batizados, 'pend_batismo': sem_batismo,
-                                    'tgo': tgo_c, 'saude': saude_c
-                                }, 
-                                {'geral': lista_geral}, 
-                                parecer_ia
-                            )
-                    # --- BOTÃO DE DOWNLOAD (APARECE APÓS A GERAÇÃO) ---
-                    if f"pdf_auditoria_{t_alvo}" in st.session_state:
-                        st.write("") # Pequeno espaçador visual
-                        st.download_button(
-                            label=f"📥 BAIXAR AUDITORIA: {t_alvo}",
-                            data=st.session_state[f"pdf_auditoria_{t_alvo}"],
-                            file_name=f"Auditoria_Pastoral_{t_alvo.replace(' ', '_')}_{date.today().year}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                with col_doc2:
-                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_v7"):
-                        with st.spinner("Gerando fichas individuais..."):
-                            pdf_fichas = gerar_fichas_turma_completa(t_alvo, alunos_t)
-                            st.session_state[f"pdf_fichas_{t_alvo}"] = pdf_fichas
-                    if f"pdf_fichas_{t_alvo}" in st.session_state:
-                        st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
-
-                # --- 6. LISTA NOMINAL DE CAMINHADA (ORIGINAL MANTIDO) ---
-                st.divider()
-                st.markdown("### 📋 Lista Nominal de Caminhada")
-                lista_preview = []
-                for _, r in alunos_t.iterrows():
-                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-                    idade_c = calcular_idade(r['data_nascimento'])
-                    lista_preview.append({'Catequizando': r['nome_completo'], 'Idade': f"{idade_c} anos", 'Faltas': f, 'Status': r['status']})
-                st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
+                    st.warning("Nenhum material (Prova/Trabalho) encontrado para este ano.")
+            
+            elif tipo_semana == "Evento Extraordinário":
+                st.markdown("#### 🌟 Foco em Competências Gerais (BNCC)")
+                comps_bncc = st.multiselect("Selecione as Competências do Evento:", [
+                    "1. Conhecimento", "2. Pensamento Crítico", "3. Repertório Cultural", "4. Comunicação", 
+                    "5. Cultura Digital", "6. Projeto de Vida", "7. Argumentação", "8. Autoconhecimento", 
+                    "9. Empatia", "10. Responsabilidade"
+                ], key=f"comp_geral_{v}")
+                ctx_ia = f"MODO EVENTO. COMPETÊNCIAS: {', '.join(comps_bncc)}"
+            
             else:
-                st.info("Selecione uma turma com catequizandos ativos.")
+                modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
+                if modo_p == "🎛️ Manual (Banco)":
+                    st.markdown("#### 🎯 Seleção Manual da Matriz (Itabuna)")
+                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                    sel_eixo = st.multiselect("1. Eixo:", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
+                    sel_cont = st.multiselect("2. Conteúdo:", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [], key=f"p_cont_{v}")
+                    sel_obj = st.multiselect("3. Objetivos:", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [], key=f"p_obj_{v}")
+                    ctx_ia = f"MODO REGULAR. EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+                else:
+                    cx1, cx2 = st.columns([2, 1])
+                    sel_mat = cx1.multiselect("Livro:", df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else [], key=f"p_livro_{v}")
+                    pags = cx2.text_input("Páginas:", key=f"p_pags_{v}")
+                    ctx_ia = f"MODO LIVRO: {sel_mat} PÁGINAS: {pags}."
 
-    with t5:
-        st.subheader("🚀 Movimentação em Massa")
-        if not df_turmas.empty and not df_cat.empty:
-            c1, c2 = st.columns(2)
-            opcoes_origem = ["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
-            t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_v6")
-            t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_v6")
+            strat = st.text_area("Estratégia / Descrição do Evento:", key=f"p_strat_{v}")
+
+        if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
+            with st.spinner("Maestro SOSA realizando Integração de Safra..."):
+                df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                status_sabado = "ATIVADO" if tem_sabado else "DESATIVADO"
+                prompt = (
+                    f"TIPO SEMANA: {tipo_semana}. ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. SÁBADO: {status_sabado}.\n"
+                    f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"--- MATRIZ ITABUNA ---\n{df_matriz_ano.to_string(index=False)}"
+                )
+                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                st.session_state.v_plano = int(time.time())
+                st.rerun()
+
+        # --- ✏️ EDITOR E VISUALIZAÇÃO ---
+        if "p_temp" in st.session_state:
+            txt_bruto = st.session_state.p_temp
+            t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura BNCC Elite"])
+            
+            with t_ed:
+                with st.container(border=True):
+                    st.subheader("🤖 Refinador Maestro")
+                    cmd_refine = st.chat_input("Solicite ajustes...", key=f"chat_refine_{v}")
+                    if cmd_refine:
+                        with st.spinner("Reengenharia em curso..."):
+                            st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
+                            st.session_state.v_plano = int(time.time())
+                            st.rerun()
+                    if st.button("🗑️ LIMPAR GERADO", use_container_width=True, key=f"btn_clear_{v}"): reset_planejamento()
+
+                c_ed1, c_ed2 = st.columns([1, 2])
+                ed_hab = c_ed1.text_input("Habilidade/Competência:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "COMPETENCIA_GERAL"), key=f"ed_h_{v}")
+                ed_comp = c_ed2.text_input("Competências Foco:", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO"), key=f"ed_c_{v}")
+                ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"), key=f"ed_g_{v}")
+                ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), key=f"ed_e_{v}")
+                ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), key=f"ed_o_{v}")
+                ed_a1 = st.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=200, key=f"a1_{v}")
+                ed_a2 = st.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=200, key=f"a2_{v}")
+                
+                # INICIALIZAÇÃO DE ed_a3 (Resolve o erro "ed_a3" não está definido)
+                val_a3 = ai.extrair_tag(txt_bruto, "SABADO_LETIVO")
+                ed_a3 = st.text_area("SÁBADO LETIVO:", val_a3 if val_a3 else "N/A", key=f"ed_a3_{v}")
+                
+                ed_ava = st.text_area("Avaliação/Logística:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO") or ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
+                ed_dua = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_dua_{v}")
+
+                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_save_{v}"):
+                    with st.status("Sincronizando Hub Acadêmico...") as status:
+                        final_ano_str = f"{ano_p}º"
+                        nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
+                        db.excluir_plano_completo(sem_limpa, final_ano_str)
+                        
+                        # Consolidação para o DOCX
+                        dados_docx = {
+                            "geral": f"[{ed_hab}] {ed_geral}", 
+                            "especificos": ed_espec, "objetivos": ed_objs, 
+                            "recursos": "Livro Didático e Materiais de Safra",
+                            "metodologia": f"COMPETÊNCIAS: {ed_comp}\n\nAULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}",
+                            "avaliacao": ed_ava, "pei": ed_dua
+                        }
+                        
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
+                        link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
+                        
+                        if "https" in str(link_drive):
+                            final_txt = (
+                                f"[HABILIDADE_BNCC] {ed_hab} \n[COMPETENCIAS_FOCO] {ed_comp} \n"
+                                f"[OBJETO_CONHECIMENTO] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n"
+                                f"[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n"
+                                f"[SABADO_LETIVO] {ed_a3} \n[AVALIACAO_DE_MERITO] {ed_ava} \n"
+                                f"[ESTRATEGIA_DUA_PEI] {ed_dua} \n--- LINK DRIVE --- {link_drive}"
+                            )
+                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
+                            status.update(label="✅ Plano Sincronizado!", state="complete")
+                            st.balloons()
+                            reset_planejamento()
+
+            with t_vis:
+                st.subheader("👁️ Estrutura BNCC Elite (Visão de Regência)")
+                c_v1, c_v2 = st.columns(2)
+                with c_v1:
+                    st.info(f"**🎯 Objeto:** {ed_geral}")
+                    st.markdown(f"**🆔 Habilidade:** {ed_hab}")
+                    st.markdown(f"**🌟 Competências:** {ed_comp}")
+                with c_v2:
+                    st.success(f"**👨‍🏫 Aula 1:**\n{ed_a1}")
+                    st.success(f"**👨‍🏫 Aula 2:**\n{ed_a2}")
+                st.divider()
+                c_v3, c_v4 = st.columns(2)
+                with c_v3: st.warning(f"**♿ DUA/PEI:**\n{ed_dua}")
+                with c_v4: st.error(f"**📝 Avaliação:**\n{ed_ava}")
+                if ed_a3 != "N/A": st.info(f"**🗓️ Sábado Letivo:**\n{ed_a3}")
+                
+# --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V31.9 - FIX LOGIC) ---
+    with tab_producao:
+        st.subheader("🏗️ Linha de Montagem de Materiais")
+        if not df_planos.empty:
+            planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
+            
+            if not planos_ativos.empty:
+                for _, row in planos_ativos.iterrows():
+                    with st.container(border=True):
+                        c_p1, c_p2, c_p3, c_p4 = st.columns([1.5, 1.5, 1, 1])
+                        
+                        sem_ref = row['SEMANA']
+                        ano_ref = row['ANO']
+                        
+                        c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
+                        
+                        # --- VERIFICAÇÃO DE PROGRESSO REAL (CORRIGIDA) ---
+                        # Agora olhamos para a coluna TIPO_MATERIAL, que é onde o nome da aula reside
+                        aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
+                        lista_tipos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
+                        
+                        # Verifica se "Aula 1" ou "Aula 2" constam na lista de materiais prontos
+                        a1_status = "✅" if any("Aula 1" in t for t in lista_tipos) else "⏳"
+                        a2_status = "✅" if any("Aula 2" in t for t in lista_tipos) else "⏳"
+                        
+                        c_p2.markdown(f"**Progresso:**\n{a1_status} Aula 1 | {a2_status} Aula 2")
+                        
+                        # Botão para ir ao Criador
+                        if c_p3.button("🧪 PRODUZIR", key=f"gen_hub_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = row["PLANO_TEXTO"]
+                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row["ANO"], row["TURMA"])
+                            st.session_state.lab_meta = {
+                                "ano": str(row["ANO"]).replace("º",""), 
+                                "trimestre": row["TURMA"], 
+                                "tipo": "PRODUÇÃO_HUB",
+                                "semana_ref": sem_ref
+                            }
+                            st.success("Conteúdo enviado! Vá ao Criador de Aulas.")
+
+                        if c_p4.button("✅ CONCLUIR", key=f"fin_hub_{row.name}", use_container_width=True):
+                            if db.arquivar_plano_produzido(sem_ref, ano_ref):
+                                st.success("Safra Concluída!"); time.sleep(1); st.rerun()
+            else:
+                st.info("📭 Nenhum plano pendente no Dashboard.")
+
+# --- ABA 3: GESTÃO DE ACERVO (VERSÃO V31.5 - FULL BNCC ELITE) ---
+    with tab_acervo:
+        st.subheader("📂 Repositório de Planos Estratégicos (Visão 360°)")
+        if not df_planos.empty:
+            c_h1, c_h2 = st.columns([1, 2])
+            f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v31")
+            
+            df_h = df_planos.copy()
+            if f_ano_h != "Todos": 
+                df_h = df_h[df_h["ANO"] == f"{f_ano_h}º"]
+            
+            if not df_h.empty:
+                # Inverte para mostrar os mais recentes primeiro
+                lista_semanas = df_h["SEMANA"].tolist()[::-1]
+                sel_h = st.selectbox("Selecionar Plano para Visualização:", lista_semanas, key="hist_sem_v31")
+                
+                dados_h = df_h[df_h["SEMANA"] == sel_h].iloc[0]
+                raw_h = str(dados_h["PLANO_TEXTO"])
+                
+                # --- BOTÕES DE AÇÃO ---
+                col_btn1, col_btn2, col_btn3 = st.columns(3)
+                with col_btn1:
+                    if st.button("🔄 REABRIR PARA REFINO", use_container_width=True, key=f"btn_reopen_{sel_h}"):
+                        st.session_state.refino_ativo = {"ano": dados_h["ANO"], "semana": sel_h}
+                        st.session_state.p_temp = raw_h
+                        st.session_state.v_plano = int(time.time())
+                        st.success("✅ Plano carregado no Editor!")
+                        st.rerun()
+                with col_btn2:
+                    if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_hub_act_{sel_h}"):
+                        if db.ativar_plano_no_hub(sel_h, dados_h["ANO"]):
+                            st.success("✅ Plano enviado ao Dashboard!"); time.sleep(1); st.rerun()
+                with col_btn3:
+                    if "https" in str(dados_h["LINK_DRIVE"]): 
+                        st.link_button("📂 ABRIR NO DRIVE", str(dados_h["LINK_DRIVE"]), use_container_width=True)
+
+                # --- VISUALIZAÇÃO DE ELITE (MAPA DO PLANO) ---
+                with st.container(border=True):
+                    # 1. CABEÇALHO TÉCNICO
+                    val_objeto = ai.extrair_tag(raw_h, "OBJETO_CONHECIMENTO") or ai.extrair_tag(raw_h, "CONTEUDO_GERAL")
+                    val_hab = ai.extrair_tag(raw_h, "HABILIDADE_BNCC") or ai.extrair_tag(raw_h, "BNCC_CODE")
+                    val_comp = ai.extrair_tag(raw_h, "COMPETENCIAS_FOCO") or ai.extrair_tag(raw_h, "COMPETENCIAS_BNCC")
+                    
+                    st.markdown(f"### 🎯 {val_objeto}")
+                    st.markdown(f"**🆔 Habilidade:** `{val_hab}`")
+                    st.info(f"**🌟 Competências Foco:** {val_comp}")
+                    
+                    # 2. CONTEÚDOS E OBJETIVOS (LITERAL ITABUNA)
+                    c_info1, c_info2 = st.columns(2)
+                    with c_info1:
+                        st.markdown("<div style='background-color:rgba(41, 98, 255, 0.1); padding:10px; border-radius:5px;'><b>📖 Conteúdos:</b><br>"+ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')+"</div>", unsafe_allow_html=True)
+                    with c_info2:
+                        st.markdown("<div style='background-color:rgba(46, 204, 113, 0.1); padding:10px; border-radius:5px;'><b>✅ Objetivos:</b><br>"+ai.extrair_tag(raw_h, 'OBJETIVOS_ENSINO')+"</div>", unsafe_allow_html=True)
+                    
+                    st.divider()
+                    
+                    # 3. ROTEIRO DE AULAS
+                    c_v1, c_v2 = st.columns(2)
+                    with c_v1: 
+                        st.markdown("##### 📘 Aula 1 (Fundamentação)")
+                        st.write(ai.extrair_tag(raw_h, "AULA_1"))
+                    with c_v2: 
+                        st.markdown("##### 📗 Aula 2 (Aplicação)")
+                        st.write(ai.extrair_tag(raw_h, "AULA_2"))
+                    
+                    # 4. SÁBADO, AVALIAÇÃO E DUA
+                    st.divider()
+                    c_v3, c_v4 = st.columns(2)
+                    with c_v3:
+                        val_dua = ai.extrair_tag(raw_h, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(raw_h, "ADAPTACAO_PEI")
+                        st.warning(f"**♿ Estratégia DUA/PEI:**\n{val_dua}")
+                    with c_v4:
+                        val_ava = ai.extrair_tag(raw_h, "AVALIACAO_DE_MERITO") or ai.extrair_tag(raw_h, "AVALIACAO")
+                        st.error(f"**📝 Avaliação de Mérito:**\n{val_ava}")
+                    
+                    sab_txt = ai.extrair_tag(raw_h, "SABADO_LETIVO")
+                    if sab_txt and "N/A" not in sab_txt.upper():
+                        st.success(f"**🗓️ Sábado Letivo:**\n{sab_txt}")
+                
+                if st.button("🗑️ EXCLUIR PLANO DO ACERVO", use_container_width=True, key=f"btn_del_plan_{sel_h}"):
+                    if db.excluir_plano_completo(sel_h, dados_h["ANO"]): 
+                        st.rerun()
+            else: 
+                st.info("📭 Nenhum plano encontrado para esta série.")
+        else: 
+            st.info("📭 Acervo vazio.")
+
+    # --- ABA 4: MATRIZ CURRICULAR ATIVA ---
+    with tab_matriz:
+        st.subheader("📖 Matriz de Competências e Status de Execução")
+        if not df_curriculo.empty:
+            ano_c = st.selectbox("Série para Consulta:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="matriz_ano_v35")
+            df_c = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_c))].copy()
+            planos_feitos = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_c))]
+            lista_conteudos_oficiais = [ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos["PLANO_TEXTO"]]
+            texto_soberano_planos = " | ".join(lista_conteudos_oficiais)
+
+            def checar_conclusao_cirurgica(conteudo_db):
+                if not texto_soberano_planos: return "⏳ PENDENTE"
+                def limpar(t): return re.sub(r'[^A-Z0-9]', '', str(t).upper())
+                target_limpo = limpar(conteudo_db)
+                soberano_limpo = limpar(texto_soberano_planos)
+                if target_limpo in soberano_limpo: return "✅ CONCLUÍDO"
+                palavras = [p for p in str(conteudo_db).upper().replace(";", "").replace(",", "").split() if len(p) > 4]
+                if not palavras: return "⏳ PENDENTE"
+                matches = sum(1 for p in palavras if limpar(p) in soberano_limpo)
+                return "✅ CONCLUÍDO" if matches >= 2 else "⏳ PENDENTE"
+
+            df_c["STATUS"] = df_c["CONTEUDO_ESPECIFICO"].apply(checar_conclusao_cirurgica)
+            st.dataframe(df_c[["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO", "STATUS"]], use_container_width=True, hide_index=True)
+
+    # --- ABA 5: ANALYTICS DE COBERTURA (CORREÇÃO TYPEERROR) ---
+    with tab_auditoria:
+        st.subheader("📈 Analytics de Cobertura Curricular")
+        if not df_curriculo.empty:
+            ano_m = st.selectbox("Analisar Série:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="auditoria_ano_v35")
+            df_m = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_m))].copy()
+            planos_m = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_m))]
+            lista_cont_m = [ai.extrair_tag(t, "CONTEUDOS_ESPECIFICOS").upper() for t in planos_m["PLANO_TEXTO"]]
+            texto_m_soberano = " | ".join(lista_cont_m)
+            
+            def concluido_num_cirurgico(x):
+                def limpar(t): return re.sub(r'[^A-Z0-9]', '', str(t).upper())
+                txt = limpar(x)
+                if txt in limpar(texto_m_soberano): return 1
+                palavras = [p for p in str(x).upper().split() if len(p) > 4]
+                return 1 if (palavras and sum(1 for p in palavras if limpar(p) in limpar(texto_m_soberano)) >= 2) else 0
+
+            df_m["CONCLUIDO"] = df_m["CONTEUDO_ESPECIFICO"].apply(concluido_num_cirurgico)
+            progresso_trim = df_m.groupby("TRIMESTRE")["CONCLUIDO"].agg(["sum", "count"]).reset_index()
+            
+            if not progresso_trim.empty:
+                # VACINA CONTRA TYPEERROR: Força conversão para numérico antes do cálculo
+                progresso_trim["sum"] = pd.to_numeric(progresso_trim["sum"], errors='coerce').fillna(0)
+                progresso_trim["count"] = pd.to_numeric(progresso_trim["count"], errors='coerce').fillna(1)
+                
+                progresso_trim["%"] = (progresso_trim["sum"] / progresso_trim["count"] * 100)
+                # Converte o resultado final para float antes de arredondar
+                progresso_trim["%"] = pd.to_numeric(progresso_trim["%"]).round(1)
+                
+                c1, c2, c3 = st.columns(3)
+                total_geral = (progresso_trim["sum"].sum() / progresso_trim["count"].sum() * 100) if progresso_trim["count"].sum() > 0 else 0
+                c1.metric("Cobertura Anual", f"{total_geral:.1f}%")
+                p_i = progresso_trim[progresso_trim["TRIMESTRE"] == "I"]["%"].values[0] if "I" in progresso_trim["TRIMESTRE"].values else 0
+                c2.metric("Progresso I Trimestre", f"{p_i}%")
+                p_ii = progresso_trim[progresso_trim["TRIMESTRE"] == "II"]["%"].values[0] if "II" in progresso_trim["TRIMESTRE"].values else 0
+                c3.metric("Progresso II Trimestre", f"{p_ii}%")
+
+                st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
+            
+# ==============================================================================
+# MÓDULO: DIÁRIO DE BORDO (V30.0 - PERSISTÊNCIA E CANAL DISCIPLINAR LIMPO)
+# ==============================================================================
+elif menu == "📝 Diário de Bordo Rápido":
+    st.title("📝 Diário de Bordo: Prontidão e Disciplina")
+    
+    if "v_diario" not in st.session_state: st.session_state.v_diario = 1
+    v = st.session_state.v_diario
+
+    # 1. FILTROS RÁPIDOS
+    with st.container(border=True):
+        c1, c2 = st.columns(2)
+        turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
+        data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
+        data_str = data_sel.strftime("%d/%m/%Y")
+
+    # 2. DETECÇÃO DO COCKPIT (HANDSHAKE)
+    aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
+    
+    if not aula_ativa.empty:
+        material_hoje = aula_ativa.iloc[0]['CONTEUDO_MINISTRADO']
+        st.info(f"🚀 **Aula Ativa:** {material_hoje}")
+    else:
+        st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data.")
+        material_hoje = "Instrução Avulsa"
+    
+    # 3. PAINEL DE REGÊNCIA (CONTINUIDADE) ---
+    with st.expander("🚦 Painel de Regência (Fechamento de Aula)", expanded=True):
+        c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
+        
+        # 1. Semáforo
+        status_aula = c_reg1.selectbox(
+            "Status da Execução:", 
+            ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"],
+            key=f"status_reg_{v}"
+        )
+        
+        # 2. Ponte Pedagógica (Memória para a IA)
+        ponte_pedagogica = c_reg2.text_area(
+            "🔗 Ponte Pedagógica (Onde paramos?):", 
+            placeholder="Ex: Parei no slide 5. Faltou corrigir a atividade...",
+            height=68,
+            key=f"ponte_reg_{v}"
+        )
+        
+        # 3. Clima da Turma
+        clima_turma = c_reg3.select_slider(
+            "🌡️ Clima da Turma:", 
+            options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"],
+            value="🧠 Focada",
+            key=f"clima_reg_{v}"
+        )
+
+    # 3. BUSCA DE REGISTROS EXISTENTES (PERSISTÊNCIA)
+    # Filtra o diário para ver se já trabalhamos nesta turma hoje
+    registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel)]
+
+    # 4. AÇÕES EM LOTE
+    st.markdown("---")
+    col_lote1, col_lote2 = st.columns(2)
+    if col_lote1.button("✅ VISTO EM TODOS", use_container_width=True):
+        st.session_state[f"visto_lote_{turma_sel}"] = True
+        st.rerun()
+    if col_lote2.button("🧹 LIMPAR TUDO", use_container_width=True):
+        st.session_state[f"visto_lote_{turma_sel}"] = False
+        st.rerun()
+
+    # 5. MONTAGEM DA MESA DE LANÇAMENTO (CARREGANDO DADOS DO BANCO)
+    alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+    
+    dados_diario = []
+    for _, alu in alunos_turma.iterrows():
+        id_a = db.limpar_id(alu['ID'])
+        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+        
+        # Tenta localizar se este aluno já tem registro hoje
+        reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
+        
+        if not reg_existente.empty:
+            # CARREGA DADOS DO BANCO (Incluindo o Bônus)
+            visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
+            falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
+            
+            # PROTEÇÃO: Busca o bônus, se não existir na linha, assume 0
+            if 'BONUS' in reg_existente.columns:
+                bonus_val = util.sosa_to_float(reg_existente.iloc[0]['BONUS'])
+            else:
+                bonus_val = 0.0
+                
+            tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
+            obs_val = reg_existente.iloc[0]['OBSERVACOES']
+        else:
+            # VALORES PADRÃO PARA NOVO REGISTRO
+            visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
+            falta_val = False
+            bonus_val = 0.0
+            tag_val = ""
+            obs_val = ""
+
+        dados_diario.append({
+            "ID": id_a,
+            "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+            "F": falta_val,
+            "V": visto_val,
+            "⭐": bonus_val,
+            "VETOR DISCIPLINAR": tag_val,
+            "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_val
+        })
+
+    # Editor Vertical Otimizado
+    df_editado = st.data_editor(
+        pd.DataFrame(dados_diario),
+        column_config={
+            "ID": None,
+            "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+            "F": st.column_config.CheckboxColumn("F", help="Faltou"),
+            "V": st.column_config.CheckboxColumn("V", help="Visto"),
+            "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
+            "VETOR DISCIPLINAR": st.column_config.SelectboxColumn(
+                "Vetor", 
+                options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]
+            ),
+            "OBSERVAÇÃO (🎙️ DITE AQUI)": st.column_config.TextColumn("Ocorrências / Comunicação", width="large")
+        },
+        hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
+    )
+
+    # 6. SALVAMENTO E SINCRONIA
+    if st.button("💾 SALVAR ALTERAÇÕES E CONSOLIDAR", type="primary", use_container_width=True):
+        with st.status("Sincronizando Práxis...") as status:
+            # Limpa os registros antigos daquela data/turma antes de salvar o novo lote
+            db.limpar_diario_data_turma(data_str, turma_sel)
+            
+            linhas_diario = []
+            for _, r in df_editado.iterrows():
+                aluno_eh_pei = "♿" in r['ESTUDANTE']
+                
+                # Lógica de Falta e Visto
+                tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
+                visto_f = False if r['F'] else r['V']
+                
+                # Auto-Tag PEI
+                if aluno_eh_pei and visto_f and not tag_f:
+                    tag_f = "PEI CONCLUÍDO"
+                
+                # Observação Pura (O material da aula fica implícito pela data/turma no banco)
+                obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
+                if r['VETOR DISCIPLINAR'] == "Comunicação":
+                    obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
+
+                linhas_diario.append([
+                    data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
+                    str(visto_f), tag_f, obs_final, util.sosa_to_str(r['⭐'])
+                ])
+                        
+            if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
+                db.atualizar_fechamento_aula(data_str, turma_sel, status_aula, ponte_pedagogica, clima_turma)
+                status.update(label="✅ Diário e Regência Atualizados!", state="complete")
+                st.balloons()
+                if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
+                time.sleep(1); st.rerun()
+
+# ==============================================================================
+# MÓDULO: PAINEL DE NOTAS V32.2 - CÁLCULO AUTOMÁTICO E RECUPERAÇÃO PARALELA
+# ==============================================================================
+elif menu == "📊 Painel de Notas & Vistos":
+    st.title("📊 Torre de Comando: Gestão de Notas e Performance")
+    st.markdown("---")
+
+    if "v_notas" not in st.session_state: 
+        st.session_state.v_notas = int(time.time())
+    v = st.session_state.v_notas
+
+    if df_alunos.empty:
+        st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
+    else:
+        # 1. CONFIGURADOR DE PESOS (CRITÉRIOS DO TRIMESTRE)
+        with st.container(border=True):
+            st.markdown("### ⚙️ Configuração de Critérios do Trimestre")
+            c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.5, 1, 0.8, 0.8, 0.8])
+            turma_sel = c_f1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key=f"n_turma_{v}")
+            trimestre_sel = c_f2.selectbox("📅 Trimestre Atual:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}")
+            
+            p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5, key=f"p_v_{v}")
+            p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5, key=f"p_t_{v}")
+            p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5, key=f"p_p_{v}")
+            
+            if (p_visto + p_teste + p_prova) != 10.0:
+                st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser 10.0 para o sistema oficial.")
+
+        # 2. MOTOR DE CÁLCULO AUTOMÁTICO (DIÁRIO DE BORDO)
+        vistos_auto_map = {}
+        bonus_total_map = {}
+        
+        calendario = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+        }
+        dt_ini, dt_fim = calendario.get(trimestre_sel)
+
+        if not df_diario.empty:
+            df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
+            df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+            df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
+            
+            for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
+                id_l = db.limpar_id(id_aluno)
+                d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
+                
+                if not d_alu.empty:
+                    vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                    aulas_com_visto = len(vistos_validos)
+                    total_aulas_periodo = len(d_alu)
+                    vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2)
+                    bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
+                else:
+                    vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
+
+        # 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO
+        notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
+        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+        
+        dados_editor = []
+        for _, alu in alunos_turma.iterrows():
+            id_a = db.limpar_id(alu['ID'])
+            reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
+            
+            n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
+            n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
+            n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
+            
+            is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+
+            dados_editor.append({
+                "ID": id_a,
+                "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
+                "BÔNUS (TOTAL)": bonus_total_map.get(id_a, 0.0),
+                "TESTE (LANÇAR)": n_teste,
+                "PROVA (LANÇAR)": n_prova,
+                "REC. PARALELA": n_rec
+            })
+
+        # 4. TABELA 1: CONSOLIDAÇÃO E ENTRADA
+        st.subheader("📝 1. Consolidação de Dados")
+        df_input = st.data_editor(
+            pd.DataFrame(dados_editor),
+            column_config={
+                "ID": None,
+                "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos (Sistema)", format="%.1f", disabled=True),
+                "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
+                "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
+                "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
+                "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f"),
+            },
+            hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
+        )
+
+        # 5. ALGORITMO DE TRANSBORDAMENTO E SUBSTITUIÇÃO POR RECUPERAÇÃO
+        def aplicar_transbordamento(row):
+            bonus_restante = row['BÔNUS (TOTAL)']
+            v_base = row['VISTOS (AUTO)']
+            t_base = row['TESTE (LANÇAR)']
+            p_base = row['PROVA (LANÇAR)']
+            rec_paralela = row['REC. PARALELA']
+            
+            # Passo 1: Completar Vistos
+            v_final = min(p_visto, v_base + bonus_restante)
+            bonus_restante -= (v_final - v_base)
+            
+            # Passo 2: Completar Teste
+            t_final = min(p_teste, t_base + max(0, bonus_restante))
+            bonus_restante -= (t_final - t_base)
+            
+            # Passo 3: Completar Prova
+            p_final = min(p_prova, p_base + max(0, bonus_restante))
+            
+            # Média Final: Soma das notas ou a Recuperação (o que for maior)
+            soma_notas = v_final + t_final + p_final
+            media_final = min(10.0, max(soma_notas, rec_paralela))
+            
+            return pd.Series([v_final, t_final, p_final, rec_paralela, media_final])
+
+        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
+
+        # 6. TABELA 2: GABARITO DE LANÇAMENTO (SISTEMA PREFEITURA)
+        st.markdown("---")
+        st.subheader("🏛️ 2. Gabarito de Lançamento (Sistema Prefeitura)")
+        st.info("As notas abaixo já consideram o bônus e a substituição pela Recuperação Paralela.")
+        
+        def style_situacao(v):
+            color = '#2ECC71' if v >= 6.0 else '#FF4B4B'
+            return f'color: {color}; font-weight: bold'
+
+        st.dataframe(
+            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']].style.applymap(
+                style_situacao, subset=['MEDIA_FINAL']
+            ).format({
+                "V_PREF": "{:.1f}", "T_PREF": "{:.1f}", "P_PREF": "{:.1f}", "REC_PREF": "{:.1f}", "MEDIA_FINAL": "{:.2f}"
+            }),
+            use_container_width=True, hide_index=True,
+            column_config={
+                "V_PREF": "Atividades",
+                "T_PREF": "Teste",
+                "P_PREF": "Prova",
+                "REC_PREF": "🔄 Rec. Paralela",
+                "MEDIA_FINAL": "Média Final"
+            }
+        )
+
+        # 7. SALVAMENTO
+        if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
+            with st.status("Sincronizando registros...") as status:
+                db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
+                linhas_save = []
+                for _, r in df_input.iterrows():
+                    linhas_save.append([
+                        r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel, trimestre_sel,
+                        util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
+                        util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
+                        util.sosa_to_str(r['MEDIA_FINAL'])
+                    ])
+                if db.salvar_lote("DB_NOTAS", linhas_save):
+                    status.update(label="✅ Boletim Sincronizado!", state="complete")
+                    st.balloons(); time.sleep(1); st.rerun()
+
+# ==============================================================================
+# MÓDULO: PAINEL DE NOTAS V32.1 - CÁLCULO AUTOMÁTICO E TRANSBORDAMENTO
+# ==============================================================================
+elif menu == "📊 Painel de Notas & Vistos":
+    st.title("📊 Torre de Comando: Gestão de Notas e Performance")
+    st.markdown("---")
+
+    if "v_notas" not in st.session_state: st.session_state.v_notas = 1
+    v = st.session_state.v_notas
+
+    if df_alunos.empty:
+        st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
+    else:
+        # 1. CONFIGURADOR DE PESOS (CRITÉRIOS DO TRIMESTRE)
+        with st.container(border=True):
+            st.markdown("### ⚙️ Configuração de Critérios do Trimestre")
+            c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.5, 1, 0.8, 0.8, 0.8])
+            turma_sel = c_f1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key=f"n_turma_{v}")
+            trimestre_sel = c_f2.selectbox("📅 Trimestre Atual:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}")
+            
+            p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5, key=f"p_v_{v}")
+            p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5, key=f"p_t_{v}")
+            p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5, key=f"p_p_{v}")
+            
+            if (p_visto + p_teste + p_prova) != 10.0:
+                st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser 10.0 para o sistema da prefeitura.")
+
+        # 2. MOTOR DE CÁLCULO AUTOMÁTICO (DIÁRIO DE BORDO)
+        vistos_auto_map = {}
+        bonus_total_map = {}
+        
+        # Datas oficiais de Itabuna (conforme utils.py)
+        calendario = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+        }
+        dt_ini, dt_fim = calendario.get(trimestre_sel)
+
+        if not df_diario.empty:
+            df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
+            # Converte datas para comparação real
+            df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+            # Filtra apenas o que aconteceu NESTE trimestre
+            df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
+            
+            for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
+                id_l = db.limpar_id(id_aluno)
+                d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
+                
+                if not d_alu.empty:
+                    # --- CORREÇÃO DO ERRO ATTRIBUTEERROR (USANDO .STR.UPPER) ---
+                    vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                    aulas_com_visto = len(vistos_validos)
+                    total_aulas_periodo = len(d_alu)
+                    
+                    # Cálculo Proporcional: (Vistos / Total) * Peso do Trimestre
+                    vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2)
+                    
+                    # Soma de Bônus (Mérito)
+                    bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
+                else:
+                    vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
+
+        # 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO
+        notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
+        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+        
+        dados_editor = []
+        for _, alu in alunos_turma.iterrows():
+            id_a = db.limpar_id(alu['ID'])
+            reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
+            
+            n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
+            n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
+            n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
+            
+            is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+
+            dados_editor.append({
+                "ID": id_a,
+                "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
+                "BÔNUS (TOTAL)": bonus_total_map.get(id_a, 0.0),
+                "TESTE (LANÇAR)": n_teste,
+                "PROVA (LANÇAR)": n_prova,
+                "REC. PARALELA": n_rec
+            })
+
+        # 4. TABELA DE ENTRADA E AJUSTE
+        st.subheader("📝 1. Consolidação de Dados")
+        df_input = st.data_editor(
+            pd.DataFrame(dados_editor),
+            column_config={
+                "ID": None,
+                "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos (Sistema)", format="%.1f", disabled=True),
+                "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
+                "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
+                "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
+                "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f"),
+            },
+            hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
+        )
+
+        # 5. ALGORITMO DE TRANSBORDAMENTO (COMPATIBILIDADE PREFEITURA)
+        def aplicar_transbordamento(row):
+            bonus_restante = row['BÔNUS (TOTAL)']
+            v_base = row['VISTOS (AUTO)']
+            t_base = row['TESTE (LANÇAR)']
+            p_base = row['PROVA (LANÇAR)']
+            
+            # Passo 1: Completar Vistos
+            v_final = min(p_visto, v_base + bonus_restante)
+            bonus_restante -= (v_final - v_base)
+            
+            # Passo 2: Completar Teste
+            t_final = min(p_teste, t_base + max(0, bonus_restante))
+            bonus_restante -= (t_final - t_base)
+            
+            # Passo 3: Completar Prova
+            p_final = min(p_prova, p_base + max(0, bonus_restante))
+            
+            soma_notas = v_final + t_final + p_final
+            media_final = min(10.0, max(soma_notas, row['REC. PARALELA']))
+            
+            return pd.Series([v_final, t_final, p_final, media_final])
+
+        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
+
+        # 6. GABARITO DE LANÇAMENTO (SISTEMA PREFEITURA)
+        st.markdown("---")
+        st.subheader("🏛️ 2. Gabarito de Lançamento (Sistema Prefeitura)")
+        
+        def style_situacao(v):
+            color = '#2ECC71' if v >= 6.0 else '#FF4B4B'
+            return f'color: {color}; font-weight: bold'
+
+        st.dataframe(
+            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'MEDIA_FINAL']].style.applymap(
+                style_situacao, subset=['MEDIA_FINAL']
+            ).format({
+                "V_PREF": "{:.1f}", "T_PREF": "{:.1f}", "P_PREF": "{:.1f}", "MEDIA_FINAL": "{:.2f}"
+            }),
+            use_container_width=True, hide_index=True
+        )
+
+        # 7. SALVAMENTO
+        if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
+            with st.status("Sincronizando registros...") as status:
+                db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
+                linhas_save = []
+                for _, r in df_input.iterrows():
+                    linhas_save.append([
+                        r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel, trimestre_sel,
+                        util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
+                        util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC. PARALELA"]),
+                        util.sosa_to_str(r['MEDIA_FINAL'])
+                    ])
+                if db.salvar_lote("DB_NOTAS", linhas_save):
+                    status.update(label="✅ Boletim Sincronizado!", state="complete")
+                    st.balloons(); time.sleep(1); st.rerun()
+
+# ==============================================================================
+# MÓDULO: GESTÃO DA TURMA (V32.0) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA
+# ==============================================================================
+elif menu == "👥 Gestão da Turma":
+    st.title("👥 Cockpit de Regência: Gestão 360°")
+    st.markdown("---")
+
+    if "v_gestao" not in st.session_state: st.session_state.v_gestao = 1
+    v = st.session_state.v_gestao
+
+    tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
+        "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
+    ])
+
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V81 - SOBERANIA ANALÍTICA & RADAR ATIVO) ---
+    with tab_cockpit:
+        if df_turmas.empty:
+            st.info("📭 Nenhuma turma cadastrada.")
+        else:
+            # --- 1. SELEÇÃO DE PARÂMETROS ---
+            c_f1, c_f2 = st.columns([1, 1])
+            turma_foco = c_f1.selectbox("🎯 Selecione a Turma:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
+            trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos os Trimestres"], key=f"foco_trim_{v}")
+            
+            # --- 2. CÁLCULOS DE BASE ---
+            alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
+            id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
+            ano_num = "".join(filter(str.isdigit, turma_foco))
+
+            # Cálculo de PEI
+            mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+            df_pei_turma = alunos_t[mask_pei]
+
+            # Saúde de Regência
+            reg_t_foco = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
+            saude_execucao = 0
+            clima_predominante = "N/A"
+            if not reg_t_foco.empty:
+                concluidas = len(reg_t_foco[reg_t_foco['STATUS_EXECUCAO'].astype(str).str.contains("Concluído", na=False)])
+                saude_execucao = (concluidas / len(reg_t_foco)) * 100 if len(reg_t_foco) > 0 else 0
+                clima_predominante = reg_t_foco['CLIMA_TURMA'].mode()[0] if not reg_t_foco['CLIMA_TURMA'].dropna().empty else "Estável"
+
+            # --- 3. EXIBIÇÃO DE MÉTRICAS ---
+            st.markdown("---")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("👥 Total Alunos", len(alunos_t))
+            m2.metric("♿ Estudantes PEI", len(df_pei_turma))
+            m3.metric("🎯 Saúde de Execução", f"{saude_execucao:.0f}%")
+
+            m4, m5, m6 = st.columns(3)
+            # Engajamento (Vistos)
+            engaj = 0
+            if not df_diario.empty:
+                d_t = df_diario[df_diario['TURMA'] == turma_foco]
+                if not d_t.empty:
+                    vistos = len(d_t[d_t['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    engaj = (vistos / len(d_t)) * 100
+            
+            m4.metric("📈 Engajamento", f"{engaj:.0f}%")
+            m5.metric("🌡️ Perfil de Clima", clima_predominante)
+            m6.metric("🎓 Série Oficial", f"{ano_num}º Ano")
+
+            # --- 4. RADAR DE RESULTADOS (FIX: BUSCA FLEXÍVEL) ---
+            st.markdown("---")
+            st.subheader(f"📡 Radar de Resultados: {trim_foco}")
+            
+            diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
+            
+            if not diag_t.empty:
+                # Normalização de Slot para agrupar 2ª Chamada
+                diag_t['SLOT'] = diag_t['ID_AVALIACAO'].apply(lambda x: x.replace(" (2ª CHAMADA)", "").strip())
+                
+                # Filtro de Trimestre Flexível
+                if trim_foco != "Todos os Trimestres":
+                    # Busca o termo (ex: "ITrimestre") removendo espaços para evitar erro de digitação
+                    termo_busca = trim_foco.replace(" ", "").upper()
+                    diag_t = diag_t[diag_t['ID_AVALIACAO'].str.replace(" ", "").str.upper().str.contains(termo_busca, na=False)]
+
+                if diag_t.empty:
+                    st.info(f"ℹ️ Nenhuma avaliação processada para {trim_foco} nesta turma.")
+                else:
+                    for slot in diag_t['SLOT'].unique():
+                        with st.expander(f"📊 AVALIAÇÃO: {slot}", expanded=True):
+                            df_slot = diag_t[diag_t['SLOT'] == slot].copy()
+                            df_slot['ID_L'] = df_slot['ID_ALUNO'].apply(db.limpar_id)
+                            df_consolidado = df_slot.sort_values('DATA').groupby('ID_L').last().reset_index()
+                            
+                            # Médias Segregadas
+                            ids_pei = set(df_pei_turma['ID'].apply(db.limpar_id).tolist())
+                            m_reg = df_consolidado[~df_consolidado['ID_L'].isin(ids_pei)]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                            m_pei = df_consolidado[df_consolidado['ID_L'].isin(ids_pei)]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                            
+                            c_r1, c_r2, c_r3 = st.columns([1, 1, 2])
+                            c_r1.metric("Média Regular", f"{m_reg:.2f}" if not pd.isna(m_reg) else "0.00")
+                            c_r2.metric("Média PEI", f"{m_pei:.2f}" if not pd.isna(m_pei) else "0.00")
+                            
+                            # Faltosos
+                            fez_prova = set(df_consolidado[df_consolidado['RESPOSTAS_ALUNO'] != "FALTOU"]['ID_L'].tolist())
+                            faltosos = id_alunos_turma - fez_prova
+                            if faltosos:
+                                nomes_f = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(faltosos)]['NOME_ALUNO'].tolist()
+                                c_r3.error(f"⚠️ Pendentes ({len(nomes_f)}): {', '.join(nomes_f)}")
+                            else:
+                                c_r3.success("✅ Turma Completa")
+
+        # --- 5. RAIO-X DE LACUNAS (VERSÃO V86 - LISTA EXPANSIVA BNCC) ---
+            st.markdown("---")
+            with st.container(border=True):
+                st.subheader(f"🔥 Raio-X de Lacunas da Turma ({trim_foco})")
+                st.caption("Clique nas habilidades abaixo para ver o detalhamento da BNCC e o nível de alerta.")
+                
+                if not diag_t.empty:
+                    mapa_erros_coletivo = []
+                    descricoes_habilidades = {} # Dicionário para guardar o texto da BNCC
+                    
+                    for _, reg in diag_t.iterrows():
+                        if reg['RESPOSTAS_ALUNO'] == "FALTOU": continue
+                        
+                        # Busca a prova original para extrair a descrição
+                        prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == reg['ID_AVALIACAO'].replace(" (2ª CHAMADA)", "")]
+                        if not prova_ref.empty:
+                            txt_p = str(prova_ref.iloc[0]['CONTEUDO'])
+                            is_p = db.limpar_id(reg['ID_ALUNO']) in set(df_pei_turma['ID'].apply(db.limpar_id).tolist())
+                            
+                            # Pega Gabarito e Grade
+                            gab_raw = ai.extrair_tag(txt_p, "GABARITO_PEI" if is_p else "GABARITO_TEXTO") or ai.extrair_tag(txt_p, "GABARITO")
+                            gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                            grade = ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO_PEI" if is_p else "GRADE_DE_CORRECAO")
+                            
+                            respostas = str(reg['RESPOSTAS_ALUNO']).split(';')
+                            for i, r in enumerate(respostas):
+                                if i < len(gab_oficial) and r != gab_oficial[i]:
+                                    q_n = i + 1
+                                    # Regex V86: Captura o Código E a Descrição que vem logo após
+                                    match_h = re.search(rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(EF\d{{2}}MA\d{{2}})(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))", grade)
+                                    
+                                    if match_h:
+                                        cod_h = match_h.group(1)
+                                        # Limpa a descrição de ruídos (*, #, [])
+                                        desc_h = re.sub(r'[*#\[\]\-\:]', '', match_h.group(2)).strip()
+                                        
+                                        mapa_erros_coletivo.append(cod_h)
+                                        # Guarda a descrição mais completa encontrada
+                                        if cod_h not in descricoes_habilidades or len(desc_h) > len(descricoes_habilidades[cod_h]):
+                                            descricoes_habilidades[cod_h] = desc_h
+                    
+                    if mapa_erros_coletivo:
+                        from collections import Counter
+                        top_lacunas = Counter(mapa_erros_coletivo).most_common(5)
+                        
+                        for cod, qtd in top_lacunas:
+                            # Define a cor do alerta baseada na gravidade
+                            cor_alerta = "🔴" if qtd > (len(alunos_t) * 0.5) else "🟡"
+                            texto_bncc = descricoes_habilidades.get(cod, "Descrição não localizada na grade de correção.")
+                            
+                            # Cria a Lista Expansiva (Expander)
+                            with st.expander(f"{cor_alerta} **{cod}** — Falha detectada em {qtd} correções"):
+                                st.markdown(f"**Descrição da Habilidade:**")
+                                st.info(texto_bncc)
+                                st.caption("💡 Sugestão Sosa: Aplique uma atividade de Recomposição focada neste descritor.")
+                    else:
+                        st.success("✅ Nenhuma lacuna recorrente detectada no período.")
+                else:
+                    st.info("Aguardando dados de avaliações para gerar o Raio-X.")
+
+            # --- 6. ABERTURA DE AULA E INVENTÁRIO ---
+            st.markdown("---")
+            col_esq, col_dir = st.columns([1.8, 1.2])
+            with col_esq:
+                st.subheader("🕒 Abertura de Aula")
+                with st.container(border=True):
+                    st.markdown("#### 🚀 Registrar Ativo para Hoje")
+                    c_r1, c_r2 = st.columns(2)
+                    data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
+                    df_p_f = df_planos[df_planos['ANO'].str.contains(ano_num)]
+                    plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + df_p_f['SEMANA'].tolist(), key=f"plano_reg_{v}")
+                    
+                    mats_disp = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
+                    mats_sel = st.multiselect("📦 Selecione o Material:", options=mats_disp, key=f"mats_reg_{v}")
+
+                    if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
+                        db.salvar_no_banco("DB_REGISTRO_AULAS", [data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, " + ".join(mats_sel), "PENDENTE", "ABERTA"])
+                        st.success("✅ Aula aberta!"); time.sleep(1); st.rerun()
+
+            with col_dir:
+                st.subheader("📂 Inventário e Alunos")
+                with st.container(border=True):
+                    st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
+                    for m in mats_disp[-5:]: st.caption(f"📘 {m}")
+                
+                with st.container(border=True):
+                    st.markdown("**👥 Foco PEI**")
+                    for _, alu in df_pei_turma.iterrows():
+                        st.warning(f"♿ {alu['NOME_ALUNO']}")
+
+# --- ABA 2: ARQUITETURA DE TURMAS (VERSÃO V32.1 - ESCUDO ANTI-DUPLICIDADE) ---
+    with tab_criar:
+        st.subheader("🏗️ Configurar Nova Turma")
+        v_t = f"t_{v}"
+        
+        with st.container(border=True):
+            c1, c2, c3 = st.columns(3)
+            ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_{v_t}")
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_{v_t}")
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_{v_t}")
+
+        dias_aula = st.multiselect(
+            "📅 Selecione os Dias de Aula (Máx 2):", 
+            ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
+            max_selections=2, 
+            key=f"dias_{v_t}"
+        )
+
+        horarios_escolhidos = {}
+        if dias_aula:
+            st.markdown("#### ⏰ Defina o Tempo de Aula por dia")
+            if turno_t == "Matutino":
+                opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
+            elif turno_t == "Vespertino":
+                opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
+            else:
+                opcoes_h = {"1º Tempo": "18:30h – 20:30h", "2º Tempo": "20:40h – 22:40h"}
+
+            cols_h = st.columns(len(dias_aula))
+            for i, dia in enumerate(dias_aula):
+                with cols_h[i]:
+                    st.info(f"**{dia}**")
+                    t_sel = st.radio(f"Horário para {dia}:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
+                    horarios_escolhidos[dia] = t_sel
+            
+            st.divider()
+            
+            if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary", key=f"btn_cad_{v_t}"):
+                prefixo_turno = turno_t[0].upper() 
+                sigla = f"{ano_t}ª {prefixo_turno}{letra_t}" 
+                
+                # ESCUDO DE INTEGRIDADE
+                turmas_existentes = df_turmas['ID_TURMA'].astype(str).str.strip().tolist() if not df_turmas.empty else []
+
+                if sigla in turmas_existentes:
+                    st.error(f"🚨 **ERRO DE SOBERANIA:** A turma **{sigla}** já existe.")
+                else:
+                    with st.status("Sincronizando Nova Arquitetura...") as status:
+                        str_dias = " / ".join(dias_aula)
+                        str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
+                        
+                        sucesso = db.salvar_no_banco("DB_TURMAS", [
+                            sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"
+                        ])
+                        
+                        if sucesso:
+                            status.update(label=f"✅ Turma {sigla} cadastrada!", state="complete")
+                            st.balloons()
+                            time.sleep(1.5)
+                            st.cache_data.clear()
+                            st.rerun()
+
+    # --- ABA 3: POVOAR ALUNOS (VERSÃO V33.0 - ID AUTOMÁTICO) ---
+    with tab_povoar:
+        st.subheader("➕ Inclusão de Estudantes")
+        if df_turmas.empty:
+            st.warning("Cadastre uma turma primeiro.")
+        else:
+            t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist(), key=f"dest_{v}")
+            metodo = st.radio("Método de Inclusão:", ["Manual", "Importar CSV"], horizontal=True, key=f"met_{v}")
+            
+            if metodo == "Manual":
+                with st.form("f_manual_povoar", clear_on_submit=True):
+                    c_n1, c_n2 = st.columns([2, 1])
+                    nome_a = c_n1.text_input("Nome Completo do Aluno:").upper()
+                    nec_a = c_n2.text_input("Necessidades/CID:", value="NENHUMA").upper()
+                    
+                    if st.form_submit_button("💾 SALVAR ESTUDANTE"):
+                        if nome_a:
+                            id_n = db.gerar_proximo_id(df_alunos)
+                            if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a.strip(), t_dest, "ATIVO", nec_a.strip(), "MANUAL"]):
+                                st.success(f"✅ {nome_a} cadastrado com ID {id_n}!")
+                                st.cache_data.clear()
+                        else:
+                            st.error("O nome do aluno é obrigatório.")
+            else:
+                st.info("O CSV deve conter a coluna 'NOME'.")
+                f_csv = st.file_uploader("Selecione o arquivo CSV", type=["csv"], key=f"csv_up_{v}")
+                if f_csv and st.button("🚀 INICIAR IMPORTAÇÃO EM LOTE"):
+                    df_up = pd.read_csv(f_csv)
+                    id_base = db.gerar_proximo_id(df_alunos)
+                    linhas_lote = []
+                    for idx, r in df_up.iterrows():
+                        nec_csv = str(r['NECESSIDADES']).upper().strip() if 'NECESSIDADES' in df_up.columns else "NENHUMA"
+                        linhas_lote.append([id_base + idx, str(r['NOME']).upper().strip(), t_dest, "ATIVO", nec_csv, "CSV"])                   
+                    if db.salvar_lote("DB_ALUNOS", linhas_lote):
+                        st.success(f"✅ {len(linhas_lote)} alunos importados!"); st.cache_data.clear(); st.rerun()
+
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (VERSÃO V33.5 - EXCLUSÃO CIRÚRGICA) ---
+    with tab_editar:
+        st.subheader("✏️ Gestão de Cadastro e Movimentação")
+        turmas_lista = sorted(df_alunos['TURMA'].unique().tolist()) if not df_alunos.empty else []
+        
+        if not turmas_lista:
+            st.info("Nenhum aluno cadastrado para editar.")
+        else:
+            t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_lista, key=f"orig_ed_{v}")
             
             if t_origem:
-                # Filtra apenas os ativos da turma de origem
-                alunos_mov = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
+                alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
+                aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
                 
-                if not alunos_mov.empty:
-                    # Lógica de selecionar todos
-                    def toggle_all_v6():
-                        for _, al in alunos_mov.iterrows():
-                            st.session_state[f"mov_al_v6_{al['id_catequizando']}"] = st.session_state.chk_mov_todos_v6
+                dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
+                id_fixo = dados_atuais['ID']
 
-                    st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos_v6", on_change=toggle_all_v6)
+                with st.form("form_edicao_aluno_v33"):
+                    st.info(f"🆔 Editando Registro ID: {id_fixo}")
+                    c_e1, c_e2 = st.columns(2)
+                    novo_nome = c_e1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
+                    nova_nec = c_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES']).upper()
                     
-                    lista_ids_selecionados = []
-                    cols = st.columns(2)
+                    c_e3, c_e4 = st.columns(2)
+                    novo_status = c_e3.selectbox("Status:", ["ATIVO", "DESISTENTE", "TRANSFERIDO"], index=0)
                     
-                    # Itera sobre os alunos calculando a idade em tempo real
-                    for i, (_, al) in enumerate(alunos_mov.iterrows()):
-                        # CÁLCULO DA IDADE PARA EXIBIÇÃO
-                        idade_atual = calcular_idade(al['data_nascimento'])
-                        
-                        with cols[i % 2]:
-                            # NOME + IDADE NO LABEL DO CHECKBOX
-                            label_exibicao = f"{al['nome_completo']} ({idade_atual} anos)"
-                            
-                            if st.checkbox(label_exibicao, key=f"mov_al_v6_{al['id_catequizando']}"):
-                                lista_ids_selecionados.append(al['id_catequizando'])
+                    lista_turmas_total = df_turmas['ID_TURMA'].tolist()
+                    idx_t = lista_turmas_total.index(t_origem) if t_origem in lista_turmas_total else 0
+                    nova_turma = c_e4.selectbox("Transferir para Turma:", lista_turmas_total, index=idx_t)
                     
-                    st.divider()
-                    # Botão de execução com contador
-                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS PARA {t_destino}", key="btn_exec_mov_v6", use_container_width=True):
-                        if t_destino and t_origem != t_destino and lista_ids_selecionados:
-                            if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
-                                st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
-                        else: 
-                            st.error("Selecione um destino válido e ao menos um catequizando.")
-                else:
-                    st.info("Não há catequizandos ativos nesta turma de origem.")
+                    if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES"):
+                        with st.status("Executando Protocolo de Atualização...") as status:
+                            # 1. Remove o registro antigo pelo ID único
+                            if db.excluir_aluno_por_id(id_fixo):
+                                # 2. Salva o novo registro mantendo o mesmo ID
+                                sucesso = db.salvar_no_banco("DB_ALUNOS", [
+                                    id_fixo, novo_nome.strip(), nova_turma, 
+                                    novo_status, nova_nec.strip(), "EDITADO"
+                                ])
+                                if sucesso:
+                                    status.update(label="✅ Cadastro Atualizado!", state="complete")
+                                    st.balloons(); time.sleep(1); st.cache_data.clear(); st.rerun()
 
 # ==============================================================================
-# BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (CORREÇÃO DE CENSO E AUDITORIA)
+# MÓDULO: BASE DE CONHECIMENTO
 # ==============================================================================
-elif menu == "🕊️ Gestão de Sacramentos":
-    st.title("🕊️ Auditoria e Gestão de Sacramentos")
-    tab_dash, tab_plan, tab_reg, tab_hist = st.tabs([
-        "📊 Auditoria Sacramental", "📅 Planejar sacramento", "✍️ Registrar Sacramento", "📜 Histórico"
-    ])
-    
-    with tab_plan:
-        st.subheader("📅 Planejamento de Cerimônias")
+elif menu == "📚 Base de Conhecimento":
+    st.header("📚 Central de Inteligência SOSA")
+    tab_upload, tab_biblioteca = st.tabs(["📤 Upload", "📖 Biblioteca"])
+    with tab_upload:
+        with st.form("form_upload"):
+            tipo_doc = st.selectbox("Categoria:", ["Livro Didático - 6º Ano", "Livro Didático - 7º Ano", "Livro Didático - 8º Ano", "Livro Didático - 9º Ano", "Referencial Pedagógico (Prefeitura)", "Documento PEI / AEE", "Outros"])
+            nome_arq = st.text_input("Nome do Arquivo")
+            uploaded_file = st.file_uploader("Selecione o PDF", type=["pdf"])
+            if st.form_submit_button("🚀 Salvar"):
+                if uploaded_file and nome_arq:
+                    temp_path = f"temp_{uploaded_file.name}"
+                    with open(temp_path, "wb") as f: f.write(uploaded_file.getbuffer())
+                    uri = ai.subir_para_google(temp_path, nome_arq)
+                    db.salvar_no_banco("DB_MATERIAIS", [datetime.now().strftime("%d/%m/%Y"), nome_arq, uri, tipo_doc])
+                    st.success("Catalogado!"); os.remove(temp_path); st.rerun()
+    with tab_biblioteca:
+        st.dataframe(df_materiais, use_container_width=True, hide_index=True)
+
+# ==============================================================================
+# MÓDULO: RELATÓRIOS PEI V26 - DOSSIÊ DE EVIDÊNCIAS INTEGRADO (CORRIGIDO)
+# ==============================================================================
+elif menu == "♿ Relatórios PEI / Perfil IA":
+    st.title("♿ Analista de Inclusão: Dossiê de Evidências")
+    st.markdown("---")
+
+    if df_alunos.empty:
+        st.warning("⚠️ Base de alunos vazia.")
+    else:
+        # --- 1. FILTRAGEM INTELIGENTE (CORREÇÃO DO ERRO .STR.STRIP) ---
+        # Criamos uma máscara booleana blindada contra valores nulos (NaN)
+        mask_pei = ~df_alunos['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+        df_somente_pei = df_alunos[mask_pei]
         
-        if df_turmas.empty:
-            st.warning("Cadastre turmas para planejar sacramentos.")
-        else:
-            # 1. SELEÇÃO DA TURMA E SACRAMENTO
-            c1, c2 = st.columns(2)
-            t_plan = c1.selectbox("Selecione a Turma:", df_turmas['nome_turma'].tolist(), key="sel_t_plan")
-            tipo_s_plan = c2.selectbox("Sacramento Previsto:", ["EUCARISTIA", "CRISMA"], key="sel_s_plan")
-            
-            info_t = df_turmas[df_turmas['nome_turma'] == t_plan].iloc[0]
-            col_data = 'previsao_eucaristia' if tipo_s_plan == "EUCARISTIA" else 'previsao_crisma'
-            data_atual_prevista = info_t.get(col_data, "")
-            
-            # 2. DEFINIÇÃO DA DATA
-            with st.expander("⚙️ Definir/Alterar Data da Cerimônia", expanded=not data_atual_prevista):
-                nova_data_p = st.date_input("Data da Missa/Celebração:", 
-                                          value=converter_para_data(data_atual_prevista) if data_atual_prevista else date.today())
-                if st.button("📌 SALVAR DATA NO CRONOGRAMA DA TURMA"):
-                    lista_up_t = info_t.tolist()
-                    # Coluna G (6) é Eucaristia, H (7) é Crisma no rigor das 10 colunas da aba turmas
-                    idx_col = 6 if tipo_s_plan == "EUCARISTIA" else 7
-                    lista_up_t[idx_col] = str(nova_data_p)
-                    if atualizar_turma(info_t['id_turma'], lista_up_t):
-                        st.success("Data salva!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        if df_somente_pei.empty:
+            st.info("💡 Nenhum aluno com CID/Necessidades detectado. Mostrando lista geral para teste.")
+            df_somente_pei = df_alunos
 
-            # 3. DIAGNÓSTICO DE CANDIDATOS
-            if data_atual_prevista:
-                st.divider()
-                st.info(f"🗓️ Celebração de **{tipo_s_plan}** prevista para: **{formatar_data_br(data_atual_prevista)}**")
-                
-                alunos_t = df_cat[(df_cat['etapa'] == t_plan) & (df_cat['status'] == 'ATIVO')]
-                
-                prontos = alunos_t[alunos_t['batizado_sn'] == 'SIM']
-                pendentes = alunos_t[alunos_t['batizado_sn'] != 'SIM']
-                
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Total de Candidatos", len(alunos_t))
-                m2.metric("✅ Prontos", len(prontos))
-                m3.metric("⚠️ Sem Batismo", len(pendentes), delta_color="inverse")
-                
-                col_l1, col_l2 = st.columns(2)
-                with col_l1:
-                    st.markdown("##### ✅ Aptos para o Sacramento")
-                    st.caption("Ativos e Batizados")
-                    for n in prontos['nome_completo'].tolist(): st.write(f"· {n}")
-                    
-                    if st.button("📄 GERAR LISTA PARA SECRETARIA (PDF)", use_container_width=True):
-                        st.session_state.pdf_secretaria = gerar_lista_secretaria_pdf(t_plan, data_atual_prevista, tipo_s_plan, prontos['nome_completo'].tolist())
-                    
-                    if "pdf_secretaria" in st.session_state:
-                        st.download_button("📥 BAIXAR LISTA NOMINAL", st.session_state.pdf_secretaria, f"Lista_Secretaria_{t_plan}.pdf", use_container_width=True)
-
-                with col_l2:
-                    st.markdown("##### 🚨 Impedimentos (Atenção!)")
-                    st.caption("Precisam de Batismo urgente")
-                    if not pendentes.empty:
-                        for n in pendentes['nome_completo'].tolist(): st.error(f"⚠️ {n}")
-                    else:
-                        st.success("Nenhum impedimento na turma!")
-
-                # 4. AÇÃO PÓS-CERIMÔNIA
-                st.divider()
-                with st.expander("🏁 FINALIZAR PROCESSO (Pós-Celebração)"):
-                    st.warning("CUIDADO: Esta ação registrará o sacramento para todos os APTOS acima e atualizará o histórico deles permanentemente.")
-                    if st.button(f"🚀 CONFIRMAR QUE A CELEBRAÇÃO OCORREU"):
-                        id_ev = f"PLAN-{int(time.time())}"
-                        lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s_plan, str(data_atual_prevista)] for _, r in prontos.iterrows()]
-                        
-                        if registrar_evento_sacramento_completo([id_ev, tipo_s_plan, str(data_atual_prevista), t_plan, st.session_state.usuario['nome']], lista_p, tipo_s_plan):
-                            st.success("Glória a Deus! Todos os registros foram atualizados."); st.balloons(); time.sleep(2); st.rerun()
-
-    with tab_dash:
-        # 1. Censo de Sacramentos REALIZADOS NO SISTEMA EM 2026 (Aba sacramentos_recebidos)
-        df_recebidos = ler_aba("sacramentos_recebidos")
+        c_t, c_a = st.columns([1, 2])
+        turma_pei = c_t.selectbox("Filtrar Turma:", sorted(df_somente_pei['TURMA'].unique()), key="pei_t")
         
-        bat_ano, euc_ano, cri_ano = 0, 0, 0
-        if not df_recebidos.empty:
-            try:
-                df_recebidos['data_dt'] = pd.to_datetime(df_recebidos['data'], errors='coerce')
-                df_2026 = df_recebidos[df_recebidos['data_dt'].dt.year == 2026]
-                bat_ano = len(df_2026[df_2026['tipo'].str.upper().str.contains('BATISMO')])
-                euc_ano = len(df_2026[df_2026['tipo'].str.upper().str.contains('EUCARISTIA')])
-                cri_ano = len(df_2026[df_2026['tipo'].str.upper().str.contains('CRISMA')])
-            except: pass
-
-        st.markdown(f"""
-            <div style='background-color:#f8f9f0; padding:20px; border-radius:10px; border:1px solid #e03d11; text-align:center; margin-bottom:20px;'>
-                <h3 style='margin:0; color:#e03d11;'>🕊️ Frutos da Evangelização 2026</h3>
-                <p style='font-size:16px; color:#666; margin-bottom:15px;'>Sacramentos celebrados e registrados este ano:</p>
-                <div style='display: flex; justify-content: space-around;'>
-                    <div><b style='font-size:20px; color:#417b99;'>{bat_ano}</b><br><small>Batismos</small></div>
-                    <div><b style='font-size:20px; color:#417b99;'>{euc_ano}</b><br><small>Eucaristias</small></div>
-                    <div><b style='font-size:20px; color:#417b99;'>{cri_ano}</b><br><small>Crismas</small></div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # 2. Quadro Geral de Sacramentos (Censo Paroquial Completo)
-        if not df_cat.empty:
-            df_censo = df_cat.copy()
-            df_censo['idade_real'] = df_censo['data_nascimento'].apply(calcular_idade)
-            
-            # Divisão de Públicos
-            df_kids = df_censo[df_censo['idade_real'] < 18]
-            df_adults = df_censo[df_censo['idade_real'] >= 18]
-            
-            # --- PÚBLICO INFANTIL / JUVENIL ---
-            st.subheader("📊 Censo Sacramental: Infantil / Juvenil")
-            c1, c2, c3 = st.columns(3)
-            
-            with c1: # Batismo Kids
-                total_k = len(df_kids)
-                k_bat = len(df_kids[df_kids['batizado_sn'].str.upper() == 'SIM'])
-                perc_k_bat = (k_bat / total_k * 100) if total_k > 0 else 0
-                st.metric("Batizados", f"{k_bat} / {total_k}", f"{perc_k_bat:.1f}%")
-            
-            with c2: # Eucaristia Kids
-                k_euc = df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-                perc_k_euc = (k_euc / total_k * 100) if total_k > 0 else 0
-                st.metric("1ª Eucaristia", f"{k_euc} / {total_k}", f"{perc_k_euc:.1f}%")
-                
-            with c3: # Crisma Kids (Geralmente Perseverança)
-                k_cri = df_kids['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
-                perc_k_cri = (k_cri / total_k * 100) if total_k > 0 else 0
-                st.metric("Crismados", f"{k_cri} / {total_k}", f"{perc_k_cri:.1f}%")
-
-            st.markdown("---")
-
-            # --- PÚBLICO ADULTOS ---
-            st.subheader("📊 Censo Sacramental: Adultos")
-            a1, a2, a3 = st.columns(3)
-            
-            with a1: # Batismo Adultos
-                total_a = len(df_adults)
-                a_bat = len(df_adults[df_adults['batizado_sn'].str.upper() == 'SIM'])
-                perc_a_bat = (a_bat / total_a * 100) if total_a > 0 else 0
-                st.metric("Batizados", f"{a_bat} / {total_a}", f"{perc_a_bat:.1f}%")
-            
-            with a2: # Eucaristia Adultos
-                a_euc = df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
-                perc_a_euc = (a_euc / total_a * 100) if total_a > 0 else 0
-                st.metric("Eucaristia", f"{a_euc} / {total_a}", f"{perc_a_euc:.1f}%")
-                
-            with a3: # Crisma Adultos
-                a_cri = df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
-                perc_a_cri = (a_cri / total_a * 100) if total_a > 0 else 0
-                st.metric("Crismados", f"{a_cri} / {total_a}", f"{perc_a_cri:.1f}%")
-        else:
-            st.warning("Base de catequizandos vazia.")
-
-        st.divider()
-        st.subheader("🏫 Auditoria de Pendências por Turma")
-        st.caption("Abaixo são listados apenas os catequizandos que possuem pendências sacramentais para sua etapa.")
+        lista_alunos_turma = df_somente_pei[df_somente_pei['TURMA'] == turma_pei]['NOME_ALUNO'].tolist()
+        aluno_pei_nome = c_a.selectbox("Selecionar Estudante PEI:", lista_alunos_turma, key="pei_a")
         
-        if not df_turmas.empty:
-            for _, t in df_turmas.iterrows():
-                nome_t = str(t['nome_turma']).strip().upper()
-                etapa_base = str(t['etapa']).strip().upper()
-                alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
-                
-                if not alunos_t.empty:
-                    # Lógica de Filtro por Etapa
-                    # Pré, 1ª e 2ª Etapa: Só checa Batismo
-                    # 3ª Etapa e Adultos: Checa Batismo, Eucaristia e Crisma
-                    is_avancado_ou_adulto = any(x in etapa_base for x in ["3ª", "TERCEIRA", "ADULTO"])
-                    
-                    # Identificar Pendentes
-                    pend_bat = alunos_t[alunos_t['batizado_sn'] != "SIM"]
-                    
-                    pend_euc = pd.DataFrame()
-                    pend_cri = pd.DataFrame()
-                    
-                    if is_avancado_ou_adulto:
-                        # Checa se a palavra não existe na coluna de sacramentos
-                        pend_euc = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False)]
-                        pend_cri = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False, case=False)]
-                    
-                    # Só exibe o expander se houver alguma pendência na turma
-                    tem_pendencia = not pend_bat.empty or not pend_euc.empty or not pend_cri.empty
-                    
-                    if tem_pendencia:
-                        with st.expander(f"🚨 {nome_t} ({etapa_base}) - Pendências Identificadas"):
-                            # Define colunas dinâmicas: 1 para iniciantes, 3 para avançados
-                            cols_p = st.columns(3 if is_avancado_ou_adulto else 1)
-                            
-                            with cols_p[0]:
-                                st.markdown("**🕊️ Falta Batismo**")
-                                if not pend_bat.empty:
-                                    for n in pend_bat['nome_completo'].tolist():
-                                        st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
-                                else:
-                                    st.success("Tudo OK")
-                            
-                            if is_avancado_ou_adulto:
-                                with cols_p[1]:
-                                    st.markdown("**🍞 Falta Eucaristia**")
-                                    if not pend_euc.empty:
-                                        for n in pend_euc['nome_completo'].tolist():
-                                            st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
-                                    else:
-                                        st.success("Tudo OK")
-                                        
-                                with cols_p[2]:
-                                    st.markdown("**🔥 Falta Crisma**")
-                                    if not pend_cri.empty:
-                                        for n in pend_cri['nome_completo'].tolist():
-                                            st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
-                                    else:
-                                        st.success("Tudo OK")
-                    else:
-                        # Se a turma estiver 100% em dia, mostra apenas uma linha discreta
-                        st.markdown(f"<small style='color:green;'>✅ {nome_t}: Todos os sacramentos em dia.</small>", unsafe_allow_html=True)
+        # Dados do Aluno Selecionado
+        dados_a = df_somente_pei[df_somente_pei['NOME_ALUNO'] == aluno_pei_nome].iloc[0]
+        id_a = db.limpar_id(dados_a['ID'])
+        cid = dados_a['NECESSIDADES']
 
-        # 2. Segmentação de Público por IDADE (Correção do Denominador)
-        if not df_cat.empty:
-            # Criamos uma cópia para não afetar o DF global e calculamos a idade real
-            df_censo = df_cat.copy()
-            df_censo['idade_real'] = df_censo['data_nascimento'].apply(calcular_idade)
+        # --- 2. MOTOR DE BUSCA DE EVIDÊNCIAS (DATA FUSION) ---
+        with st.status("🔍 Maestro Sosa compilando evidências de todos os painéis...", expanded=False) as status:
+            # A. Evidências do Diário (Engajamento e Bônus)
+            d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diario.empty else pd.DataFrame()
             
-            df_kids = df_censo[df_censo['idade_real'] < 18]
-            df_adults = df_censo[df_censo['idade_real'] >= 18]
+            vistos_concluidos = 0
+            bonus_total = 0.0
+            if not d_aluno.empty:
+                # Conta tags de conclusão PEI
+                vistos_concluidos = len(d_aluno[d_aluno['TAGS'].astype(str).str.upper().str.contains("PEI CONCLUÍDO", na=False)])
+                # Soma bônus ⭐
+                if 'BONUS' in d_aluno.columns:
+                    bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
             
-            st.subheader("📊 Quadro Geral de Sacramentos (Censo Paroquial)")
-            col_k, col_a = st.columns(2)
+            # B. Evidências do Scanner (Desempenho em Provas Adaptadas)
+            s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diagnosticos.empty else pd.DataFrame()
+            media_scanner = s_aluno['NOTA_CALCULADA'].mean() if not s_aluno.empty else 0.0
             
-            with col_k:
-                st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
-                total_k = len(df_kids)
-                if total_k > 0:
-                    k_bat = len(df_kids[df_kids['batizado_sn'].str.upper() == 'SIM'])
-                    perc_k = (k_bat / total_k) * 100
-                    st.metric("Batizados (Kids)", f"{k_bat} / {total_k}", f"{perc_k:.1f}% batizados")
-                else: st.write("Nenhum registro infantil.")
+            # C. Evidências do Planejamento (Estratégias Ponto ID)
+            estrategias = []
+            if not df_planos.empty:
+                # Filtra planos do ano correspondente (ex: 6º ano)
+                p_ano = df_planos[df_planos['ANO'].str.contains(str(turma_pei[0]), na=False)]
+                for p_txt in p_ano['PLANO_TEXTO']:
+                    est = ai.extrair_tag(p_txt, "ADAPTACAO_PEI")
+                    if est and len(est) > 5: estrategias.append(est)
+            estrategias_unicas = list(set(estrategias))[-3:] # Pega as 3 últimas
 
-            with col_a:
-                st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
-                total_a = len(df_adults)
-                if total_a > 0:
-                    a_bat = len(df_adults[df_adults['batizado_sn'].str.upper() == 'SIM'])
-                    perc_a = (a_bat / total_a) * 100
-                    st.metric("Batizados (Adultos)", f"{a_bat} / {total_a}", f"{perc_a:.1f}% batizados")
-                else: st.write("Nenhum registro de adultos.")
-        else:
-            st.warning("Base de catequizandos vazia.")
+            status.update(label="✅ Dossiê de Evidências Compilado!", state="complete")
 
-        st.divider()
-        st.subheader("🏫 Auditoria Nominal e Pastoral por Turma")
-        
-        analise_detalhada_ia = []
-        if not df_turmas.empty:
-            for _, t in df_turmas.iterrows():
-                # Filtro robusto: remove espaços extras e converte para maiúsculo
-                nome_t = str(t['nome_turma']).strip().upper()
-                alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
-                
-                if not alunos_t.empty:
-                    pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
-                    freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
-                    
-                    idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
-                    # Impedimentos baseados em situação matrimonial (para adultos)
-                    impedimentos = len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM'])])
-                    
-                    batizados_list = alunos_t[alunos_t['batizado_sn'].str.upper() == 'SIM']
-                    pendentes_list = alunos_t[alunos_t['batizado_sn'].str.upper() != 'SIM']
-                    
-                    with st.expander(f"📍 {t['nome_turma']} ({t['etapa']}) - Frequência: {freq_media:.1f}%"):
-                        col_p1, col_p2 = st.columns([2, 1])
-                        with col_p1:
-                            st.write(f"**Faixa Etária:** {min(idades)} a {max(idades)} anos")
-                            if impedimentos > 0 and min(idades) >= 18: 
-                                st.warning(f"⚠️ {impedimentos} adultos com situação matrimonial a regularizar.")
-                            
-                            st.markdown("---")
-                            cb1, cb2 = st.columns(2)
-                            with cb1:
-                                st.success(f"✅ Batizados ({len(batizados_list)})")
-                                for n_bat in batizados_list['nome_completo'].tolist(): st.write(f"· {n_bat}")
-                            with cb2:
-                                st.error(f"❌ Pendentes ({len(pendentes_list)})")
-                                for n_pend in pendentes_list['nome_completo'].tolist(): st.write(f"· {n_pend}")
-                        
-                        with col_p2:
-                            st.markdown("**Previsões:**")
-                            st.write(f"Eucaristia: `{t.get('previsao_eucaristia', 'N/A')}`")
-                            st.write(f"Crisma: `{t.get('previsao_crisma', 'N/A')}`")
+        # --- 3. DASHBOARD DE MONITORAMENTO PEI ---
+        c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+        c_m1.metric("Engajamento PEI", f"{vistos_concluidos} Vistos")
+        c_m2.metric("Bônus Acumulado ⭐", f"{bonus_total:.1f}")
+        c_m3.metric("Média Scanner", f"{media_scanner:.2f}")
+        c_m4.metric("Perfil", "Em Evolução" if bonus_total > 0 else "Monitoramento")
 
-                    analise_detalhada_ia.append({
-                        "turma": t['nome_turma'], "etapa": t['etapa'], "freq": f"{freq_media:.1f}%",
-                        "batizados": len(batizados_list), "pendentes": len(pendentes_list),
-                        "nomes_pendentes": pendentes_list['nome_completo'].tolist(),
-                        "impedimentos_civel": impedimentos
-                    })
+        tab_rel, tab_doc, tab_zap, tab_hist = st.tabs([
+            "🧠 Relatório de Evidências (IA)", 
+            "📄 Capa do PEI Oficial", 
+            "📱 Comunicado Pais", 
+            "🗂️ Histórico Salvo"
+        ])
 
-        st.divider()
-        st.subheader("🏛️ Relatório Oficial de Auditoria")
-        
-        if "pdf_sac_tecnico" in st.session_state:
-            st.success("✅ Auditoria Diocesana pronta para download!")
-            st.download_button(
-                label="📥 BAIXAR AUDITORIA SACRAMENTAL (PDF)",
-                data=st.session_state.pdf_sac_tecnico,
-                file_name=f"Auditoria_Pastoral_Fatima_{date.today().year}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-            if st.button("🔄 Gerar Novo Relatório (Atualizar)"):
-                del st.session_state.pdf_sac_tecnico
-                st.rerun()
-        else:
-            if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
-                with st.spinner("O Auditor IA está analisando impedimentos..."):
-                    analise_detalhada_ia = []
-                    for _, t in df_turmas.iterrows():
-                        nome_t = str(t['nome_turma']).strip().upper()
-                        alunos_t = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
-                        if not alunos_t.empty:
-                            pend_bat = len(alunos_t[alunos_t['batizado_sn'] != "SIM"])
-                            
-                            # CONTAGEM REAL DE IMPEDIMENTOS (3ª Etapa ou Adultos sem Batismo)
-                            imp_count = len(alunos_t[
-                                (("3ª" in str(t['etapa'])) | ("ADULTO" in str(t['etapa']).upper())) & 
-                                (alunos_t['batizado_sn'] != "SIM")
-                            ])
-                            
-                            analise_detalhada_ia.append({
-                                "turma": nome_t, 
-                                "etapa": t['etapa'], 
-                                "batizados": len(alunos_t) - pend_bat, 
-                                "pendentes": pend_bat,
-                                "impedimentos_civel": imp_count # Agora mostra o número real de casos críticos
-                            })
-                    # 2. Lista de Impedimentos Nominais (Para a Seção 2)
-                    impedimentos_detalhados = []
-                    for _, cat in df_cat[df_cat['status'] == 'ATIVO'].iterrows():
-                        if ("3ª" in str(cat['etapa']) or "ADULTO" in str(cat['etapa']).upper()) and cat['batizado_sn'] != "SIM":
-                            impedimentos_detalhados.append({
-                                "nome": cat['nome_completo'],
-                                "turma": cat['etapa'],
-                                "motivo": "Falta Batismo (Impedimento de Iniciação)"
-                            })
-                    
-                    # 3. Chamada da IA
-                    resumo_ia = str({"turmas": analise_detalhada_ia, "impedimentos": impedimentos_detalhados})
-                    analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
-                    
-                    # 4. Geração do PDF v3
-                    st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v3(
-                        analise_detalhada_ia, 
-                        impedimentos_detalhados, 
-                        analise_ia_sac
+        # --- ABA 1: RELATÓRIO DE EVIDÊNCIAS (INTEGRAÇÃO TOTAL) ---
+        with tab_rel:
+            st.subheader("📝 Relatório Técnico de Acompanhamento")
+            percepcao = st.text_area("Sua percepção analítica (O que a IA não viu?):", placeholder="Ex: Demonstrou maior autonomia na resolução de problemas...")
+            
+            if st.button("🚀 GERAR RELATÓRIO BASEADO EM EVIDÊNCIAS", type="primary", use_container_width=True):
+                with st.spinner("Maestro Sosa cruzando dados e redigindo..."):
+                    prompt_pei = (
+                        f"VOCÊ É UM ESPECIALISTA EM EDUCAÇÃO INCLUSIVA (PADRÃO SOSA).\n"
+                        f"ESTUDANTE: {aluno_pei_nome}. CID: {cid}.\n\n"
+                        f"DADOS REAIS COLETADOS NO SISTEMA:\n"
+                        f"- ENGAJAMENTO: {vistos_concluidos} atividades adaptadas concluídas.\n"
+                        f"- MÉRITO: {bonus_total} pontos de bônus por desafios superados.\n"
+                        f"- DESEMPENHO: Média de {media_scanner:.2f} no Scanner de Gabaritos.\n"
+                        f"- ESTRATÉGIAS DO PONTO ID: {'; '.join(estrategias_unicas)}.\n"
+                        f"- PERCEPÇÃO DO PROFESSOR: {percepcao}\n\n"
+                        f"MISSÃO: Escreva um relatório técnico de evolução trimestral.\n"
+                        f"REGRAS: Use linguagem clínica-pedagógica. Cite os números acima para validar o progresso. SEM MARKDOWN."
                     )
+                    st.session_state.res_pei_v26 = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_pei)
+            
+            if "res_pei_v26" in st.session_state:
+                txt_final = st.text_area("Relatório Gerado (Editável):", st.session_state.res_pei_v26, height=400)
+                if st.button("💾 ARQUIVAR RELATÓRIO NO BANCO"):
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, aluno_pei_nome, "ACOMPANHAMENTO_PEI", txt_final])
+                    st.success("Relatório arquivado com sucesso!")
+
+        # --- ABA 2: CAPA DO PEI (INTEGRADO AO PONTO ID) ---
+        with tab_doc:
+            st.subheader("📄 Seção 1: Plano de Acessibilidade")
+            if st.button("📄 Gerar Capa do PEI (Sincronizada com Planejamento)"):
+                with st.spinner("Correlacionando barreiras e estratégias..."):
+                    prompt_capa = (
+                        f"ALUNO: {aluno_pei_nome}. CID: {cid}.\n"
+                        f"ESTRATÉGIAS PLANEJADAS NO PONTO ID: {estrategias_unicas}.\n"
+                        f"Gere a Seção 1 do PEI (Habilidades Sociais, Comunicativas, Emocionais e Funcionais) "
+                        f"garantindo que as estratégias citadas coincidam com o que o professor já planejou."
+                    )
+                    st.session_state.res_capa_v26 = ai.gerar_ia("ESPECIALISTA_PEI", prompt_capa)
+            
+            if "res_capa_v26" in st.session_state:
+                st.text_area("Texto da Capa:", st.session_state.res_capa_v26, height=400)
+
+        # --- ABA 3: COMUNICADO PAIS (ZAP) ---
+        with tab_zap:
+            st.subheader("📱 Mensagem para Família")
+            motivo = st.text_input("Motivo do contato:", "Progresso nas atividades adaptadas")
+            if st.button("🚀 Gerar Mensagem Acolhedora"):
+                base = st.session_state.get("res_pei_v26", "O aluno está evoluindo conforme o plano.")
+                prompt_zap = f"Com base neste relatório: '{base}', gere uma mensagem de WhatsApp para os pais. Motivo: {motivo}. Tom: Empático e profissional."
+                st.info(ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_zap))
+
+# --- ABA 4: HISTÓRICO (VERSÃO BLINDADA CONTRA KEYERROR) ---
+        with tab_hist:
+            st.subheader("🗂️ Histórico de Documentos Salvos")
+            if not df_relatorios.empty:
+                # Filtra os relatórios do aluno
+                hist = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[::-1]
+                
+                if not hist.empty:
+                    for _, row in hist.iterrows():
+                        # --- LÓGICA DE ACESSO SEGURO SOSA ---
+                        # Tenta pegar a data, se não existir usa "Sem Data"
+                        data_rel = row.get('DATA', 'Sem Data')
+                        
+                        # Tenta pegar 'TIPO', se não existir tenta 'TURMA', se não 'Registro'
+                        # Isso evita o KeyError se a coluna mudar de nome na planilha
+                        tipo_rel = row.get('TIPO', row.get('TURMA', 'REGISTRO'))
+                        
+                        conteudo_rel = row.get('CONTEUDO', 'Conteúdo não localizado.')
+
+                        with st.expander(f"📅 {data_rel} - {tipo_rel}"):
+                            st.write(conteudo_rel)
+                else: 
+                    st.info("📭 Nenhum documento encontrado para este aluno.")
+            else: 
+                st.info("📭 Banco de relatórios vazio.")
+
+# ==============================================================================
+# MÓDULO: CENTRAL DE AVALIAÇÕES (V64.0 - ACERVO PIP E SINCRONIA TOTAL)
+# ==============================================================================
+elif menu == "📝 Central de Avaliações":
+    st.title("📝 Arquiteto de Exames e Gestão de Safra")
+    st.markdown("---")
+    
+    is_refinando_av = "refino_av_ativo" in st.session_state
+
+    def reset_avaliacoes():
+        keys_to_del = ["temp_prova", "temp_revisao", "av_pei", "refino_av_ativo", "av_valor_total", "av_gab_pei", "av_res_pei_ia", "av_nome_fixo"]
+        for k in keys_to_del:
+            if k in st.session_state: del st.session_state[k]
+        st.cache_data.clear()
+        st.session_state.v_av = int(time.time())
+        st.rerun()
+
+    if "v_av" not in st.session_state: st.session_state.v_av = 1
+    v = st.session_state.v_av
+
+    tab_arquiteto_av, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo_av = st.tabs([
+        "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
+    ])
+
+# --- ABA 1: ARQUITETO DE EXAMES (VERSÃO V76 - HÍBRIDA: SAFRA + SONDA SAEB) ---
+    with tab_arquiteto_av:
+        if is_refinando_av:
+            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
+            if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
+
+        # --- 1. CONFIGURAÇÃO BÁSICA ---
+        with st.container(border=True):
+            st.markdown("### ⚙️ 1. Configuração do Exame")
+            c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
+            
+            tipo_av = c1.selectbox("Tipo de Ativo:", 
+                ["Teste", "Prova", "Sonda de Proficiência", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
+                key=f"av_t_{v}")
+            
+            # Ajuste de valores automáticos
+            val_sugerido = 3.0 if "Teste" in tipo_av else 10.0 if "Sonda" in tipo_av else 4.0
+            v_total = c2.number_input("Valor Total:", 0.0, 10.0, val_sugerido, step=0.5, key=f"av_v_{v}")
+            ano_av = c3.selectbox("Série Atual:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
+            qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10, key=f"av_q_{v}")
+
+        # --- LÓGICA DE MODO (SONDA VS SAFRA) ---
+        is_sonda = "Sonda" in tipo_av
+        is_segunda = "2ª Chamada" in tipo_av
+
+        if is_sonda:
+            # --- MODO 2: ENGENHARIA DE SONDAGEM (MATRIZ SAEB / GOVERNO) ---
+            with st.container(border=True):
+                st.markdown("#### 🔍 2. Parâmetros de Sondagem Diagnóstica")
+                trim_filtro = st.selectbox("Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
+                
+                # Lógica de Retrocesso Curricular (I Trimestre busca base do ano anterior)
+                ano_busca = int(ano_av) - 1 if trim_filtro == "I Trimestre" else int(ano_av)
+                st.info(f"💡 **Foco Diagnóstico:** Buscando conteúdos do **{ano_busca}º Ano** para mapear lacunas.")
+
+                df_matriz = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
+                
+                c_s1, c_s2 = st.columns(2)
+                lista_eixos = sorted(df_matriz["EIXO"].unique().tolist())
+                sel_eixos = c_s1.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_e_m_{v}")
+                
+                sel_conts = []
+                sel_objs = []
+                if sel_eixos:
+                    df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)]
+                    lista_conts = sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist())
+                    sel_conts = c_s2.multiselect("Conteúdo(s) Base:", lista_conts, key=f"s_c_m_{v}")
+                    
+                    if sel_conts:
+                        lista_objs = sorted(df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)]["OBJETIVOS"].unique().tolist())
+                        sel_objs = st.multiselect("Refine pelos Objetivos (Descritores):", lista_objs, key=f"s_o_m_{v}")
+                
+                instr_extra = st.text_area("📝 Instruções de Sondagem (Ex: Buscar itens do SAEB sobre este tema):", key=f"s_instr_{v}")
+
+        else:
+            # --- MODO 1: ENGENHARIA DE SAFRA (TESTE/PROVA/2ª CHAMADA) ---
+            with st.container(border=True):
+                st.markdown("### 📊 2. Distribuição de Dificuldade (Taxonomia)")
+                cd1, cd2, cd3 = st.columns(3)
+                q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
+                q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
+                q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, max(0, qtd_q-(q_facil+q_medio)), key=f"q_d_{v}")
+                soma_q = q_facil + q_medio + q_dificil
+
+            with st.container(border=True):
+                st.markdown("### 🎯 3. Matriz de Mérito e Vínculo de Safra")
+                trim_filtro = st.selectbox("Filtrar Ativos por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
+                
+                # --- MOTOR DE BUSCA CRONOLÓGICA V33 (FIX: ATIVOS DE SAFRA) ---
+                # 1. Filtra pela série (Ano)
+                df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
+                
+                def validar_pertenca_trimestre(row):
+                    # Prioridade 1: Se o texto contém o nome do trimestre
+                    if trim_filtro.upper() in str(row['CONTEUDO']).upper():
+                        return True
+                    # Prioridade 2: Pela data da aula (Sincronia com Calendário Itabuna)
+                    try:
+                        data_str = str(row['DATA'])
+                        # Converte DD/MM/YYYY para objeto date
+                        d, m, y = map(int, data_str.split('/'))
+                        dt_aula = date(y, m, d)
+                        trim_nome, _ = util.obter_info_trimestre(dt_aula)
+                        return trim_nome == trim_filtro
+                    except:
+                        return False
+
+                # Aplica a validação inteligente
+                if not df_ref.empty:
+                    mask = df_ref.apply(validar_pertenca_trimestre, axis=1)
+                    df_ref = df_ref[mask]
+
+                if is_segunda:
+                    # Para 2ª Chamada, busca apenas o que é AVALIAÇÃO
+                    df_ref_2a = df_ref[df_ref['SEMANA_REF'] == "AVALIAÇÃO"]
+                    mats_selecionados = st.selectbox(f"📦 Selecione a Prova Original ({len(df_ref_2a)} detectadas):", [""] + df_ref_2a['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
+                else:
+                    # Para Provas Normais, mostra todos os ativos de safra (Aulas, Projetos, etc)
+                    mats_selecionados = st.multiselect(f"Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
+                
+                instr_extra = st.text_area("📝 Instruções Extras de Composição:", key=f"av_extra_{v}")
+
+        # --- 4. DIAGNÓSTICO DE CONFIGURAÇÃO ---
+        with st.container(border=True):
+            col_diag1, col_diag2 = st.columns(2)
+            with col_diag1:
+                if is_sonda:
+                    if sel_conts: st.success(f"✅ Sonda configurada: {len(sel_conts)} conteúdos.")
+                    else: st.warning("⚠️ Selecione os conteúdos da matriz.")
+                else:
+                    if soma_q == qtd_q: st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões.")
+                    else: st.error(f"🚨 Erro: Soma ({soma_q}) ≠ Total ({qtd_q}).")
+            with col_diag2:
+                peso_q = v_total / qtd_q if qtd_q > 0 else 0
+                st.metric("Peso por Questão", f"{peso_q:.2f} pts")
+
+        # --- 5. BOTÃO DE COMPILAÇÃO UNIFICADO ---
+        if st.button("💎 MATERIALIZAR ATIVO DE ELITE", use_container_width=True, type="primary"):
+            if not is_sonda and not is_segunda and soma_q != qtd_q:
+                st.error("Ajuste a distribuição de dificuldade.")
+            else:
+                with st.spinner("Maestro Sosa arquitetando Tratado Pedagógico..."):
+                    peso_str = util.sosa_to_str(peso_q)
+                    nome_tecnico = f"{tipo_av.upper().replace(' ', '_')}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
+                    
+                    if is_sonda:
+                        # PROMPT ESPECÍFICO PARA SONDA (PROVA BRASIL/SAEB)
+                        prompt = (
+                            f"ORDEM DE PERÍCIA V70 - PSICOMETRIA DIAGNÓSTICA\n"
+                            f"SÉRIE ATUAL: {ano_av}º. SÉRIE BASE: {ano_busca}º. VALOR: 10.0. QTD: {qtd_q}.\n"
+                            f"CONTEÚDOS MATRIZ: {sel_conts}. OBJETIVOS: {sel_objs}.\n"
+                            f"EXTRAS: {instr_extra}.\n\n"
+                            f"🚨 MISSÃO: Use o Google Search para encontrar itens de avaliação diagnóstica oficiais (SAEB, Prova Brasil, AAP). "
+                            f"Gere questões de múltipla escolha com erros planejados para mapear lacunas. "
+                            f"Formatação INLINE: **QUESTÃO XX ({peso_str} ponto) -** Texto."
+                        )
+                        persona_alvo = "ARQUITETO_SONDA_DIAGNOSTICA"
+                    else:
+                        # PROMPT PARA PROVA/TESTE (SAFRA)
+                        contexto_base = ""
+                        for m_nome in (mats_selecionados if isinstance(mats_selecionados, list) else [mats_selecionados]):
+                            m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
+                            contexto_base += f"MATERIAL: {m_nome}\n{m_row['CONTEUDO']}\n"
+                        
+                        diretriz = f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis." if not is_segunda else "MODO 2ª CHAMADA (QUESTÕES GÊMEAS)."
+                        
+                        prompt = (
+                            f"TIPO: {tipo_av}. SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
+                            f"DIRETRIZ: {diretriz}. EXTRAS: {instr_extra}.\n\n"
+                            f"--- CONTEÚDO HERDADO DAS AULAS ---\n{contexto_base}"
+                        )
+                        persona_alvo = "ARQUITETO_EXAMES_V30_ELITE"
+
+                    st.session_state.temp_prova = ai.gerar_ia(persona_alvo, prompt, usar_busca=True)
+                    st.session_state.av_valor_total = v_total
+                    st.session_state.av_nome_fixo = nome_tecnico
                     st.rerun()
 
-    # --- ABAS DE REGISTRO E HISTÓRICO ---
-    with tab_reg:
-        st.subheader("✍️ Registro de Sacramento")
-        modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True)
-        
-        if modo_reg == "Individual (Busca por Nome)":
-            nome_busca = st.text_input("🔍 Digite o nome do catequizando:").upper()
-            if nome_busca:
-                sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
-                if not sugestoes.empty:
-                    escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist())
-                    dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
-                    with st.form("form_sac_individual"):
-                        st.write(f"Registrando para: **{escolhido}**")
-                        c1, c2 = st.columns(2)
-                        tipo_s = c1.selectbox("Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
-                        data_s = c2.date_input("Data", date.today())
-                        if st.form_submit_button("💾 SALVAR REGISTRO"):
-                            id_ev = f"IND-{int(time.time())}"
-                            if registrar_evento_sacramento_completo([id_ev, tipo_s, str(data_s), dados_c['etapa'], st.session_state.usuario['nome']], [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s, str(data_s)]], tipo_s):
-                                st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                else: st.warning("Não encontrado.")
-        else:
-            turmas_s = st.multiselect("Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-            if turmas_s:
-                with st.form("form_sac_lote"):
-                    tipo_s = st.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
-                    data_s = st.date_input("Data da Celebração", date.today())
-                    alunos_f = df_cat[df_cat['etapa'].isin(turmas_s)].sort_values('nome_completo')
-                    sel_ids = []
-                    if not alunos_f.empty:
-                        cols = st.columns(2)
-                        for i, (_, r) in enumerate(alunos_f.iterrows()):
-                            with cols[i % 2]:
-                                if st.checkbox(f"{r['nome_completo']}", key=f"chk_sac_{r['id_catequizando']}"): sel_ids.append(r)
-                    if st.form_submit_button("💾 SALVAR EM LOTE"):
-                        id_ev = f"SAC-{int(time.time())}"
-                        lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in sel_ids]
-                        if registrar_evento_sacramento_completo([id_ev, tipo_s, str(data_s), ", ".join(turmas_s), st.session_state.usuario['nome']], lista_p, tipo_s):
-                            st.success("Registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+    # --- ABA 2: REFINADOR ---
+    with tab_refino:
+        if "temp_prova" in st.session_state:
+            st.subheader("🤖 Refinamento de Precisão")
+            cmd = st.chat_input("Solicitar ajuste no exame ou na grade...", key=f"chat_av_{v}")
+            if cmd:
+                with st.spinner("Reescrevendo..."):
+                    st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
+                    st.session_state.v_av += 1; st.rerun()
+            st.text_area("Editor de Exame:", st.session_state.temp_prova, height=500, key=f"ed_av_raw_{v}")
+        else: st.info("Gere um exame para refinar.")
 
-    with tab_hist:
-        st.subheader("📜 Histórico e Auditoria de Eventos")
-        df_eventos = ler_aba("sacramentos_eventos")
-        
-        if not df_eventos.empty:
-            # --- 1. FILTROS INTELIGENTES ---
-            st.markdown("#### 🔍 Filtrar Registros")
-            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-            
-            filtro_tipo = c1.selectbox("Sacramento:", ["TODOS", "BATISMO", "EUCARISTIA", "CRISMA"], key="f_sac")
-            
-            # Preparação de datas para os filtros
-            df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
-            anos_disp = sorted(df_eventos['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
-            filtro_ano = c2.selectbox("Ano:", ["TODOS"] + [str(a) for a in anos_disp], key="f_ano")
-            
-            meses_br = {
-                "TODOS": "TODOS", "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
-                "05": "Maio", "06": "Junho", "07": "Julho", "08": "Agosto", "09": "Setembro",
-                "10": "Outubro", "11": "Novembro", "12": "Dezembro"
-            }
-            filtro_mes = c3.selectbox("Mês:", list(meses_br.values()), key="f_mes")
-            
-            # Aplicar Filtros no DataFrame de exibição
-            df_f = df_eventos.copy()
-            if filtro_tipo != "TODOS":
-                df_f = df_f[df_f['tipo'] == filtro_tipo]
-            if filtro_ano != "TODOS":
-                df_f = df_f[df_f['data_dt'].dt.year == int(filtro_ano)]
-            if filtro_mes != "TODOS":
-                # Inverte o dicionário para pegar o número do mês
-                mes_num = [k for k, v in meses_br.items() if v == filtro_mes][0]
-                df_f = df_f[df_f['data_dt'].dt.strftime('%m') == mes_num]
-
-            # Exibição da Tabela Filtrada
-            st.dataframe(
-                df_f[['id_evento', 'tipo', 'data', 'turmas', 'catequista']].sort_values(by='data', ascending=False), 
-                use_container_width=True, 
-                hide_index=True
-            )
-
-            # --- 2. ÁREA DE EDIÇÃO (CORREÇÃO) ---
-            st.divider()
-            with st.expander("✏️ Editar Registro de Evento"):
-                st.info("Selecione um evento pelo ID para corrigir a data ou o tipo.")
-                id_para_editar = st.selectbox("Selecione o ID do Evento:", [""] + df_f['id_evento'].tolist())
+    # --- ABA 3: VISUALIZAÇÃO ---
+        with tab_vis:
+            if "temp_prova" in st.session_state:
+                txt_f = st.session_state.temp_prova
+                # Adicionamos a aba "🔬 Perícia PEI"
+                t1, t2, t3, t4, t5 = st.tabs(["📝 Prova Regular", "🔍 Perícia Regular", "♿ Prova PEI", "🔬 Perícia PEI", "✅ Gabaritos"])
                 
-                if id_para_editar:
-                    # Localiza os dados atuais
-                    dados_atuais = df_eventos[df_eventos['id_evento'] == id_para_editar].iloc[0]
-                    
-                    with st.form("form_edit_sac_evento"):
-                        col_e1, col_e2 = st.columns(2)
-                        ed_tipo = col_e1.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"], 
-                                                 index=["BATISMO", "EUCARISTIA", "CRISMA"].index(dados_atuais['tipo']))
-                        ed_data = col_e2.date_input("Data Correta", value=pd.to_datetime(dados_atuais['data']).date())
-                        ed_turmas = st.text_input("Turmas (Nomes separados por vírgula)", value=dados_atuais['turmas'])
+                with t1: st.text_area("Questões Regulares:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
+                with t2: st.text_area("Grade de Perícia Regular:", ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO"), height=500, key=f"vis_grade_reg_{v}")
+                with t3: st.text_area("Questões PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_q_{v}")
+                
+                with t4: 
+                    # ABA NOVA: Perícia de Inclusão
+                    val_grade_pei = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO_PEI")
+                    if val_grade_pei:
+                        st.text_area("Habilidades e Lacunas PEI:", val_grade_pei, height=500, key=f"vis_grade_pei_{v}")
+                    else:
+                        st.info("Aguardando nova geração para povoar a Perícia PEI.")
                         
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                            from database import atualizar_evento_sacramento
-                            novos_dados = [id_para_editar, ed_tipo, str(ed_data), ed_turmas, dados_atuais['catequista']]
-                            
-                            if atualizar_evento_sacramento(id_para_editar, novos_dados):
-                                st.success("✅ Evento atualizado com sucesso!")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("❌ Erro ao atualizar. Verifique a conexão.")
-        else:
-            st.info("Nenhum evento registrado no histórico.")
+                with t5: 
+                    c_g1, c_g2 = st.columns(2)
+                    with c_g1:
+                        st.markdown("### 📝 Gabarito Regular")
+                        st.code(ai.extrair_tag(txt_f, "GABARITO_TEXTO"))
+                    with c_g2:
+                        st.markdown("### ♿ Gabarito PEI")
+                        st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
+            else: st.info("Gere um exame para carregar a Visualização 360°.")
 
-# ==============================================================================
-# PÁGINA: ✅ CHAMADA INTELIGENTE (VERSÃO MOBILE-FIRST 2026)
-# ==============================================================================
-elif menu == "✅ Fazer Chamada":
-    st.title("✅ Chamada Inteligente")
-
-    # 1. IDENTIFICAÇÃO DE PERMISSÕES
-    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    if eh_gestor or vinculo_raw == "TODAS":
-        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-    else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
-
-    if not turmas_permitidas:
-        st.error("❌ Você não possui turmas vinculadas."); st.stop()
-
-    # 2. CABEÇALHO DE CONFIGURAÇÃO (MOBILE FRIENDLY)
-    with st.container():
-        c1, c2 = st.columns([1, 1])
-        turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
-        data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
-
-    # 3. LÓGICA DE TEMA (SUGESTÃO DO CRONOGRAMA)
-    df_cron_c = ler_aba("cronograma")
-    sugestao_tema = ""
-    if not df_cron_c.empty:
-        # Busca o primeiro tema pendente daquela turma
-        filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
-        if not filtro_cron.empty:
-            sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
-            st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
-            if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
-                st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
-
-    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
-                             value=st.session_state.get(f"tema_input_{turma_sel}", ""), 
-                             key=f"tema_field_{turma_sel}").upper()
-
-    # 4. LISTA DE CATEQUIZANDOS (CARDS)
-    lista_cat = df_cat[(df_cat['etapa'] == turma_sel) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
-    
-    if lista_cat.empty:
-        st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
-    else:
-        st.divider()
-        
-        # Botão Marcar Todos (Compacto)
-        if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
-            for _, r in lista_cat.iterrows():
-                st.session_state[f"p_{r['id_catequizando']}_{data_enc}"] = True
-        
-        st.markdown("---")
-        
-        registros_presenca = []
-        contador_p = 0
-        contador_a = 0
-        contador_niver = 0
-
-        # CSS para os Cards Mobile
-        st.markdown("""
-            <style>
-            .card-chamada {
-                background-color: #f8f9f0;
-                padding: 15px;
-                border-radius: 10px;
-                border-left: 8px solid #417b99;
-                margin-bottom: 10px;
-            }
-            .card-niver {
-                border-left: 8px solid #ffa000 !important;
-                background-color: #fff9e6 !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-        for _, row in lista_cat.iterrows():
-            is_niver = eh_aniversariante_da_semana(row['data_nascimento'])
-            if is_niver: contador_niver += 1
+    # --- ABA 4: RECOMPOSIÇÃO ---
+    with tab_recomposicao:
+        if "temp_prova" in st.session_state:
+            st.subheader("🚀 Gerador de Revisão Sincronizada")
+            if st.button("💎 MATERIALIZAR REVISÃO DE ELITE", use_container_width=True, type="primary"):
+                with st.spinner("Convertendo prova em roteiro de recomposição..."):
+                    prompt_rev = f"PROVA BASE:\n{st.session_state.temp_prova}\n\nID_EXAME: {st.session_state.av_nome_fixo}"
+                    st.session_state.temp_revisao = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_rev)
+                    st.rerun()
             
-            # Container do Card
-            with st.container():
-                # Estilização visual baseada no aniversário
-                classe_card = "card-niver" if is_niver else ""
+            if "temp_revisao" in st.session_state:
+                txt_rev = st.session_state.temp_revisao
+                tr1, tr2, tr3, tr_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "♿ PEI", "☁️ SINCRONIA"])
+                with tr1: st.text_area("Guia:", ai.extrair_tag(txt_rev, "PROFESSOR"), height=400, key=f"rev_prof_{v}")
+                with tr2: st.text_area("Folha:", ai.extrair_tag(txt_rev, "ALUNO"), height=400, key=f"rev_alu_{v}")
+                with tr3: st.text_area("PEI:", ai.extrair_tag(txt_rev, "PEI"), height=400, key=f"rev_pei_{v}")
                 
-                col_info, col_check = st.columns([3, 1])
-                
-                with col_info:
-                    niver_tag = "🎂 <b>NIVER!</b> " if is_niver else ""
-                    st.markdown(f"{niver_tag}{row['nome_completo']}", unsafe_allow_html=True)
-                    if is_niver:
-                        if st.button(f"🎨 Card Parabéns", key=f"btn_niver_{row['id_catequizando']}"):
-                            card_img = gerar_card_aniversario(f"{data_enc.day} | CATEQUIZANDO | {row['nome_completo']}", tipo="DIA")
-                            if card_img: st.image(card_img, width=150)
+                with tr_sync:
+                    if st.button("💾 EXECUTAR TRIPLE-SYNC DA REVISÃO", use_container_width=True, type="primary"):
+                        with st.status("Sincronizando...") as status:
+                            nome_rev = f"REVISAO_{st.session_state.av_nome_fixo}"
+                            db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_rev)
+                            
+                            doc_alu = exporter.gerar_docx_aluno_v24(nome_rev, ai.extrair_tag(txt_rev, "ALUNO"), {"ano": f"{ano_av}º", "trimestre": trim_filtro})
+                            link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_rev}_ALUNO", modo="AULA")
+                            
+                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_rev}_PEI", ai.extrair_tag(txt_rev, "PEI"), {"ano": f"{ano_av}º", "trimestre": trim_filtro})
+                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_rev}_PEI", modo="AULA")
+                            
+                            doc_prof = exporter.gerar_docx_professor_v25(nome_rev, ai.extrair_tag(txt_rev, "PROFESSOR"), {"ano": f"{ano_av}º", "semana": "REVISÃO", "trimestre": trim_filtro})
+                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_rev}_PROF", modo="AULA")
+                            
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_rev, 
+                                txt_rev + f"\n--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})", f"{ano_av}º", link_alu
+                            ])
+                            status.update(label="✅ Revisão Sincronizada!", state="complete"); st.balloons()
+        else: st.warning("⚠️ Gere a prova primeiro.")
 
-                with col_check:
-                    # Toggle é melhor para mobile que checkbox
-                    presente = st.toggle("P", key=f"p_{row['id_catequizando']}_{data_enc}")
-                    if presente: contador_p += 1
-                    else: contador_a += 1
+# --- ABA 5: FINALIZAR ATIVO (VERSÃO V67.2 - SOBERANIA DE NOMENCLATURA) ---
+    with tab_finalizar:
+        if "temp_prova" in st.session_state:
+            st.subheader("💾 Consolidação do Ativo de Safra")
+            
+            # Recupera os dados da sessão
+            v_tipo = st.session_state.get(f"av_t_{v}", "Prova")
+            v_ano = st.session_state.get(f"av_a_{v}", 6)
+            v_qtd = st.session_state.get(f"av_q_{v}", 10)
+            v_total_num = st.session_state.get('av_valor_total', 10.0)
+            
+            c_s1, c_s2 = st.columns(2)
+            trim_av = c_s1.selectbox("Confirmar Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
+            
+            # --- O PULO DO GATO: O NOME TÉCNICO É O IDENTIFICADOR ---
+            nome_tecnico_sugerido = st.session_state.get('av_nome_fixo', 'AVALIACAO_SEM_NOME')
+            nome_arq = c_s2.text_input("ID Técnico do Material (Nome no Banco):", nome_tecnico_sugerido, key=f"name_av_in_{v}")
 
-                registros_presenca.append([
-                    str(data_enc), row['id_catequizando'], row['nome_completo'], 
-                    turma_sel, "PRESENTE" if presente else "AUSENTE", 
-                    tema_dia, st.session_state.usuario['nome']
-                ])
-            st.markdown("---")
+            st.info(f"🚀 O material será salvo como: **{nome_arq}**")
 
-        # 5. TERMÔMETRO E FINALIZAÇÃO
-        st.subheader("📊 Resumo da Chamada")
-        c_res1, c_res2, c_res3 = st.columns(3)
-        c_res1.metric("✅ Presentes", contador_p)
-        c_res2.metric("❌ Ausentes", contador_a)
-        c_res3.metric("🎂 Aniversariantes", contador_niver)
+            if st.button("💾 SALVAR E OFICIALIZAR ATIVO", use_container_width=True, type="primary"):
+                with st.status("Sincronizando Ativos e Gerando DOCX...") as status:
+                    # 1. INICIALIZAÇÃO DE SEGURANÇA
+                    link_reg = "N/A"
+                    link_pei = "N/A"
+                    link_prof = "N/A"
+                    identificador = nome_arq 
+                    
+                    # 2. LIMPEZA EM CASCATA (Deleta linha antiga e arquivos físicos)
+                    db.excluir_avaliacao_completa(identificador, v_tipo)
+                    
+                    # 3. TRATAMENTO DO TEXTO DA IA (Remove links fantasmas)
+                    # Certifique-se de que a função ai.limpar_links_antigos existe no seu ai_engine.py
+                    texto_puro_ia = ai.limpar_links_antigos(st.session_state.temp_prova)
+                    
+                    # 4. GERAÇÃO E UPLOAD - MATERIAL REGULAR
+                    status.write("📝 Gerando Prova Regular...")
+                    info_reg = {
+                        "ano": f"{v_ano}º", "tipo_prova": v_tipo, 
+                        "valor": util.sosa_to_str(v_total_num), 
+                        "valor_questao": util.sosa_to_str(v_total_num/v_qtd), 
+                        "qtd_questoes": v_qtd, "trimestre": trim_av
+                    }
+                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_puro_ia, info_reg)
+                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
+                    
+                    # 5. GERAÇÃO E UPLOAD - MATERIAL PEI
+                    status.write("♿ Gerando Versão PEI...")
+                    txt_pei_raw = ai.extrair_tag(texto_puro_ia, "PEI")
+                    if txt_pei_raw:
+                        qtd_q_pei = len(re.findall(r'QUESTÃO', txt_pei_raw.upper()))
+                        if qtd_q_pei == 0: qtd_q_pei = 5
+                        info_pei = {
+                            "ano": f"{v_ano}º", "tipo_prova": v_tipo, 
+                            "valor": util.sosa_to_str(v_total_num), 
+                            "valor_questao": util.sosa_to_str(v_total_num/qtd_q_pei), 
+                            "qtd_questoes": qtd_q_pei, "trimestre": trim_av
+                        }
+                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_raw, info_pei)
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", modo="AVALIACAO")
 
-        if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
-            if salvar_presencas(registros_presenca):
-                # Se o tema veio do cronograma, marca como realizado
-                if tema_dia == sugestao_tema:
-                    from database import marcar_tema_realizado_cronograma
-                    marcar_tema_realizado_cronograma(turma_sel, tema_dia)
-                
-                st.success(f"✅ Chamada de {turma_sel} salva com sucesso!"); st.balloons()
-                st.cache_data.clear(); time.sleep(1); st.rerun()
+                    # 6. GERAÇÃO E UPLOAD - GUIA DO PROFESSOR (GRADE TOTAL)
+                    status.write("🔍 Gerando Guia de Perícia Integral...")
+                    # Coleta os 4 Pilares de Inteligência
+                    txt_gab_reg = ai.extrair_tag(texto_puro_ia, "GABARITO_TEXTO")
+                    txt_grade_reg = ai.extrair_tag(texto_puro_ia, "GRADE_DE_CORRECAO")
+                    txt_gab_pei = ai.extrair_tag(texto_puro_ia, "GABARITO_PEI")
+                    txt_grade_pei = ai.extrair_tag(texto_puro_ia, "GRADE_DE_CORRECAO_PEI")
+
+                    # Montagem da estrutura de Soberania
+                    txt_prof_completo = (
+                        f"GABARITO OFICIAL (REGULAR):\n{txt_gab_reg}\n\n"
+                        f"GABARITO OFICIAL (PEI):\n{txt_gab_pei}\n\n"
+                        f"DETALHAMENTO POR ITEM (REGULAR):\n{txt_grade_reg}\n\n"
+                        f"DETALHAMENTO POR ITEM (PEI):\n{txt_grade_pei}"
+                    )
+
+                    if txt_grade_reg:
+                        doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GRADE", txt_prof_completo, {"ano": f"{v_ano}º", "semana": "AVALIAÇÃO", "trimestre": trim_av})
+                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GRADE", modo="AVALIACAO")
+
+                    # 7. CONSOLIDAÇÃO FINAL NO BANCO (TRIPLE-SYNC)
+                    status.write("💾 Sincronizando com o Banco de Dados...")
+                    links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI({link_pei}) Prof({link_prof})"
+                    conteudo_final_banco = f"[VALOR: {v_total_num}]\n" + texto_puro_ia + f"\n\n{links_footer}"
+                    
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        datetime.now().strftime("%d/%m/%Y"), 
+                        "AVALIAÇÃO", 
+                        identificador, 
+                        conteudo_final_banco, 
+                        f"{v_ano}º", 
+                        link_reg
+                    ])
+                    
+                    status.update(label="✅ Ativo Salvo e Sincronizado!", state="complete")
+                    st.balloons()
+                    time.sleep(1.5)
+                    reset_avaliacoes()
+        else:
+            st.warning("⚠️ Gere a prova no Arquiteto antes de finalizar.")
+
+# --- ABA 6: ACERVO DE SAFRA (VERSÃO V75 - LAYOUT SOBERANO 360 COM PERÍCIA PEI) ---
+# --- ABA 6: ACERVO DE SAFRA (VERSÃO V84 - PADRONIZAÇÃO ESTÉTICA ELITE) ---
+    with tab_acervo_av:
+        st.subheader("🗂️ Gestão de Acervo de Safra (PIP - Provas e Revisões)")
         
-        if not tema_dia:
-            st.warning("⚠️ O botão de salvar será liberado após preencher o Tema do Encontro.")
+        # 1. FILTROS DE BUSCA
+        with st.container(border=True):
+            c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
+            f_trim_h = c_h1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="h_trim_av")
+            f_ano_h = c_h2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="h_ano_av")
+            f_tipo_h = c_h3.selectbox("📝 Tipo de Ativo:", ["Todos", "AVALIAÇÃO", "REVISÃO"], key="h_tipo_av")
+
+        # 2. FILTRAGEM DA BASE
+        df_exames = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
+        if f_trim_h != "Todos": df_exames = df_exames[df_exames['CONTEUDO'].str.contains(f_trim_h, na=False)]
+        if f_ano_h != "Todos": df_exames = df_exames[df_exames['ANO'] == f_ano_h]
+        if f_tipo_h != "Todos": df_exames = df_exames[df_exames['SEMANA_REF'] == f_tipo_h]
+
+        df_exames = df_exames.iloc[::-1] 
+
+        if not df_exames.empty:
+            for _, row in df_exames.iterrows():
+                with st.container(border=True):
+                    txt_f = str(row['CONTEUDO'])
+                    identificador = row['TIPO_MATERIAL']
+                    # Limpa o valor para não vir com hashtags
+                    valor_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
+                    
+                    # --- CABEÇALHO DO DOSSIÊ (PADRONIZADO) ---
+                    col_tit, col_meta = st.columns([2, 1])
+                    with col_tit:
+                        st.markdown(f"#### 📄 {identificador}")
+                    with col_meta:
+                        st.markdown(f"**💰 Valor:** `{valor_ex if valor_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
+
+                    # --- GABARITO EXPRESSO ---
+                    gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
+                    if gab_simples:
+                        gab_limpo = re.sub(r'[*#]', '', gab_simples).replace('QUESTÃO', '').strip()
+                        st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
+
+                    # --- EXTRAÇÃO DE LINKS ---
+                    l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
+                    l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
+                    l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
+
+                    # --- BOTÕES DE AÇÃO ---
+                    c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                    c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
+                    if l_pei and "N/A" not in str(l_pei): c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
+                    else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                    if l_prof and "N/A" not in str(l_prof): c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
+                    else: c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True)
+                    
+                    if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
+                        st.session_state.temp_prova = txt_f
+                        st.session_state.av_nome_fixo = identificador
+                        st.rerun()
+                        
+                    if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
+                        if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
+
+                    # --- EXPANDER RAIO-X (VISUAL CLEAN V84) ---
+                    with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
+                        t_gab, t_ques, t_pei_v, t_peri_pei = st.tabs([
+                            "🎯 Perícia Regular", "📝 Prova Regular", "♿ Adaptação PEI", "🔬 Perícia PEI"
+                        ])
+                        
+                        # ABA 1: PERÍCIA REGULAR (REMOÇÃO DE FONTES GIGANTES)
+                        with t_gab:
+                            st.markdown("##### 🔬 Grade de Perícia (Regular)")
+                            grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
+                            if grade_raw:
+                                # Regex para separar as questões
+                                questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
+                                if len(questoes_grade) > 1:
+                                    for i in range(1, len(questoes_grade), 2):
+                                        q_num, q_txt = questoes_grade[i], questoes_grade[i+1]
+                                        with st.container(border=True):
+                                            # Título da questão em negrito padrão (sem ser header gigante)
+                                            st.markdown(f"**📑 QUESTÃO {q_num}**")
+                                            
+                                            # Limpeza de ruídos Markdown da IA
+                                            q_txt_limpo = re.sub(r'[*#]', '', q_txt).strip()
+                                            
+                                            # Extração de campos com ícones padronizados
+                                            m_hab = re.search(r"(?i)(?:HABILIDADE|BNCC|DESCRITOR).*?[:\-]\s*(.*?)(?=RESPOSTA|JUSTIFICATIVA|ALERTA|PERÍCIA|$)", q_txt_limpo, re.DOTALL)
+                                            m_just = re.search(r"(?i)(?:RESPOSTA|JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=ALERTA|PERÍCIA|DISTRATORES|$)", q_txt_limpo, re.DOTALL)
+                                            m_peri = re.search(r"(?i)(?:ALERTA|PERÍCIA|DISTRATORES).*?[:\-]\s*(.*)", q_txt_limpo, re.DOTALL)
+                                            
+                                            if m_hab: st.caption(f"🆔 **Habilidade:** {m_hab.group(1).strip()}")
+                                            if m_just: st.write(f"**🎯 Resposta:** {m_just.group(1).strip()}")
+                                            if m_peri: st.info(f"**🔍 Análise de Erros:** {m_peri.group(1).strip()}")
+                                else: st.write(re.sub(r'[*#]', '', grade_raw))
+                            else: st.warning("Grade não localizada.")
+
+                        # ABA 2: PROVA REGULAR
+                        with t_ques:
+                            st.markdown("##### 📋 Conteúdo da Prova Regular")
+                            questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
+                            if questoes_reg:
+                                # Remove prompts de imagem para leitura limpa
+                                txt_limpo_q = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE)
+                                st.write(re.sub(r'[*#]', '', txt_limpo_q))
+
+                        # ABA 3: ADAPTAÇÃO PEI
+                        with t_pei_v:
+                            st.markdown("##### ♿ Detalhes da Adaptação PEI")
+                            pei_txt = ai.extrair_tag(txt_f, "PEI")
+                            if pei_txt:
+                                st.info(re.sub(r'[*#]', '', pei_txt))
+                                st.divider()
+                                gab_pei = ai.extrair_tag(txt_f, "GABARITO_PEI")
+                                if gab_pei: st.code(re.sub(r'[*#]', '', gab_pei))
+
+                        # ABA 4: PERÍCIA PEI
+                        with t_peri_pei:
+                            st.markdown("##### 🔬 Grade de Perícia PEI")
+                            grade_pei_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO_PEI")
+                            if grade_pei_raw:
+                                q_grade_pei = re.split(r"(?i)QUEST[AÃ]O\s*PEI\s*0?(\d+)", grade_pei_raw)
+                                if len(q_grade_pei) > 1:
+                                    for i in range(1, len(q_grade_pei), 2):
+                                        q_n, q_t = q_grade_pei[i], q_grade_pei[i+1]
+                                        with st.container(border=True):
+                                            st.markdown(f"**♿ QUESTÃO PEI {q_n}**")
+                                            q_t_limpo = re.sub(r'[*#]', '', q_t).strip()
+                                            
+                                            m_just_p = re.search(r"(?i)(?:JUSTIFICATIVA|RESPOSTA).*?[:\-]\s*(.*?)(?=ANÁLISE|LACUNA|ERRO|$)", q_t_limpo, re.DOTALL)
+                                            m_lacu_p = re.search(r"(?i)(?:ANÁLISE|LACUNA|ERRO).*?[:\-]\s*(.*)", q_t_limpo, re.DOTALL)
+                                            
+                                            if m_just_p: st.write(f"**🎯 Resposta:** {m_just_p.group(1).strip()}")
+                                            if m_lacu_p: st.warning(f"**🧠 Análise de Lacuna:** {m_lacu_p.group(1).strip()}")
+                                else: st.write(re.sub(r'[*#]', '', grade_pei_raw))
+                            else: st.info("Perícia PEI não disponível para este ativo.")
+        else:
+            st.info("📭 Acervo vazio para os filtros selecionados.")
 
 # ==============================================================================
-# BLOCO INTEGRAL: GESTÃO DE CATEQUISTAS (DASHBOARD + EDIÇÃO + NOVO ACESSO)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.2 - CORREÇÃO DE FILTROS)
 # ==============================================================================
-elif menu == "👥 Gestão de Catequistas":
-    st.title("👥 Gestão de Catequistas e Formação")
-    
-    df_formacoes = ler_aba("formacoes")
-    df_pres_form = ler_aba("presenca_formacao")
-    
-    tab_dash, tab_lista, tab_novo, tab_formacao = st.tabs([
-        "📊 Dashboard de Equipe", "📋 Lista e Perfil", 
-        "➕ Novo Acesso", "🎓 Registro de Formação"
+elif menu == "📸 Scanner de Gabaritos":
+    st.title("📸 Central de Inteligência de Resultados (CIR)")
+    st.markdown("---")
+
+    if "v_scan" not in st.session_state: st.session_state.v_scan = 1
+    v = st.session_state.v_scan
+
+# --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64.5 (FIX RECUPERAÇÃO) ---
+    def filtrar_ativos_cir_v64(turma, trimestre_nome, apenas_provas=True):
+        """
+        Motor de busca inteligente que agora entende a abrangência da Recuperação Final.
+        """
+        if not turma or not trimestre_nome: return []
+        try:
+            serie_num = str(turma)[0] 
+            df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
+            
+            def detectar_trimestre(x):
+                try:
+                    if str(x).replace('.','',1).isdigit():
+                        dt = date(1899, 12, 30) + timedelta(days=int(float(x)))
+                        return util.obter_info_trimestre(dt)[0]
+                    if "/" in str(x):
+                        partes = str(x).split("/")
+                        dt = date(int(partes[2]), int(partes[1]), int(partes[0]))
+                        return util.obter_info_trimestre(dt)[0]
+                except: pass
+                return "Outros"
+
+            df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
+            
+            # --- LÓGICA DE SOBERANIA PARA RECUPERAÇÃO FINAL ---
+            # Se for prova, permitimos que "Recuperação Final" apareça independente do trimestre selecionado
+            if apenas_provas:
+                permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
+                
+                # Filtro: Mostra o que é do trimestre OU o que é "FINAL / ANO INTEIRO"
+                mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | \
+                            (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False)) | \
+                            (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
+                df_f = df_f[mask_trim]
+            else:
+                # Filtro para Atividades/Projetos (Aba 2)
+                permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
+                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
+                df_f = df_f[df_f['TRIM_DETECTADO'] == trimestre_nome]
+            
+            return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
+        except Exception as e: 
+            return []
+
+    # --- ABAS PERSISTENTES ---
+    tab_pericia, tab_atividades, tab_soberania, tab_raiox, tab_acervo_cir, tab_dash_cir = st.tabs([
+        "📸 1. Perícia de Gabaritos", "✍️ 2. Atividades & Projetos", "🏛️ 3. Hub de Soberania", 
+        "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-    with tab_dash:
-        st.subheader("📊 Qualificação da Equipe Catequética")
-        if not equipe_tecnica.empty:
-            total_e = len(equipe_tecnica)
-            bat_e = equipe_tecnica['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-            euc_e = equipe_tecnica['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-            cri_e = equipe_tecnica['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-            min_e = equipe_tecnica['data_ministerio'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V50.0 - SOBERANIA TOTAL) ---
+    with tab_pericia:
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+        t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
+        tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
+        
+        # Filtro de Avaliação Base (O "Slot" no Boletim)
+        opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
+        opcoes_base = [opt for opt in opcoes_p if "2CHAMADA" not in opt.upper()]
+        at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
-            m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Total Equipe", total_e)
-            m2.metric("Batizados", bat_e)
-            m3.metric("Eucaristia", euc_e)
-            m4.metric("Crismados", cri_e)
-            m5.metric("Ministros", min_e)
-
-            st.divider()
-            st.markdown("### 🛡️ Maturidade Ministerial")
-            status_data = []
-            for _, row in equipe_tecnica.iterrows():
-                status, anos = verificar_status_ministerial(
-                    str(row.get('data_inicio_catequese', '')),
-                    str(row.get('data_batismo', '')),
-                    str(row.get('data_eucaristia', '')),
-                    str(row.get('data_crisma', '')),
-                    str(row.get('data_ministerio', ''))
-                )
-                status_data.append({"Nome": row['nome'], "Status": status, "Anos de Missão": anos, "Turmas": row['turma_vinculada']})
-            
-            df_status = pd.DataFrame(status_data)
-            c_apt, c_cam = st.columns(2)
-            with c_apt:
-                st.success("**✅ Aptos / Ministros de Catequese**")
-                st.dataframe(df_status[df_status['Status'].isin(['MINISTRO', 'APTO'])], use_container_width=True, hide_index=True)
-            with c_cam:
-                st.warning("**⏳ Em Caminhada de Formação**")
-                st.dataframe(df_status[df_status['Status'] == 'EM_CAMINHADA'], use_container_width=True, hide_index=True)
-
-            if st.button("🗂️ GERAR DOSSIÊ COMPLETO DA EQUIPE (PDF)"):
-                st.session_state.pdf_lote_equipe = gerar_fichas_catequistas_lote(equipe_tecnica, df_pres_form, df_formacoes)
-            if "pdf_lote_equipe" in st.session_state:
-                st.download_button("📥 BAIXAR DOSSIÊ DA EQUIPE", st.session_state.pdf_lote_equipe, "Dossie_Equipe_Catequetica.pdf", use_container_width=True)
+        if not t_sel or not at_sel:
+            st.info("💡 Selecione a Turma e a Avaliação Base para abrir o Scanner.")
         else:
-            st.info("Nenhum catequista cadastrado.")
+            # 1. BUSCA DE PENDENTES (Considera quem não tem nota na base nem na 2ª chamada)
+            nome_filtro_pendente = at_sel.split("-")[0].strip()
+            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
+            pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
 
-    with tab_lista:
-        st.subheader("📋 Relação e Perfil Individual")
-        if not equipe_tecnica.empty:
-            busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat_v2026").upper()
-            df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
-            st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
-            
-            st.divider()
-            escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat_v2026")
-            
-            if escolha_c:
-                u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
-                col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
+            if pendentes.empty:
+                st.success(f"🏆 SOBERANIA: Todos os alunos da {t_sel} já possuem nota para {at_sel}!")
+                if st.button("🔄 REVISAR HUB"): st.rerun()
+            else:
+                al_info = pendentes.iloc[0]
+                al_sel = al_info['NOME_ALUNO']
+                id_aluno_atual = al_info['ID']
                 
-                with col_perfil:
-                    c1, c2 = st.columns([2, 1])
-                    with c1:
-                        st.markdown(f"### {u['nome']}")
-                        st.write(f"**E-mail:** {u['email']}")
-                        st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
-                        # Exibição do Contato de Emergência no Perfil
-                        st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[12] if len(u) > 12 else 'Não cadastrado'}")
-                        st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
-                        st.write(f"**Turmas:** {u['turma_vinculada']}")
-                    with c2:
-                        if st.button(f"📄 Gerar Ficha PDF"):
-                            st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
-                        if "pdf_catequista" in st.session_state:
-                            st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
-
-                with col_edit:
-                    # Configurações de Data
-                    hoje = date.today()
-                    d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
-
-                    def converter_ou_none(valor):
-                        if pd.isna(valor) or str(valor).strip() in ["", "N/A", "None"]: return None
-                        try: return converter_para_data(valor)
-                        except: return None
-
-                    # Carregamento dos dados atuais
-                    val_nasc = converter_ou_none(u.get('data_nascimento', '')) or hoje
-                    val_ini = converter_ou_none(u.get('data_inicio_catequese', '')) or hoje
-                    val_bat = converter_ou_none(u.get('data_batismo', ''))
-                    val_euc = converter_ou_none(u.get('data_eucaristia', ''))
-                    val_cri = converter_ou_none(u.get('data_crisma', ''))
-                    val_min = converter_ou_none(u.get('data_ministerio', ''))
-                    val_emerg = u.iloc[12] if len(u) > 12 else ""
-
-                    with st.form(f"form_edit_cat_final_{u['email']}"):
-                        st.markdown("#### 📍 Dados Cadastrais e Emergência")
-                        c1, c2 = st.columns(2)
-                        ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
-                        ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
-                        
-                        c3, c4 = st.columns(2)
-                        ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
-                        ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
-                        
-                        c5, c6 = st.columns(2)
-                        ed_papel = c5.selectbox("Papel", ["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
-                        ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
-                        
-                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-                        ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
-                        
-                        st.divider()
-                        st.markdown("#### ⛪ Itinerário Sacramental (Marque apenas se possuir)")
-                        
-                        # Lógica para evitar datas fictícias
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            has_ini = st.checkbox("Início na Catequese", value=True)
-                            dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_ini)
-                        
-                        with col2:
-                            has_bat = st.checkbox("Possui Batismo?", value=(val_bat is not None))
-                            dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
-                        
-                        with col3:
-                            has_euc = st.checkbox("Possui 1ª Eucaristia?", value=(val_euc is not None))
-                            dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
-
-                        col4, col5 = st.columns(2)
-                        with col4:
-                            has_cri = st.checkbox("Possui Crisma?", value=(val_cri is not None))
-                            dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
-                        
-                        with col5:
-                            has_min = st.checkbox("É Ministro de Catequese?", value=(val_min is not None))
-                            dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
-
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                            dados_up = [
-                                ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
-                                ed_tel, str(ed_nasc), dt_ini, dt_bat, dt_euc, dt_cri, dt_min, 
-                                str(u.iloc[12]) if len(u) > 12 else "", # Coluna 13 (M) - SessionID
-                                ed_emergencia                          # Coluna 14 (N) - Emergência
-                            ]
-                            if atualizar_usuario(u['email'], dados_up):
-                                st.success("✅ Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-    with tab_novo:
-        st.subheader("➕ Criar Novo Acesso para Equipe")
-        with st.form("form_novo_cat_v13", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            n_nome = c1.text_input("Nome Completo (EM MAIÚSCULAS)").upper()
-            n_email = c2.text_input("E-mail (Login)")
-            
-            c3, c4, c5 = st.columns(3)
-            n_senha = c3.text_input("Senha Inicial", type="password")
-            n_tel = c4.text_input("Telefone / WhatsApp")
-            
-            # --- CORREÇÃO DO CALENDÁRIO (1930 a 2011) ---
-            n_nasc = c5.date_input("Data de Nascimento", 
-                                   value=date(1990, 1, 1),
-                                   min_value=date(1930, 1, 1),
-                                   max_value=date(2011, 12, 31),
-                                   format="DD/MM/YYYY")
-            
-            c_papel, c_emerg = st.columns(2)
-            n_papel = c_papel.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"])
-            n_emergencia = c_emerg.text_input("🚨 Contato de Emergência (Nome e Tel)")
-            
-            lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-            n_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes)
-            
-            if st.form_submit_button("🚀 CRIAR ACESSO E DEFINIR PERMISSÕES"):
-                if n_nome and n_email and n_senha:
-                    with st.spinner("Criando novo acesso..."):
-                        # Montagem rigorosa das 14 colunas (A até N)
-                        # A:Nome, B:Email, C:Senha, D:Papel, E:Turmas, F:Tel, G:Nasc, H:Ini, I:Bat, J:Euc, K:Cri, L:Min, M:SID, N:Emerg
-                        novo_user_lista = [
-                            n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
-                            n_tel, str(n_nasc), "", "", "", "", "", 
-                            "",             # Coluna 13 (M) - Vazio para o primeiro login
-                            n_emergencia    # Coluna 14 (N) - Emergência
+                # --- DETECÇÃO AUTOMÁTICA DE PERFIL (REGULAR OU PEI) ---
+                is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                
+                st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
+                
+                # --- 2. HUB DE SELEÇÃO DE PARÂMETROS (VERSÃO + PERFIL) ---
+                with st.container(border=True):
+                    c_v1, c_v2 = st.columns([1, 1])
+                    
+                    # A. Seleção de Versão (Regular ou 2ª Chamada)
+                    modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
+                    
+                    if modo_2a:
+                        tipo_base = at_sel.split("-")[0].strip().upper()
+                        serie_num = "".join(filter(str.isdigit, t_sel))
+                        df_2a_candidatos = df_aulas[
+                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
+                            (df_aulas['ANO'].str.contains(serie_num))
                         ]
-                        
-                        from database import adicionar_novo_usuario
-                        if adicionar_novo_usuario(novo_user_lista):
-                            # Sincronização com a aba turmas (Opcional, mas mantido)
-                            try:
-                                planilha = conectar_google_sheets()
-                                if n_turmas:
-                                    aba_t = planilha.worksheet("turmas")
-                                    for t_nome in n_turmas:
-                                        cel_t = aba_t.find(t_nome)
-                                        if cel_t:
-                                            v_atual = aba_t.cell(cel_t.row, 5).value or ""
-                                            nova_v = f"{v_atual}, {n_nome}".strip(", ")
-                                            aba_t.update_cell(cel_t.row, 5, nova_v)
-                            except: pass
-                            
-                            st.success(f"✅ {n_nome} cadastrado com sucesso!")
-                            st.balloons()
-                            time.sleep(1)
-                            st.rerun()
-                else:
-                    st.warning("⚠️ Nome, E-mail e Senha são obrigatórios.")
-
-    with tab_formacao:
-        st.subheader("🎓 Itinerário de Formação Continuada")
-        
-        # --- BLINDAGEM DE COLUNAS ---
-        # Identifica qual coluna representa o Status (geralmente a 6ª coluna, índice 5)
-        if not df_formacoes.empty:
-            if 'status' in df_formacoes.columns:
-                col_status = 'status'
-            elif 'col_5' in df_formacoes.columns:
-                col_status = 'col_5'
-            else:
-                # Se não achar pelos nomes, pega a 6ª coluna disponível
-                col_status = df_formacoes.columns[5] if len(df_formacoes.columns) > 5 else None
-        else:
-            col_status = None
-
-        sub_tab_plan, sub_tab_valida, sub_tab_hist = st.tabs([
-            "📅 Planejar Formação", "✅ Validar Presença", "📜 Histórico e Edição"
-        ])
-
-        # --- SUB-ABA 1: PLANEJAR (FUTURO) ---
-        with sub_tab_plan:
-            with st.form("form_plan_formacao", clear_on_submit=True):
-                f_tema = st.text_input("Tema da Formação").upper()
-                c1, c2 = st.columns(2)
-                f_data = c1.date_input("Data Prevista", value=date.today())
-                f_formador = c2.text_input("Quem irá ministrar? (Formador)").upper()
-                f_local = st.text_input("Local / Sala").upper()
-                
-                if st.form_submit_button("📌 AGENDAR FORMAÇÃO"):
-                    if f_tema:
-                        id_f = f"FOR-{int(time.time())}"
-                        # Salva com status PENDENTE
-                        if salvar_formacao([id_f, f_tema, str(f_data), f_formador, f_local, "PENDENTE"]):
-                            st.success(f"Formação '{f_tema}' agendada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-        # --- SUB-ABA 2: VALIDAR (AGORA) ---
-        with sub_tab_valida:
-            # Usa a coluna identificada na blindagem para filtrar
-            df_f_pendentes = pd.DataFrame()
-            if col_status and not df_formacoes.empty:
-                df_f_pendentes = df_formacoes[df_formacoes[col_status].str.upper() == "PENDENTE"]
-            
-            if df_f_pendentes.empty:
-                st.info("Não há formações pendentes de validação.")
-            else:
-                st.warning("Selecione a formação realizada e marque os catequistas presentes.")
-                escolha_f = st.selectbox("Formação para dar Baixa:", df_f_pendentes['tema'].tolist())
-                dados_f = df_f_pendentes[df_f_pendentes['tema'] == escolha_f].iloc[0]
-                
-                st.divider()
-                st.markdown(f"### Lista de Presença: {escolha_f}")
-                
-                dict_equipe = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
-                selecionados = []
-                
-                cols = st.columns(2)
-                for i, (nome, email) in enumerate(dict_equipe.items()):
-                    with cols[i % 2]:
-                        if st.checkbox(nome, key=f"pres_f_{dados_f['id_formacao']}_{email}"):
-                            selecionados.append(email)
-                
-                if st.button("💾 FINALIZAR E REGISTRAR PRESENÇAS", use_container_width=True):
-                    if selecionados:
-                        lista_p = [[dados_f['id_formacao'], email] for email in selecionados]
-                        if salvar_presenca_formacao(lista_p):
-                            # Atualiza para CONCLUIDA
-                            nova_lista_f = [dados_f['id_formacao'], dados_f['tema'], dados_f['data'], dados_f['formador'], dados_f['local'], "CONCLUIDA"]
-                            from database import atualizar_formacao
-                            atualizar_formacao(dados_f['id_formacao'], nova_lista_f)
-                            st.success("Presenças registradas!"); st.balloons(); st.cache_data.clear(); time.sleep(1); st.rerun()
+                        opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
+                        at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                        if at_segunda:
+                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
+                        else:
+                            st.error("Selecione o material de 2ª chamada.")
+                            material_ref = None
                     else:
-                        st.error("Selecione ao menos um catequista.")
-
-        # --- SUB-ABA 3: HISTÓRICO E EDIÇÃO (PASSADO) ---
-        with sub_tab_hist:
-            if not df_formacoes.empty:
-                st.markdown("#### 🔍 Consultar e Corrigir")
-                df_formacoes['data_dt'] = pd.to_datetime(df_formacoes['data'], errors='coerce')
-                anos = sorted(df_formacoes['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
-                ano_sel = st.selectbox("Filtrar por Ano:", ["TODOS"] + [str(a) for a in anos])
-                
-                df_hist = df_formacoes.copy()
-                if ano_sel != "TODOS":
-                    df_hist = df_hist[df_hist['data_dt'].dt.year == int(ano_sel)]
-                
-                # Exibe as colunas existentes de forma segura
-                cols_view = ['tema', 'data', 'formador', 'local']
-                if col_status in df_hist.columns: cols_view.append(col_status)
-                
-                st.dataframe(df_hist[cols_view], use_container_width=True, hide_index=True)
-                
-                st.divider()
-                with st.expander("✏️ Editar ou Excluir Formação"):
-                    f_para_editar = st.selectbox("Selecione a Formação:", [""] + df_hist['tema'].tolist())
-                    if f_para_editar:
-                        d_edit = df_hist[df_hist['tema'] == f_para_editar].iloc[0]
-                        with st.form("form_edit_f_real"):
-                            ed_tema = st.text_input("Tema", value=d_edit['tema']).upper()
-                            ed_data = st.date_input("Data", value=pd.to_datetime(d_edit['data']).date())
-                            ed_formador = st.text_input("Formador", value=d_edit['formador']).upper()
-                            ed_local = st.text_input("Local", value=d_edit['local']).upper()
-                            
-                            status_atual_val = str(d_edit[col_status]).upper() if col_status else "PENDENTE"
-                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], 
-                                                   index=0 if status_atual_val == "PENDENTE" else 1)
-                            
-                            c_btn1, c_btn2 = st.columns([3, 1])
-                            if c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
-                                from database import atualizar_formacao
-                                if atualizar_formacao(d_edit['id_formacao'], [d_edit['id_formacao'], ed_tema, str(ed_data), ed_formador, ed_local, ed_status]):
-                                    st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                            
-                            if c_btn2.form_submit_button("🗑️ EXCLUIR", use_container_width=True):
-                                from database import excluir_formacao_completa
-                                if excluir_formacao_completa(d_edit['id_formacao']):
-                                    st.success("Excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-            else:
-                st.info("Nenhuma formação registrada.")
-
-# ==============================================================================
-# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO CONSOLIDADA 2026 - GESTOR & CATEQUISTA)
-# ==============================================================================
-elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
-    st.title("👨‍👩‍👧‍👦 Gestão da Igreja Doméstica")
-    
-    # --- 1. FUNÇÕES DE APOIO E INTELIGÊNCIA (WHATSAPP E RADAR) ---
-    def limpar_wa(tel):
-        if not tel or str(tel).strip() in ["N/A", "", "None"]: return None
-        num = "".join(filter(str.isdigit, str(tel)))
-        if num.startswith("0"): num = num[1:]
-        return f"5573{num}" if len(num) <= 9 else f"55{num}"
-
-    def buscar_irmaos(nome_mae, nome_pai, id_atual):
-        if df_cat.empty: return []
-        irmaos = df_cat[(((df_cat['nome_mae'] == nome_mae) & (nome_mae != "N/A")) | 
-                         ((df_cat['nome_pai'] == nome_pai) & (nome_pai != "N/A"))) & 
-                        (df_cat['id_catequizando'] != id_atual)]
-        return irmaos[['nome_completo', 'etapa']].to_dict('records')
-
-    # ==========================================================================
-    # VISÃO A: COORDENADOR / ADMIN (CENTRAL DE COMANDO)
-    # ==========================================================================
-    if eh_gestor:
-        tab_reunioes, tab_censo, tab_agenda, tab_visitas, tab_ia = st.tabs([
-            "📅 Reuniões de Pais", "📊 Censo Familiar", "📞 Agenda Geral", "🏠 Visitas", "✨ IA"
-        ])
-
-        # --- ABA 1: REUNIÕES DE PAIS (AGENDAR, PDF, CHAMADA E EDIÇÃO) ---
-        with tab_reunioes:
-            st.subheader("📅 Ciclo de Encontros com as Famílias")
-            sub_r1, sub_r2, sub_r3, sub_r4 = st.tabs([
-                "➕ Agendar", "📄 Lista Física (PDF)", "✅ Validar Presença (Digital)", "📜 Histórico e Edição"
-            ])
-            
-            # 1.1 AGENDAR REUNIÃO
-            with sub_r1:
-                with st.form("form_plan_reuniao", clear_on_submit=True):
-                    r_tema = st.text_input("Tema da Reunião").upper()
-                    c_r1, c_r2 = st.columns(2)
-                    r_data = c_r1.date_input("Data Prevista", value=date.today(), format="DD/MM/YYYY")
-                    r_turma = c_r2.selectbox("Turma Alvo", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
-                    r_local = st.text_input("Local (Ex: Salão Paroquial)").upper()
-                    if st.form_submit_button("📌 AGENDAR REUNIÃO"):
-                        if r_tema:
-                            if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, str(r_data), r_turma, r_local, "PENDENTE"]):
-                                st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-            # 1.2 GERAR PDF PARA ASSINATURA FÍSICA
-            with sub_r2:
-                df_reunioes_v = ler_aba("reunioes_pais")
-                if not df_reunioes_v.empty:
-                    sel_r_pdf = st.selectbox("Selecione a Reunião para gerar PDF:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pdf")
-                    dados_r = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_pdf].iloc[0]
-                    if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)"):
-                        t_alvo = dados_r.iloc[3]
-                        df_f_lista = df_cat[df_cat['status'] == 'ATIVO']
-                        if t_alvo != "GERAL (TODAS)": df_f_lista = df_f_lista[df_f_lista['etapa'] == t_alvo]
-                        lista_pdf = [{'nome_cat': r['nome_completo'], 'responsavel': r['nome_responsavel']} for _, r in df_f_lista.iterrows()]
-                        pdf_out = gerar_lista_assinatura_reuniao_pdf(dados_r.iloc[1], dados_r.iloc[2], dados_r.iloc[4], t_alvo, lista_pdf)
-                        st.download_button("📥 Baixar Lista para Impressão", pdf_out, f"Lista_{sel_r_pdf}.pdf")
-                else: st.info("Nenhuma reunião agendada.")
-
-            # 1.3 VALIDAR PRESENÇA (CHAMADA DIGITAL DOS PAIS)
-            with sub_r3:
-                if not df_reunioes_v.empty:
-                    sel_r_pres = st.selectbox("Selecione a Reunião para Chamada Digital:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pres")
-                    dados_r_pres = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_pres].iloc[0]
-                    id_reuniao = dados_r_pres.iloc[0]
-                    t_alvo_pres = dados_r_pres.iloc[3]
-
-                    df_fam_pres = df_cat[df_cat['status'] == 'ATIVO']
-                    if t_alvo_pres != "GERAL (TODAS)": df_fam_pres = df_fam_pres[df_fam_pres['etapa'] == t_alvo_pres]
+                        material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
                     
-                    st.info(f"📋 Registrando presença para: {sel_r_pres}")
-                    with st.form(f"form_pres_reu_{id_reuniao}"):
-                        lista_presenca_reu = []
-                        for _, r in df_fam_pres.sort_values('nome_completo').iterrows():
-                            col_n, col_c = st.columns([3, 1])
-                            col_n.write(f"**{r['nome_completo']}** (Resp: {r['nome_responsavel']})")
-                            presente = col_c.toggle("Presente", key=f"reu_p_{id_reuniao}_{r['id_catequizando']}")
-                            lista_presenca_reu.append([id_reuniao, r['id_catequizando'], r['nome_completo'], t_alvo_pres, "PRESENTE" if presente else "AUSENTE", str(date.today())])
+                    # B. Feedback Visual de Lente
+                    if material_ref is not None:
+                        tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
+                        perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
+                        st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
+
+                # 3. EXTRAÇÃO INTELIGENTE DO GABARITO
+                if material_ref is not None:
+                    txt_ref = str(material_ref['CONTEUDO'])
+                    val_tag = ai.extrair_tag(txt_ref, "VALOR")
+                    v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
+
+                    def extrair_gab_v50(texto, is_pei=False):
+                        tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+                        if not raw: return []
+                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+                        mapa = {int(num): letra for num, letra in matches}
+                        return [mapa[n] for n in sorted(mapa.keys())]
+
+                    # A mágica: extrai o gabarito correto (Regular ou PEI) da versão escolhida
+                    gab_alvo = extrair_gab_v50(txt_ref, is_pei_aluno)
+
+                    # 4. ÁREA DE CAPTURA
+                    col_cam, col_falta = st.columns([2, 1])
+                    img = col_cam.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
+                    
+                    with col_falta:
+                        st.write("---")
+                        if st.button("❌ REGISTRAR FALTA", use_container_width=True):
+                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
+                            st.rerun()
+
+                    if img and "current_scan_res" not in st.session_state:
+                        with st.spinner("Analisando marcações..."):
+                            res_json = ai.analisar_gabarito_vision(img.getvalue())
+                            qtd_q = len(gab_alvo)
+                            st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
+                            st.session_state.current_scan_img = img.getvalue()
+                            st.rerun()
+
+                    # 5. MESA DE PERÍCIA E SALVAMENTO
+                    if "current_scan_res" in st.session_state:
+                        res_lidas = st.session_state.current_scan_res
+                        st.markdown("---")
+                        col_res1, col_res2 = st.columns([1.5, 1])
                         
-                        if st.form_submit_button("💾 SALVAR PRESENÇAS NO BANCO"):
-                            if salvar_presenca_reuniao_pais(lista_presenca_reu):
-                                novos_dados_reu = list(dados_r_pres); novos_dados_reu[5] = "CONCLUIDA"
-                                atualizar_reuniao_pais(id_reuniao, novos_dados_reu)
-                                st.success("Presenças registradas!"); st.balloons(); time.sleep(1); st.rerun()
-                else: st.info("Nenhuma reunião para validar.")
-
-            # 1.4 HISTÓRICO E EDIÇÃO DE REUNIÕES
-            with sub_r4:
-                if not df_reunioes_v.empty:
-                    st.write("### ✏️ Editar Dados da Reunião")
-                    sel_r_edit = st.selectbox("Selecione para alterar:", [""] + df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_edit")
-                    if sel_r_edit:
-                        d_edit = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_edit].iloc[0]
-                        with st.form(f"form_edit_reu_{d_edit.iloc[0]}"):
-                            ed_tema = st.text_input("Tema", value=d_edit.iloc[1]).upper()
-                            ed_data = st.date_input("Data", value=converter_para_data(d_edit.iloc[2]))
-                            ed_turma = st.selectbox("Turma", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
-                            ed_local = st.text_input("Local", value=d_edit.iloc[4]).upper()
-                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
-                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                                if atualizar_reuniao_pais(d_edit.iloc[0], [d_edit.iloc[0], ed_tema, str(ed_data), ed_turma, ed_local, ed_status]):
-                                    st.success("Reunião atualizada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                    st.divider()
-                    st.write("### 📜 Histórico Geral")
-                    st.dataframe(df_reunioes_v, use_container_width=True, hide_index=True)
-
-        # --- ABA 2: CENSO MATRIMONIAL ---
-        with tab_censo:
-            st.subheader("📊 Diagnóstico da Igreja Doméstica")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("**💍 Situação Matrimonial dos Pais**")
-                st.bar_chart(df_cat['est_civil_pais'].value_counts())
-            with c2:
-                st.markdown("**⛪ Sacramentos dos Pais**")
-                sac_series = df_cat['sac_pais'].str.split(', ').explode()
-                st.bar_chart(sac_series.value_counts())
-
-# --- ABA 3: AGENDA GERAL (COM DOIS MÉTODOS DE IA) ---
-        with tab_agenda:
-            busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):", key="txt_busca_fam").upper()
-            df_age = df_cat[df_cat['nome_completo'].str.contains(busca_g, na=False) | df_cat['nome_mae'].str.contains(busca_g, na=False)] if busca_g else df_cat
-            
-            for _, row in df_age.iterrows():
-                with st.container():
-                    # Estilização do Card
-                    st.markdown(f"""
-                        <div style='background-color:#f8f9f0; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
-                            <b style='color:#417b99;'>{row['nome_completo']}</b> | Turma: {row['etapa']}
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
-                    
-                    # --- No botão de COBRAR DOCS ---
-                    if c_btn1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}"):
-                        nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
-                        msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], nome_alvo)
+                        with col_res1:
+                            st.subheader("⚖️ Mesa de Perícia")
+                            dados_pericia = []
+                            for i, lido in enumerate(res_lidas):
+                                if i < len(gab_alvo):
+                                    certo = gab_alvo[i]
+                                    status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
+                                    dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                            
+                            df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
+                                column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
+                                key=f"ed_turbo_{id_aluno_atual}")
                         
-                        # BLINDAGEM CONTRA ERRO DE MATH SYNTAX
-                        msg_segura = msg.replace("$", "\$") 
-                        st.info(f"**Mensagem de Cobrança:**\n\n{msg_segura}")
+                        with col_res2:
+                            st.subheader("📊 Resultado")
+                            novas_res = df_mesa["Lido"].tolist()
+                            acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
+                            nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
+                            st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                            
+                            if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
+                                with st.spinner("Arquivando com Rastreabilidade..."):
+                                    # --- LÓGICA DE ETIQUETA DE SOBERANIA ---
+                                    # O ID_AVALIACAO no banco será o nome da BASE + a marca da 2ª CHAMADA
+                                    id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
+                                    
+                                    link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                    
+                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                        datetime.now().strftime("%d/%m/%Y"), 
+                                        id_aluno_atual, al_sel, t_sel, 
+                                        id_av_final, # <--- Salva com a etiqueta solicitada
+                                        ";".join(novas_res), 
+                                        util.sosa_to_str(nota_f), 
+                                        link_pasta
+                                    ])
+                                    del st.session_state.current_scan_res
+                                    del st.session_state.current_scan_img
+                                    st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
 
-                    # --- No botão de ATUALIZAR FICHA ---
-                    if c_btn2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}"):
-                        nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
-                        resumo = f"Endereço: {row['endereco_completo']} | Saúde: {row['toma_medicamento_sn']}"
-                        msg = gerar_mensagem_atualizacao_cadastral_ia(row['nome_completo'], resumo, nome_alvo)
-                        
-                        # BLINDAGEM CONTRA ERRO DE MATH SYNTAX
-                        msg_segura = msg.replace("$", "\$")
-                        st.info(f"**Mensagem de Atualização:**\n\n{msg_segura}")
-                    
-                    # WHATSAPP DIRETO
-                    tel_limpo = limpar_wa(row['contato_principal'])
-                    if tel_limpo:
-                        c_btn3.markdown(f'''<a href="https://wa.me/{tel_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 Abrir WhatsApp</div></a>''', unsafe_allow_html=True)
-                    st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("🗑️ DESCARTAR"):
+                            del st.session_state.current_scan_res
+                            del st.session_state.current_scan_img
+                            st.rerun()
 
-        # --- ABA 4: RELATOS DE VISITAS ---
-        with tab_visitas:
-            st.subheader("🏠 Acompanhamento Familiar")
-            busca_v = st.text_input("Localizar Família para Relato:").upper()
-            if busca_v:
-                fam = df_cat[df_cat['nome_mae'].str.contains(busca_v, na=False) | df_cat['nome_pai'].str.contains(busca_v, na=False)]
-                if not fam.empty:
-                    dados_f = fam.iloc[0]
-                    st.success(f"✅ Família: {dados_f['nome_mae']} & {dados_f['nome_pai']}")
-                    novo_relato = st.text_area("Relato da Visita:", value=dados_f.get('obs_pastoral_familia', ''), height=150)
-                    if st.button("💾 SALVAR RELATO"):
-                        for _, filho in fam.iterrows():
-                            lista_up = filho.tolist()
-                            while len(lista_up) < 30: lista_up.append("N/A")
-                            lista_up[29] = novo_relato
-                            atualizar_catequizando(filho['id_catequizando'], lista_up)
-                        st.success("Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-        # --- ABA 5: IA ---
-        with tab_ia:
-            if st.button("🚀 EXECUTAR DIAGNÓSTICO FAMILIAR IA"):
-                resumo_fam = str(df_cat['est_civil_pais'].value_counts().to_dict())
-                st.info(analisar_saude_familiar_ia(resumo_fam))
-
-    # ==========================================================================
-    # VISÃO B: CATEQUISTA (MODELO MOBILE-FIRST / CARDS)
-    # ==========================================================================
-    else:
-        vinculo = str(st.session_state.usuario.get('turma_vinculada', '')).split(',')[0].strip()
-        st.subheader(f"📱 Agenda Pastoral: {vinculo}")
+# --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
+    with tab_atividades:
+        st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
         
-        df_minha_fam = df_cat[df_cat['etapa'] == vinculo]
-        busca_c = st.text_input("🔍 Buscar na minha turma:").upper()
-        if busca_c: df_minha_fam = df_minha_fam[df_minha_fam['nome_completo'].str.contains(busca_c, na=False)]
+        c_f1, c_f2 = st.columns(2)
+        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v66_{v}")
+        tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v66_{v}")
 
-        for _, row in df_minha_fam.iterrows():
-            with st.container():
-                st.markdown(f"""
-                    <div style='background-color:#ffffff; padding:12px; border-radius:12px; border-left:8px solid #417b99; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;'>
-                        <b style='color:#417b99; font-size:16px;'>{row['nome_completo']}</b><br>
-                        <small>Mãe: {row['nome_mae']} | Pai: {row['nome_pai']}</small>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                # Radar de Irmãos
-                irmaos = buscar_irmaos(row['nome_mae'], row['nome_pai'], row['id_catequizando'])
-                if irmaos:
-                    with st.expander("🔗 IRMÃOS NA CATEQUESE"):
-                        for ir in irmaos: st.write(f"👦 {ir['nome_completo']} ({ir['etapa']})")
+        # Busca ativos que não são provas (Projetos, Fixação, etc)
+        opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
+        at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v66_{v}")
 
-                # Botões WhatsApp Mobile
-                c1, c2, c3 = st.columns(3)
-                lm = limpar_wa(row['tel_mae'])
-                if lm: c1.markdown(f'''<a href="https://wa.me/{lm}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">👩‍🦱 MÃE</div></a>''', unsafe_allow_html=True)
-                lp = limpar_wa(row['tel_pai'])
-                if lp: c2.markdown(f'''<a href="https://wa.me/{lp}" target="_blank" style="text-decoration:none;"><div style="background-color:#128c7e; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">👨‍🦱 PAI</div></a>''', unsafe_allow_html=True)
+        if not t_sel_a or not at_sel_a:
+            st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento de Notas.")
+        else:
+            # 1. LEITURA E DNA DO MATERIAL
+            dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
+            txt_at = str(dados_at['CONTEUDO'])
+            
+            # Tenta extrair o valor sugerido no material, senão assume 2.0 como padrão
+            val_sugerido = ai.extrair_tag(txt_at, "VALOR")
+            v_max_padrao = util.sosa_to_float(val_sugerido) if val_sugerido else 2.0
+
+            with st.container(border=True):
+                c_m1, c_m2 = st.columns([2, 1])
+                c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
+                v_max_ativ = c_m2.number_input("💎 Valor Máximo desta Atividade:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_{v}")
+
+            with st.expander("👁️ REVISAR ROTEIRO E CRITÉRIOS (RUBRICA)"):
+                c_v1, c_v2 = st.columns(2)
+                with c_v1:
+                    st.markdown("**👨‍🏫 Guia do Professor:**")
+                    st.write(ai.extrair_tag(txt_at, "PROFESSOR"))
+                with c_v2:
+                    st.markdown("**📝 Roteiro do Aluno:**")
+                    st.write(ai.extrair_tag(txt_at, "ALUNO"))
+
+            # 2. MESA DE LANÇAMENTO DE NOTAS (AUTONOMIA TOTAL)
+            st.divider()
+            st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
+            st.caption(f"As notas lançadas abaixo (até {v_max_ativ}) serão integradas ao bônus do aluno no boletim.")
+            
+            alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
+            
+            # Busca se já existem notas lançadas para este material no Diário de Bordo
+            notas_existentes = {}
+            if not df_diario.empty:
+                # Filtra registros que contenham o nome deste material nas observações
+                df_filtro_mat = df_diario[df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False)]
+                for _, row_d in df_filtro_mat.iterrows():
+                    notas_existentes[db.limpar_id(row_d['ID_ALUNO'])] = util.sosa_to_float(row_d.get('BONUS', 0))
+
+            dados_notas_projeto = []
+            for _, alu in alunos_a.iterrows():
+                id_a = db.limpar_id(alu['ID'])
+                nota_atual = notas_existentes.get(id_a, 0.0)
                 
-                obs_p = str(row.get('obs_pastoral_familia', ''))
-                te = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else None
-                le = limpar_wa(te)
-                if le: c3.markdown(f'''<a href="https://wa.me/{le}" target="_blank" style="text-decoration:none;"><div style="background-color:#e03d11; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">🚨 EMERG.</div></a>''', unsafe_allow_html=True)
+                dados_notas_projeto.append({
+                    "ID": id_a, 
+                    "Estudante": alu['NOME_ALUNO'], 
+                    "Nota Alcançada": nota_atual,
+                    "Status": "✅ Lançado" if nota_atual > 0 else "⏳ Pendente"
+                })
+            
+            df_notas_ed = st.data_editor(
+                pd.DataFrame(dados_notas_projeto),
+                hide_index=True, use_container_width=True,
+                column_config={
+                    "ID": None,
+                    "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                    "Nota Alcançada": st.column_config.NumberColumn(f"Nota (0 a {v_max_ativ})", min_value=0.0, max_value=v_max_ativ, step=0.1, format="%.1f"),
+                    "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
+                },
+                key=f"ed_notas_proj_{at_sel_a.replace(' ','_')}"
+            )
+
+            # 3. SALVAMENTO NO DIÁRIO DE BORDO (INTEGRAÇÃO COM PAINEL DE NOTAS)
+            if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
+                with st.status("Sincronizando Notas de Mérito com o Ecossistema...") as status:
+                    data_hoje = datetime.now().strftime("%d/%m/%Y")
+                    lista_lote_diario = []
+                    
+                    for _, r in df_notas_ed.iterrows():
+                        # Salvamos no Diário de Bordo para que o Painel de Notas some como Bônus
+                        # A tag 'PROJETO' ajuda a identificar a origem da nota
+                        lista_lote_diario.append([
+                            data_hoje, 
+                            r['ID'], 
+                            r['Estudante'], 
+                            t_sel_a, 
+                            "TRUE", # Visto como True pois houve entrega
+                            "PROJETO/ATIVIDADE", 
+                            f"[{at_sel_a}] Nota atribuída na CIR.", 
+                            util.sosa_to_str(r['Nota Alcançada'])
+                        ])
+                    
+                    if lista_lote_diario:
+                        # Limpa registros antigos deste material para esta turma para evitar duplicidade de bônus
+                        db.limpar_diario_data_turma(data_hoje, t_sel_a) # Opcional: pode-se criar uma função específica para limpar por material
+                        
+                        db.salvar_lote("DB_DIARIO_BORDO", lista_lote_diario)
+                        status.update(label=f"✅ Notas de {at_sel_a} integradas com sucesso!", state="complete")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+
+    # ==============================================================================
+    # MÓDULO: HUB DE SOBERANIA (V70.0 - SOBERANIA DE VERSÕES E PERFIS)
+    # ==============================================================================
+    with tab_soberania:
+        st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
+        st.markdown("---")
+
+        c_h1, c_h2 = st.columns([1, 1])
+        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v70_{v}")
+        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v70_{v}")
+
+        if not t_sel_h:
+            st.info("💡 Selecione uma turma para abrir a Mesa de Soberania.")
+        else:
+            sub_auditoria, sub_externas = st.tabs(["⚖️ Auditoria e Lançamento Manual", "🌍 Notas Externas (SAEB/Governo)"])
+
+            with sub_auditoria:
+                st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
                 
-                with st.expander("📝 Anotar Visita/Conversa"):
-                    with st.form(key=f"f_v_{row['id_catequizando']}"):
-                        rel = st.text_area("Relato:", value=row.get('obs_pastoral_familia', ''))
-                        if st.form_submit_button("💾 Salvar"):
-                            lista_up = row.tolist()
-                            while len(lista_up) < 30: lista_up.append("N/A")
-                            lista_up[29] = rel
-                            atualizar_catequizando(row['id_catequizando'], lista_up)
-                            st.success("Salvo!"); st.cache_data.clear(); time.sleep(0.5); st.rerun()
+                # 1. FILTRO DE ATIVOS OFICIAIS (CENTRAL DE AVALIAÇÕES)
+                serie_num = t_sel_h[0]
+                df_oficiais = df_aulas[
+                    (df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & 
+                    (df_aulas['ANO'].str.contains(serie_num))
+                ]
+                
+                # Filtra apenas as avaliações "Base" (ignora o sufixo 2ª chamada no seletor principal)
+                opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
+                av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
+
+                if av_alvo_h:
+                    # 2. DATA FUSION: CRUZAMENTO DE ALUNOS + SCANNER
+                    alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
+                    
+                    # Busca registros do scanner que pertencem a este "Slot" (Base ou 2ª Chamada)
+                    nome_curto_av = av_alvo_h.split("-")[0].strip()
+                    gabaritos_lidos = df_diagnosticos[
+                        (df_diagnosticos['TURMA'] == t_sel_h) & 
+                        (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))
+                    ]
+                    
+                    dados_soberania = []
+                    for _, alu in alunos_turma.iterrows():
+                        id_a = db.limpar_id(alu['ID'])
+                        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                        
+                        # Tenta localizar o registro do aluno (pega o mais recente)
+                        leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                        
+                        situacao_txt = "✍️ PENDENTE"
+                        versao_prova = "N/A"
+                        nota_atual = 0.0
+                        link_ev = ""
+
+                        if not leitura.empty:
+                            reg = leitura.iloc[-1] # Pega a última ação (ex: se faltou e depois fez 2ª chamada)
+                            nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
+                            link_ev = reg.get('LINK_FOTO_DRIVE', '')
+                            
+                            if reg['RESPOSTAS_ALUNO'] == "FALTOU":
+                                situacao_txt = "❌ FALTOU"
+                                versao_prova = "N/A"
+                            elif "2ª" in reg['ID_AVALIACAO'].upper():
+                                situacao_txt = "✅ REALIZADA"
+                                versao_prova = "SEGUNDA CHAMADA"
+                            else:
+                                situacao_txt = "✅ REALIZADA"
+                                versao_prova = "PROVA ORIGINAL"
+
+                        dados_soberania.append({
+                            "ID": id_a,
+                            "Estudante": alu['NOME_ALUNO'],
+                            "Perfil": "♿ PEI" if is_pei else "📝 REGULAR",
+                            "Situação": situacao_txt,
+                            "Versão Aplicada": versao_prova,
+                            "Nota Final (Soberana)": nota_atual,
+                            "Evidência": link_ev
+                        })
+
+                    st.info(f"💡 **Soberania:** O senhor pode alterar a nota de quem 'FALTOU' caso ele tenha realizado a Segunda Chamada manualmente.")
+                    
+                    # 3. MESA DE SOBERANIA (DATA EDITOR)
+                    df_soberano_ed = st.data_editor(
+                        pd.DataFrame(dados_soberania),
+                        column_config={
+                            "ID": None,
+                            "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                            "Perfil": st.column_config.TextColumn("Perfil", width="small", disabled=True),
+                            "Situação": st.column_config.TextColumn("Situação", width="small", disabled=True),
+                            "Versão Aplicada": st.column_config.TextColumn("Versão", width="small", disabled=True),
+                            "Nota Final (Soberana)": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
+                            "Evidência": st.column_config.LinkColumn("🔗 Ver Prova")
+                        },
+                        hide_index=True, use_container_width=True, key=f"ed_soberania_v70_{v}"
+                    )
+
+                    # 4. HOMOLOGAÇÃO
+                    if st.button("⚖️ HOMOLOGAR NOTAS E ATUALIZAR BOLETIM", use_container_width=True, type="primary"):
+                        with st.status("Sincronizando com o Boletim Oficial...") as status_h:
+                            lista_homologacao = []
+                            for _, r in df_soberano_ed.iterrows():
+                                col_teste = "0,0"
+                                col_prova = "0,0"
+                                nota_str = util.sosa_to_str(r['Nota Final (Soberana)'])
+                                
+                                if "TESTE" in av_alvo_h.upper():
+                                    col_teste = nota_str
+                                else:
+                                    col_prova = nota_str
+
+                                lista_homologacao.append([
+                                    r['ID'], r['Estudante'], t_sel_h, tr_sel_h, 
+                                    "0,0", col_teste, col_prova, "0,0", nota_str
+                                ])
+                            
+                            if db.salvar_lote("DB_NOTAS", lista_homologacao):
+                                status_h.update(label="✅ Notas homologadas! O Boletim Anual foi atualizado.", state="complete")
+                                st.balloons()
+                else:
+                    st.info("Selecione a Avaliação para abrir a mesa de auditoria.")
+
+            # --- SUB-ABA 2: NOTAS EXTERNAS ---
+            with sub_externas:
+                st.markdown("#### 🌍 Lançamento de Indicadores Externos (SAEB / Município)")
+                st.caption("Use este espaço para integrar resultados de provas do Governo ou da Prefeitura.")
+                
+                alunos_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
+                
+                dados_externos = []
+                for _, alu in alunos_h.iterrows():
+                    dados_externos.append({
+                        "ID": alu['ID'],
+                        "Estudante": alu['NOME_ALUNO'],
+                        "Nota SAEB/Externa": 0.0,
+                        "Observação": ""
+                    })
+                
+                df_ext_ed = st.data_editor(
+                    pd.DataFrame(dados_externos),
+                    column_config={
+                        "ID": None,
+                        "Nota SAEB/Externa": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1),
+                        "Observação": st.column_config.TextColumn("Origem (Ex: SAEB 2026)")
+                    },
+                    hide_index=True, use_container_width=True, key=f"ed_externas_{v}"
+                )
+
+                if st.button("💾 INTEGRAR NOTAS EXTERNAS AO PERFIL", use_container_width=True):
+                    with st.spinner("Arquivando indicadores externos..."):
+                        # Salva na aba de Relatórios para consulta no Raio-X e Conselho
+                        for _, r in df_ext_ed.iterrows():
+                            if r['Nota SAEB/Externa'] > 0:
+                                db.salvar_no_banco("DB_RELATORIOS", [
+                                    datetime.now().strftime("%d/%m/%Y"), 
+                                    r['ID'], r['Estudante'], 
+                                    "NOTA_EXTERNA", 
+                                    f"Nota: {r['Nota SAEB/Externa']} | Origem: {r['Observação']}"
+                                ])
+                        st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
+
+# --- ABA 4: RAIO-X PEDAGÓGICO (V87 - SOBERANIA ESTÉTICA & CLAREZA INDIVIDUAL) ---
+    with tab_raiox:
+        st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
+        st.markdown("---")
+
+        # --- 1. FUNÇÃO DE EXTRAÇÃO UNIVERSAL (BLINDADA) ---
+        def extrair_gab_v87_universal(texto, is_pei=False):
+            if not texto: return {}
+            tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+            raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO") or ai.extrair_tag(texto, "RESPOSTAS_IA")
+            matches = re.findall(r"(\d+)\s*[\-\.\:\)]\s*([A-E])", raw.upper())
+            if matches: return {int(num): letra for num, letra in matches}
+            letras = re.findall(r"\b[A-E]\b", raw.upper())
+            return {i+1: letra for i, letra in enumerate(letras)}
+
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v87_{v}")
+        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v87_{v}")
+        
+        opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
+        opcoes_base_r = [opt for opt in opcoes_r if not re.search(r"2[ªA]|CHAMADA", opt, re.IGNORECASE)]
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v87_{v}")
+
+        if not t_sel_r or not at_sel_r:
+            st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
+        else:
+            # 1. DATA FUSION: CRUZAMENTO DE DADOS
+            nome_curto_av = at_sel_r.split("-")[0].strip()
+            ano_num_r = "".join(filter(str.isdigit, t_sel_r))
+            
+            respostas_brutas = df_diagnosticos[
+                (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
+                (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
+            ].copy()
+
+            if respostas_brutas.empty:
+                st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
+            else:
+                df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
+                df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
+                respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
+                
+                df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
+                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
+
+                # --- PARTE A: ANÁLISE MACRO ---
+                st.markdown("### 🎯 1. Análise de Performance por Item")
+                col_l1, col_l2 = st.columns(2)
+                perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v87_{v}")
+                versao_visao = col_l2.radio("2. Versão da Prova:", ["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v87_{v}")
+                
+                is_pei_view = "PEI" in perfil_visao
+                is_2a_view = "2ª" in versao_visao
+                
+                df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
+
+                if is_2a_view:
+                    query_mat = df_aulas[
+                        (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                        (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
+                        (df_aulas['ANO'].str.contains(ano_num_r))
+                    ]
+                else:
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+
+                if query_mat.empty:
+                    st.error(f"❌ Gabarito da {versao_visao} não localizado.")
+                elif df_filtrado.empty:
+                    st.info(f"📭 Não há dados de {perfil_visao} para a {versao_visao}.")
+                else:
+                    dados_prova = query_mat.iloc[0]
+                    txt_prova = str(dados_prova['CONTEUDO'])
+                    grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
+                    gab_ativo = extrair_gab_v87_universal(txt_prova, is_pei_view)
+
+                    num_q_total = len(gab_ativo)
+                    stats_list = []
+                    matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+
+                    for i in range(1, num_q_total + 1):
+                        correta = gab_ativo.get(i, "?")
+                        votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                        acertos = votos.count(correta)
+                        perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
+                        erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
+                        distrator = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
+                        stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, "Distrator Crítico": distrator})
+
+                    df_stats = pd.DataFrame(stats_list)
+                    col_graf, col_item = st.columns([1.2, 1])
+                    with col_graf:
+                        fig = px.bar(df_stats, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                        fig.update_layout(yaxis_range=[0, 110], height=350)
+                        st.plotly_chart(fig, use_container_width=True)
+                    with col_item:
+                        with st.container(border=True):
+                            st.markdown("**🔬 Perícia do Item**")
+                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v87_{is_pei_view}_{is_2a_view}")
+                            info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
+                            idx_num = int(q_sel[1:])
+                            st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
+                            try:
+                                padrao = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num}\b.*?(?=QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                match = re.search(padrao, grade_pericia)
+                                if match:
+                                    # --- VACINA ANTI-FONTE GIGANTE ---
+                                    # Remove todos os # e * que causam títulos enormes
+                                    txt_limpo = re.sub(r'[*#]', '', match.group(0)).strip()
+                                    st.info(txt_limpo)
+                            except: st.caption("Detalhes não localizados.")
+
+                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO V87 - CLAREZA TOTAL) ---
+                st.markdown("---")
+                st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
+                st.caption("🔍 O sistema identifica a alternativa marcada e extrai a análise pedagógica do erro cometido.")
+                
+                alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
+                dados_indiv = []
+
+                for _, alu in alunos_turma.iterrows():
+                    id_a = db.limpar_id(alu['ID'])
+                    is_pei_alu = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
+                    
+                    if reg_aluno.empty:
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.00, "Diagnóstico Técnico de Erros": "Aguardando Realização"})
+                    else:
+                        reg = reg_aluno.iloc[-1]
+                        nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
+                        material_aluno = reg['ID_AVALIACAO']
+                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_aluno]
+                        
+                        if not m_ref_query.empty:
+                            m_ref = m_ref_query.iloc[0]
+                            txt_cont = str(m_ref['CONTEUDO'])
+                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
+                            grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO"))
+                            
+                            gab_ref_alu = extrair_gab_v87_universal(txt_cont, is_pei_alu)
+                            resp_aluno_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
+                            
+                            analise_de_erros = []
+                            for i, letra_marcada in enumerate(resp_aluno_lista):
+                                q_n = i + 1
+                                letra_correta = gab_ref_alu.get(q_n)
+                                
+                                if letra_marcada != letra_correta and letra_marcada in ["A", "B", "C", "D", "E"]:
+                                    # 1. Localiza o bloco da questão
+                                    padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
+                                    bloco_q = re.search(padrao_bloco, grade_texto)
+                                    
+                                    if bloco_q:
+                                        texto_bloco = bloco_q.group(0)
+                                        
+                                        # Extrai o código da Habilidade (EF...)
+                                        match_hab = re.search(r"(EF\d{2}MA\d{2})", texto_bloco)
+                                        cod_h = match_hab.group(1) if match_hab else "BNCC"
+
+                                        # Busca a explicação do erro
+                                        secao_erros = re.search(r"(?i)(?:ALERTA|PERÍCIA|DISTRATORES).*?[:\-]\s*(.*)", texto_bloco, re.DOTALL)
+                                        texto_para_busca = secao_erros.group(1) if secao_erros else texto_bloco
+                                        
+                                        padrao_distrator = rf"(?i){letra_marcada}[\)\:\s\-]+(.*?)(?=[A-E][\)\:\s\-]|;|\. [A-E][\)\:]|JUSTIFICATIVA|QUEST[AÃ]O|$)"
+                                        match_d = re.search(padrao_distrator, texto_para_busca, re.DOTALL)
+                                        
+                                        if match_d:
+                                            # Formatação de Elite: [HABILIDADE] Q(Letra): Descrição
+                                            analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {match_d.group(1).strip()}")
+                                        else:
+                                            analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): Erro de interpretação.")
+                            
+                            lacunas_txt = " \n\n ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total das Habilidades"
+                        else:
+                            lacunas_txt = "⚠️ Material não localizado."
+
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
+
+                # --- EXIBIÇÃO FINAL COM CONFIGURAÇÃO DE COLUNA LARGA ---
+                df_f = pd.DataFrame(dados_indiv)
+                st.data_editor(
+                    df_f,
+                    column_config={
+                        "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
+                        "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")
+                    },
+                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v87_{v}"
+                )
+
+# --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
+    with tab_acervo_cir:
+        st.subheader("📂 Cofre Digital de Evidências: Localização Rápida")
+        st.markdown("---")
+
+        if df_diagnosticos.empty:
+            st.info("📭 Nenhuma evidência arquivada ainda.")
+        else:
+            # 1. BARRA DE FILTROS DE ELITE
+            with st.container(border=True):
+                c_f1, c_f2, c_f3 = st.columns([1, 1, 1.5])
+                
+                # Filtro 1: Turma
+                lista_turmas_ev = ["Todas"] + sorted(df_diagnosticos['TURMA'].unique().tolist())
+                f_turma = c_f1.selectbox("👥 Filtrar por Turma:", lista_turmas_ev, key=f"f_t_ev_{v}")
+                
+                # Filtro 2: Trimestre (Busca por texto no ID da Avaliação)
+                f_trim = c_f2.selectbox("📅 Filtrar por Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"f_tr_ev_{v}")
+                
+                # Preparação da base filtrada para o Filtro 3
+                df_ev_filtrado = df_diagnosticos.copy()
+                if f_turma != "Todas":
+                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['TURMA'] == f_turma]
+                if f_trim != "Todos":
+                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'].str.contains(f_trim, na=False)]
+                
+                # Filtro 3: Material (Dinâmico com base nos filtros anteriores)
+                lista_mats_ev = ["Todos"] + sorted(df_ev_filtrado['ID_AVALIACAO'].unique().tolist())
+                f_mat = c_f3.selectbox("📋 Selecionar Material Específico:", lista_mats_ev, key=f"f_m_ev_{v}")
+                
+                if f_mat != "Todos":
+                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'] == f_mat]
+
+            # 2. EXIBIÇÃO DOS RESULTADOS
+            st.markdown(f"**🔍 Registros Localizados:** {len(df_ev_filtrado)}")
+            
+            if df_ev_filtrado.empty:
+                st.warning("⚠️ Nenhum registro encontrado com os filtros selecionados.")
+            else:
+                # Ordena pelos mais recentes
+                df_ev_exibicao = df_ev_filtrado.iloc[::-1]
+                
+                # Tabela de Custódia com Link Direto
+                st.dataframe(
+                    df_ev_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
+                    column_config={
+                        "DATA": st.column_config.TextColumn("Data", width="small"),
+                        "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
+                        "TURMA": st.column_config.TextColumn("Turma", width="small"),
+                        "ID_AVALIACAO": st.column_config.TextColumn("Avaliação", width="medium"),
+                        "NOTA_CALCULADA": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
+                        "LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Evidência (Drive)", width="medium")
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # 3. RESUMO DE PERFORMANCE DO FILTRO
+                with st.expander("📊 Resumo Rápido desta Seleção"):
+                    c_r1, c_r2, c_r3 = st.columns(3)
+                    media_sel = df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                    c_r1.metric("Média do Grupo", f"{media_sel:.2f}")
+                    
+                    acima_media = len(df_ev_filtrado[df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) >= 6.0])
+                    c_r2.metric("Alunos com Sucesso", acima_media)
+                    
+                    abaixo_media = len(df_ev_filtrado) - acima_media
+                    c_r3.metric("Alunos em Alerta", abaixo_media, delta_color="inverse")
+
+    # --- ABA 6: DASHBOARD (V73.0 - TORRE DE COMANDO COM FILTRO DE TURMA) ---
+    with tab_dash_cir:
+        st.subheader("📈 Torre de Comando: Inteligência de Resultados 360°")
+        st.markdown("---")
+
+        if df_diagnosticos.empty:
+            st.info("📭 Aguardando dados de gabaritos para gerar a inteligência analítica.")
+        else:
+            # 1. PREPARAÇÃO E FUSÃO DE DADOS (DATA FUSION)
+            df_dash = df_diagnosticos.copy()
+            df_dash['NOTA_NUM'] = df_dash['NOTA_CALCULADA'].apply(util.sosa_to_float)
+            
+            # Cruzamento com a base de alunos para identificar Perfil (Regular/PEI)
+            df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
+            df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
+            df_dash['ID_ALUNO_L'] = df_dash['ID_ALUNO'].apply(db.limpar_id)
+            
+            df_final_base = pd.merge(df_dash, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
+            df_final_base['PERFIL'] = df_final_base['NECESSIDADES'].apply(
+                lambda x: "♿ PEI" if str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"] else "📝 REGULAR"
+            )
+
+            # --- SELETOR DE SOBERANIA (FILTRO DE TURMA) ---
+            with st.container(border=True):
+                lista_turmas_dash = ["Todas as Turmas"] + sorted(df_final_base['TURMA'].unique().tolist())
+                turma_sel_dash = st.selectbox("🎯 Selecione a Turma para Análise de Performance:", lista_turmas_dash, key=f"dash_t_filter_{v}")
+
+            # Aplicação do Filtro
+            if turma_sel_dash != "Todas as Turmas":
+                df_final = df_final_base[df_final_base['TURMA'] == turma_sel_dash].copy()
+            else:
+                df_final = df_final_base.copy()
+
+            if df_final.empty:
+                st.warning(f"⚠️ Não há dados processados para a turma {turma_sel_dash}.")
+            else:
+                # 2. KPIs DE TOPO (MÉTRICAS AJUSTADAS AO FILTRO)
+                c1, c2, c3, c4 = st.columns(4)
+                
+                media_geral = df_final['NOTA_NUM'].mean()
+                c1.metric("Média do Grupo", f"{media_geral:.2f}", 
+                        delta=f"{media_geral - 6.0:.1f}", 
+                        delta_color="normal" if media_geral >= 6 else "inverse")
+                
+                total_correcoes = len(df_final)
+                c2.metric("Total de Correções", total_correcoes)
+                
+                taxa_sucesso = (len(df_final[df_final['NOTA_NUM'] >= 6.0]) / total_correcoes) * 100 if total_correcoes > 0 else 0
+                c3.metric("Taxa de Sucesso", f"{taxa_sucesso:.1f}%")
+                
+                media_pei = df_final[df_final['PERFIL'] == "♿ PEI"]['NOTA_NUM'].mean()
+                c4.metric("Média PEI", f"{media_pei:.2f}" if not pd.isna(media_pei) else "0.00")
+
+                st.markdown("---")
+
+                # 3. ANÁLISE GRÁFICA (VISÃO SEGREGADA)
+                col_esq, col_dir = st.columns(2)
+
+                with col_esq:
+                    st.markdown(f"**⚖️ Índice de Equidade: {turma_sel_dash}**")
+                    # Gráfico de Box Plot para ver a dispersão das notas por perfil
+                    fig_perfil = px.box(df_final, x="PERFIL", y="NOTA_NUM", color="PERFIL",
+                                    points="all", title="Distribuição de Notas: Regular vs PEI",
+                                    color_discrete_map={"📝 REGULAR": BRAND_BLUE, "♿ PEI": "#FF4B4B"})
+                    fig_perfil.update_layout(showlegend=False, yaxis_range=[0, 11], height=400)
+                    st.plotly_chart(fig_perfil, use_container_width=True)
+
+                with col_dir:
+                    st.markdown(f"**📊 Performance por Ativo: {turma_sel_dash}**")
+                    # Média de cada prova aplicada para o grupo selecionado
+                    df_ativos = df_final.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index().sort_values(by='NOTA_NUM')
+                    fig_ativos = px.bar(df_ativos, x="NOTA_NUM", y="ID_AVALIACAO", orientation='h',
+                                    title="Média de Acertos por Avaliação",
+                                    text_auto='.1f', color="NOTA_NUM", color_continuous_scale="RdYlGn")
+                    fig_ativos.update_layout(xaxis_range=[0, 11], height=400)
+                    st.plotly_chart(fig_ativos, use_container_width=True)
+
+                # 4. MAPA DE CALOR DE HABILIDADES (LACUNAS BNCC ESPECÍFICAS)
+                st.markdown("---")
+                st.markdown(f"**🔥 Mapa de Calor: Domínio de Habilidades BNCC ({turma_sel_dash})**")
+                
+                df_habilidades = []
+                # Itera apenas sobre as avaliações que aparecem no filtro atual
+                for avaliacao in df_final['ID_AVALIACAO'].unique():
+                    # Busca o conteúdo da prova no banco de materiais
+                    prova_query = df_aulas[df_aulas['TIPO_MATERIAL'] == avaliacao]
+                    if not prova_query.empty:
+                        prova_txt = prova_query['CONTEUDO'].iloc[0]
+                        grade = ai.extrair_tag(prova_txt, "GRADE_DE_CORRECAO")
+                        
+                        # Busca códigos BNCC (Ex: EF06MA01)
+                        codigos = re.findall(r"EF\d{2}MA\d{2}", grade)
+                        for cod in set(codigos):
+                            # Calcula a média de acerto do grupo filtrado para esta prova
+                            media_hab = df_final[df_final['ID_AVALIACAO'] == avaliacao]['NOTA_NUM'].mean()
+                            df_habilidades.append({"Habilidade": cod, "Domínio %": media_hab * 10, "Ativo": avaliacao})
+
+                if df_habilidades:
+                    df_hab_plot = pd.DataFrame(df_habilidades)
+                    fig_hab = px.scatter(df_hab_plot, x="Habilidade", y="Domínio %", size="Domínio %", color="Domínio %",
+                                        hover_name="Ativo", title="Nível de Domínio por Descritor",
+                                        color_continuous_scale="RdYlGn", range_y=[0, 105])
+                    st.plotly_chart(fig_hab, use_container_width=True)
+                else:
+                    st.info("Habilidades BNCC serão mapeadas conforme o senhor realizar as perícias no Raio-X.")
+
+                # 5. ALERTAS DE INTERVENÇÃO (FOCO NA TURMA)
+                st.markdown("---")
+                st.markdown(f"#### 🚨 Alertas de Risco Pedagógico: {turma_sel_dash}")
+                
+                # Filtra alunos do grupo atual com média abaixo de 5.0
+                df_alerta = df_final[df_final['NOTA_NUM'] < 5.0].groupby(['NOME_ALUNO', 'TURMA', 'PERFIL'])['NOTA_NUM'].count().reset_index()
+                df_alerta.columns = ['Estudante', 'Turma', 'Perfil', 'Qtd. Avaliações Críticas']
+                
+                if not df_alerta.empty:
+                    st.warning(f"Identificamos {len(df_alerta)} alunos em {turma_sel_dash} que necessitam de recomposição urgente.")
+                    st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), 
+                                use_container_width=True, hide_index=True)
+                else:
+                    st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
+
+# ==============================================================================
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.0 - DOSSIÊ COM EXTRATOR DE HABILIDADES V82)
+# ==============================================================================
+elif menu == "👤 Biografia do Estudante":
+    st.title("👤 Dossiê de Soberania do Estudante")
+    st.markdown("---")
+
+    if df_alunos.empty:
+        st.warning("⚠️ Base de alunos vazia.")
+    else:
+        # 1. FILTROS DE ACESSO RÁPIDO
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([1, 1.5, 1])
+            turma_b = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="bio_t")
+            lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO")
+            aluno_b = c2.selectbox("Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
+            trim_b = c3.selectbox("Trimestre em Foco:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim")
+
+        # --- LÓGICA DE DATAS DO TRIMESTRE (Sincronia Itabuna 2026) ---
+        if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
+        elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
+        elif trim_b == "III Trimestre": dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
+        else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
+
+        # Captura dados básicos
+        info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == aluno_b].iloc[0]
+        id_alu = db.limpar_id(info_alu['ID'])
+        is_pei = str(info_alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+        
+        # --- FILTRAGEM DE BASES POR ALUNO E TEMPO ---
+        n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+        n_alu_f = n_alu[n_alu['TRIMESTRE'] == trim_b] if trim_b != "Todos" else n_alu.copy()
+
+        d_alu_f = pd.DataFrame()
+        if not df_diario.empty:
+            d_alu = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
+            if not d_alu.empty:
+                d_alu['DATA_DT'] = pd.to_datetime(d_alu['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                d_alu_f = d_alu[(d_alu['DATA_DT'] >= dt_ini) & (d_alu['DATA_DT'] <= dt_fim)]
+
+        diag_alu_f = pd.DataFrame()
+        if not df_diagnosticos.empty:
+            diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+            if trim_b != "Todos":
+                diag_alu_f = diag_alu[diag_alu['ID_AVALIACAO'].str.replace(" ","").str.upper().str.contains(trim_b.replace(" ","").upper(), na=False)]
+            else:
+                diag_alu_f = diag_alu.copy()
+
+        # --- CABEÇALHO DE STATUS ---
+        c_h1, c_h2 = st.columns([2, 1])
+        with c_h1:
+            st.subheader(f"🎓 {aluno_b}")
+            perfil_label = "♿ ESTUDANTE PEI" if is_pei else "📝 ESTUDANTE REGULAR"
+            st.caption(f"**Perfil:** {perfil_label} | **ID:** {id_alu}")
+        with c_h2:
+            if not n_alu.empty:
+                soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum()
+                st.metric("Soma Anual (Meta 18.0)", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}")
+
+        # --- SEÇÃO 1: DESEMPENHO ACADÊMICO ---
+        st.markdown(f"### 📈 1. Desempenho Acadêmico: {trim_b}")
+        with st.container(border=True):
+            if not n_alu_f.empty:
+                dados_notas = []
+                trims_para_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+                for t in trims_para_exibir:
+                    reg = n_alu[n_alu['TRIMESTRE'] == t]
+                    if not reg.empty:
+                        dados_notas.append({
+                            "Trimestre": t,
+                            "Média": util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']),
+                            "Rec. Paralela": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
+                            "Situação": "✅ OK" if util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']) >= 6.0 else "⚠️ ABAIXO"
+                        })
+                if dados_notas:
+                    st.dataframe(pd.DataFrame(dados_notas), use_container_width=True, hide_index=True)
+                else: st.info(f"Sem notas lançadas para o {trim_b}.")
+            else: st.info(f"Aguardando lançamento de notas.")
+
+        # --- SEÇÃO 2: TRABALHOS E PROJETOS ---
+        st.markdown(f"### ✍️ 2. Trabalhos e Projetos: {trim_b}")
+        with st.container(border=True):
+            if not d_alu_f.empty:
+                trabalhos = d_alu_f[d_alu_f['TAGS'].astype(str).str.contains("PROJETO|ATIVIDADE", na=False, case=False)]
+                if not trabalhos.empty:
+                    for _, trab in trabalhos.iterrows():
+                        c_p1, c_p2 = st.columns([3, 1])
+                        c_p1.markdown(f"📘 **{trab['OBSERVACOES']}**")
+                        c_p2.success(f"Nota: {trab['BONUS']}")
+                else: st.warning(f"Nenhuma entrega de projeto registrada.")
+            else: st.info(f"Sem registros de atividades.")
+
+        # --- SEÇÃO 3: ENGAJAMENTO E ATITUDE ---
+        st.markdown(f"### 📊 3. Engajamento e Atitude: {trim_b}")
+        col_v1, col_v2 = st.columns([1.2, 1.8])
+        with col_v1:
+            if not d_alu_f.empty:
+                total_aulas = len(d_alu_f)
+                vistos = len(d_alu_f[d_alu_f['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                perc_visto = (vistos / total_aulas) * 100 if total_aulas > 0 else 0
+                st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas} aulas")
+                st.progress(perc_visto / 100)
+            else: st.info(f"Sem registros de vistos.")
+
+        with col_v2:
+            st.markdown("**🚩 Ocorrências e Observações:**")
+            if not d_alu_f.empty:
+                tags_obs = d_alu_f[d_alu_f['TAGS'] != ""]
+                if not tags_obs.empty:
+                    for _, row in tags_obs.tail(10).iterrows():
+                        emoji = "🔴" if any(x in str(row['TAGS']).upper() for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU"]) else "🟢"
+                        st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
+                else: st.success("✅ Nenhuma ocorrência negativa.")
+
+# --- SEÇÃO 4: RAIO-X DE DIFICULDADES (VERSÃO V40 - REFINAMENTO ESTÉTICO) ---
+        st.markdown("---")
+        with st.container(border=True):
+            st.markdown(f"### 🔍 4. Raio-X de Dificuldades: {trim_b}")
+            
+            if not diag_alu_f.empty:
+                # 1. IDENTIFICAÇÃO NOMINAL DAS AVALIAÇÕES
+                lista_nomes_av = diag_alu_f['ID_AVALIACAO'].unique().tolist()
+                nomes_formatados = ", ".join([f"**{n}**" for n in lista_nomes_av])
+                st.info(f"📊 Analisando {len(lista_nomes_av)} avaliações para compor o diagnóstico: {nomes_formatados}")
+                
+                todas_as_lacunas = []
+                
+                # 2. LOOP DE EXTRAÇÃO DE HABILIDADES
+                for _, reg_av in diag_alu_f.iterrows():
+                    nome_av_real = reg_av['ID_AVALIACAO']
+                    
+                    # Busca material de referência
+                    m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
+                    
+                    if not m_ref_query.empty:
+                        m_ref = m_ref_query.iloc[0]
+                        txt_p = str(m_ref['CONTEUDO'])
+                        
+                        # Define a grade correta (Regular ou PEI)
+                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei else "GRADE_DE_CORRECAO"
+                        grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                        
+                        # Gabarito oficial
+                        tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
+                        gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                        
+                        # Respostas do aluno
+                        respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
+                        
+                        for i, r in enumerate(respostas_aluno):
+                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
+                                q_n = i + 1
+                                # Extrator V82 de Habilidades (Código + Descrição)
+                                padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
+                                m_h = re.search(padrao_h, grade)
+                                
+                                if m_h:
+                                    # Limpeza profunda: remove [], **, # e espaços extras
+                                    txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
+                                    # Adiciona apenas o texto da habilidade (sem a tag de origem)
+                                    todas_as_lacunas.append(txt_limpo)
+                
+                if todas_as_lacunas:
+                    st.markdown("**Mapa de Habilidades que precisam de reforço:**")
+                    # Remove duplicatas mantendo a ordem e exibe com o ícone de erro
+                    for l in list(dict.fromkeys(todas_as_lacunas)): 
+                        st.error(f"❌ {l}")
+                else:
+                    st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
+            else:
+                st.info("Aguardando avaliações escaneadas para gerar o Raio-X.")
+
+        if is_pei:
+            st.warning(f"♿ **Observação PEI:** {info_alu['NECESSIDADES']}")
+        st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        
+# ==============================================================================
+# MÓDULO: BOLETIM ANUAL & CONSELHO V30 - FOCO EM DADOS E MOBILE-FIRST
+# ==============================================================================
+elif menu == "📈 Boletim Anual & Conselho":
+    st.title("📈 Inteligência de Conselho e Resultados")
+    st.markdown("---")
+
+    if df_notas.empty:
+        st.warning("⚠️ Sem notas lançadas no sistema.")
+    else:
+        # --- 1. FILTRO DE TURMA ---
+        turma_sel = st.selectbox("🎯 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key="bol_turma_v30")
+        
+        # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION) ---
+        df_t = df_notas[df_notas['TURMA'] == turma_sel].copy()
+        
+        # Pivotagem: Média e Rec por Trimestre
+        pivot = df_t.pivot_table(
+            index=["ID_ALUNO", "NOME_ALUNO"], 
+            columns="TRIMESTRE", 
+            values=["MEDIA_FINAL", "NOTA_REC"], 
+            aggfunc='first'
+        ).reset_index()
+
+        # Achatar colunas para nomes curtos (Otimização Mobile)
+        pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
+
+        # Garantir colunas e limpar espaços (Vacina Strip)
+        trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
+        for t in trims:
+            if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
+            if f"NOTA_REC_{t}" not in pivot.columns: pivot[f"NOTA_REC_{t}"] = 0.0
+
+        # Busca nota de REC_FINAL vinda do Scanner/CIR (Salva no banco como TRIMESTRE='REC_FINAL')
+        rec_f_data = df_t[df_t['TRIMESTRE'].str.contains("REC_FINAL|FINAL", na=False, case=False)]
+        if not rec_f_data.empty:
+            rec_f_min = rec_f_data[['ID_ALUNO', 'MEDIA_FINAL']].rename(columns={'MEDIA_FINAL': 'RF'})
+            pivot = pd.merge(pivot, rec_f_min, on='ID_ALUNO', how='left')
+        else:
+            pivot['RF'] = 0.0
+        
+        pivot = pivot.fillna(0.0)
+
+        # --- 3. LÓGICA DE STATUS ---
+        def calcular_situacao_v30(row):
+            t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
+            t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
+            t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
+            rf = util.sosa_to_float(row.get("RF", 0))
+            
+            soma = t1 + t2 + t3
+            falta = max(0.0, 18.0 - soma)
+            
+            # Perfil
+            aluno_info = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])].iloc[0]
+            pei = "♿" if str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝"
+            
+            # Status
+            if soma >= 18.0: status = "✅ APROV"
+            elif rf >= 6.0: status = "🔄 APROV.REC"
+            elif soma > 0 and falta <= 10.0: status = "⚠️ REC.FINAL"
+            elif soma > 0 and falta > 10.0: status = "🚨 RISCO"
+            else: status = "⏳ AGUARD"
+            
+            return pd.Series([pei, soma, falta, status])
+
+        pivot[['P', 'Σ', 'FALTA', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_v30, axis=1)
+
+        # --- 4. KPIs DE TOPO ---
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Média Turma", f"{pivot['Σ'].mean()/3:.1f}")
+        aprov = len(pivot[pivot['SITUAÇÃO'].str.contains("APROV")])
+        c2.metric("Aprovação", f"{(aprov/len(pivot)*100):.0f}%")
+        c3.metric("Em Rec. Final", len(pivot[pivot['SITUAÇÃO'] == "⚠️ REC.FINAL"]))
+        c4.metric("Risco Crítico", len(pivot[pivot['SITUAÇÃO'] == "🚨 RISCO"]), delta_color="inverse")
+
+        # --- 5. TABELA MOBILE-FIRST (COLUNAS CURTAS E SEM ESPAÇO) ---
+        st.markdown("### 📋 Mapa de Desempenho Anual")
+        
+        # Estilização de Situação
+        def style_v30(v):
+            if "APROV" in str(v): return 'color: #2ECC71; font-weight: bold;'
+            if "RISCO" in str(v): return 'color: #E74C3C; font-weight: bold;'
+            if "REC.FINAL" in str(v): return 'color: #F1C40F; font-weight: bold;'
+            return ''
+
+        # Configuração de Colunas para Mobile
+        st.dataframe(
+            pivot[['P', 'NOME_ALUNO', 
+                   'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
+                   'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
+                   'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
+                   'Σ', 'RF', 'SITUAÇÃO']]
+            .style.applymap(style_v30, subset=['SITUAÇÃO'])
+            .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
+                                      'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
+                                      'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
+                                      'Σ', 'RF']),
+            use_container_width=True, hide_index=True,
+            column_config={
+                "P": st.column_config.TextColumn("P", width="small"),
+                "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
+                "MEDIA_FINAL_I Trimestre": st.column_config.NumberColumn("I", width="small"),
+                "NOTA_REC_I Trimestre": st.column_config.NumberColumn("R1", width="small"),
+                "MEDIA_FINAL_II Trimestre": st.column_config.NumberColumn("II", width="small"),
+                "NOTA_REC_II Trimestre": st.column_config.NumberColumn("R2", width="small"),
+                "MEDIA_FINAL_III Trimestre": st.column_config.NumberColumn("III", width="small"),
+                "NOTA_REC_III Trimestre": st.column_config.NumberColumn("R3", width="small"),
+                "Σ": st.column_config.NumberColumn("Σ", width="small"),
+                "RF": st.column_config.NumberColumn("RF", width="small", help="Nota da Recuperação Final vinda do Scanner"),
+                "SITUAÇÃO": st.column_config.TextColumn("Status", width="small")
+            }
+        )
+        
+        st.caption("📌 Legenda: I, II, III (Médias) | R1, R2, R3 (Rec. Paralelas) | Σ (Soma Anual) | RF (Rec. Final do Scanner)")
