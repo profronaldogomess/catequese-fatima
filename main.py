@@ -1099,10 +1099,9 @@ elif menu == "👤 Perfil Individual":
                     nome_sel = dados['nome_completo']
                     status_atual = str(dados['status']).upper()
 
-                    # --- NOVO: BANNER DE CONTATO RÁPIDO NO PERFIL ---
+                    # --- BANNER DE CONTATO RÁPIDO NO PERFIL (ALINHADO AO BANCO) ---
                     obs_p = str(dados.get('obs_pastoral_familia', ''))
                     tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
-                    
                     st.warning(f"🚨 **CONTATO DE EMERGÊNCIA:** {dados['nome_responsavel']} | **TEL:** {tel_e}")
                     
                     # Ícone de Status Dinâmico
@@ -1110,7 +1109,7 @@ elif menu == "👤 Perfil Individual":
                     st.markdown(f"### {icone} {dados['nome_completo']} ({status_atual})")
 
                     # SUB-ABAS DE AÇÃO INDIVIDUAL
-                    sub_tab_edit, sub_tab_doc = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Ficha de Inscrição (PDF)"])
+                    sub_tab_edit, sub_tab_doc = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Documentos (PDF)"])
                     
                     with sub_tab_edit:
                         st.subheader("✏️ Atualizar Dados do Catequizando")
@@ -1121,6 +1120,7 @@ elif menu == "👤 Perfil Individual":
                         st.markdown("#### 📍 1. Identificação e Status")
                         ce1, ce2 = st.columns([2, 1])
                         ed_nome = ce1.text_input("Nome Completo", value=dados['nome_completo']).upper()
+                        
                         opcoes_status = ["ATIVO", "TRANSFERIDO", "DESISTENTE", "INATIVO"]
                         idx_status = opcoes_status.index(status_atual) if status_atual in opcoes_status else 0
                         ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status)
@@ -1128,7 +1128,16 @@ elif menu == "👤 Perfil Individual":
                         c3, c4, c5 = st.columns([1, 1, 2])
                         ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), format="DD/MM/YYYY")
                         ed_batizado = c4.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
-                        ed_etapa = c5.selectbox("Turma Atual", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']])
+                        
+                        # --- LÓGICA DE ALINHAMENTO DE TURMA (CORREÇÃO DO SEU ERRO) ---
+                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
+                        try:
+                            # Encontra a posição exata da turma que está no banco de dados
+                            idx_turma_banco = lista_t_nomes.index(dados['etapa'])
+                        except:
+                            idx_turma_banco = 0
+                        
+                        ed_etapa = c5.selectbox("Turma Atual (Conforme Banco de Dados)", lista_t_nomes, index=idx_turma_banco)
 
                         st.divider()
 
@@ -1138,10 +1147,7 @@ elif menu == "👤 Perfil Individual":
                             cx1, cx2, cx3 = st.columns([2, 1, 1])
                             ed_contato = cx1.text_input("WhatsApp do Catequizando", value=dados['contato_principal'])
                             ed_resp = cx2.text_input("Nome do Contato", value=dados['nome_responsavel']).upper()
-                            # Tenta extrair o telefone da observação pastoral
-                            obs_raw = str(dados.get('obs_pastoral_familia', ''))
-                            tel_emerg_val = obs_raw.split('TEL: ')[-1] if 'TEL: ' in obs_raw else ""
-                            ed_tel_resp = cx3.text_input("Telefone de Emergência", value=tel_emerg_val)
+                            ed_tel_resp = cx3.text_input("Telefone de Emergência", value=tel_e if tel_e != "Não informado" else "")
                             
                             ed_mae, ed_prof_m, ed_tel_m = dados['nome_mae'], dados.get('profissao_mae', 'N/A'), dados.get('tel_mae', 'N/A')
                             ed_pai, ed_prof_p, ed_tel_p = dados['nome_pai'], dados.get('profissao_pai', 'N/A'), dados.get('tel_pai', 'N/A')
@@ -1173,10 +1179,16 @@ elif menu == "👤 Perfil Individual":
                             ed_qual_grupo = fe1.text_input("Qual grupo/pastoral?", value=dados.get('qual_grupo', '') if dados.get('qual_grupo') != "N/A" else "").upper()
 
                         if is_adulto:
-                            ed_est_civil = fe2.selectbox("Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"], index=0)
+                            opcoes_ec = ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"]
+                            val_ec = str(dados.get('estado_civil_pais_ou_proprio', 'SOLTEIRO(A)')).upper()
+                            idx_ec = opcoes_ec.index(val_ec) if val_ec in opcoes_ec else 0
+                            ed_est_civil = fe2.selectbox("Estado Civil", opcoes_ec, index=idx_ec)
                             ed_est_civil_pais = "N/A"
                         else:
-                            ed_est_civil_pais = fe2.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"], index=0)
+                            opcoes_ecp = ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"]
+                            val_ecp = str(dados.get('est_civil_pais', 'CASADOS')).upper()
+                            idx_ecp = opcoes_ecp.index(val_ecp) if val_ecp in opcoes_ecp else 0
+                            ed_est_civil_pais = fe2.selectbox("Estado Civil dos Pais", opcoes_ecp, index=idx_ecp)
                             ed_est_civil = "N/A"
 
                         st.divider()
@@ -1199,6 +1211,9 @@ elif menu == "👤 Perfil Individual":
 
                         if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True):
                             # Montagem rigorosa das 30 colunas (A-AD)
+                            # Se for adulto, atualizamos a observação com o novo telefone de emergência
+                            obs_final = f"EMERGÊNCIA: {ed_resp} - TEL: {ed_tel_resp}" if is_adulto else dados.get('obs_pastoral_familia', '')
+                            
                             lista_up = [
                                 dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
                                 ed_contato, ed_end, ed_mae, ed_pai, ed_resp, ed_doc_status_k, 
@@ -1207,7 +1222,7 @@ elif menu == "👤 Perfil Individual":
                                 ed_prof_p, ed_tel_p, ed_est_civil_pais, dados.get('sac_pais', 'N/A'), 
                                 ed_part_grupo, ed_qual_grupo, dados.get('tem_irmaos', 'NÃO'), 
                                 dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), 
-                                dados.get('local_encontro', 'N/A'), dados.get('obs_pastoral_familia', '')
+                                dados.get('local_encontro', 'N/A'), obs_final
                             ]
                             if atualizar_catequizando(dados['id_catequizando'], lista_up):
                                 st.success(f"✅ Cadastro de {ed_nome} atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
@@ -1215,39 +1230,17 @@ elif menu == "👤 Perfil Individual":
                     with sub_tab_doc:
                         st.subheader("📄 Documentação Cadastral e Oficial")
                         st.write(f"Gerar documentos para: **{nome_sel}**")
-                        
                         col_doc_a, col_doc_b = st.columns(2)
-                        
                         with col_doc_a:
-                            # BOTÃO 1: FICHA DE INSCRIÇÃO (A que já existia)
                             if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_v6", use_container_width=True):
-                                with st.spinner("Gerando ficha..."):
-                                    st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
-                            
+                                st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
                             if "pdf_catequizando" in st.session_state:
-                                st.download_button(
-                                    label="📥 BAIXAR FICHA PDF", 
-                                    data=st.session_state.pdf_catequizando, 
-                                    file_name=f"Ficha_{nome_sel}.pdf", 
-                                    mime="application/pdf", 
-                                    use_container_width=True
-                                )
-                        
+                                st.download_button("📥 BAIXAR FICHA PDF", st.session_state.pdf_catequizando, f"Ficha_{nome_sel}.pdf", "application/pdf", use_container_width=True)
                         with col_doc_b:
-                            # BOTÃO 2: DECLARAÇÃO DE MATRÍCULA (A nova funcionalidade)
                             if st.button("📜 Gerar Declaração de Matrícula", key="btn_decl_matr_v6", use_container_width=True):
-                                with st.spinner("Gerando declaração oficial..."):
-                                    # Utiliza a função oficial que configuramos no utils.py
-                                    st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
-                            
+                                st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
                             if "pdf_decl_matr" in st.session_state:
-                                st.download_button(
-                                    label="📥 BAIXAR DECLARAÇÃO PDF", 
-                                    data=st.session_state.pdf_decl_matr, 
-                                    file_name=f"Declaracao_Matricula_{nome_sel}.pdf", 
-                                    mime="application/pdf", 
-                                    use_container_width=True
-                                )
+                                st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Matricula_{nome_sel}.pdf", "application/pdf", use_container_width=True)
 
         # --- ABA 2: AUDITORIA DE DOCUMENTAÇÃO POR TURMA ---
         with tab_auditoria_geral:
