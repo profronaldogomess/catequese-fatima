@@ -587,6 +587,24 @@ elif menu == "📚 Minha Turma":
         num_limpo = "".join(filter(str.isdigit, str(row['contato_principal'])))
         if num_limpo:
             st.markdown(f'''<a href="https://wa.me/5573{num_limpo[-9:]}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-weight:bold;">📲 Falar com Responsável</div></a>''', unsafe_allow_html=True)
+        
+        # --- NOVO: EXTRATO DE CAMINHADA ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("📜 Ver Extrato de Caminhada (Presenças e Temas)"):
+            pres_aluno = minhas_pres[minhas_pres['id_catequizando'] == row['id_catequizando']].copy()
+            if not pres_aluno.empty:
+                pres_aluno['data_dt'] = pd.to_datetime(pres_aluno['data_encontro'], errors='coerce')
+                pres_aluno = pres_aluno.sort_values('data_dt', ascending=False)
+                
+                for _, p in pres_aluno.iterrows():
+                    icone_p = "✅" if p['status'] == "PRESENTE" else "❌"
+                    cor_p = "#2e7d32" if p['status'] == "PRESENTE" else "#e03d11"
+                    data_f = formatar_data_br(p['data_encontro'])
+                    tema_f = p.get('tema_do_dia', 'Tema não registrado')
+                    st.markdown(f"<div style='padding:5px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p['status']})</i></div>", unsafe_allow_html=True)
+            else:
+                st.info("Nenhum registro de presença/falta para este catequizando.")
+
     else:
         st.info("👆 Use a busca acima para ver a ficha de um catequizando específico.")
 
@@ -971,7 +989,8 @@ elif menu == "👤 Perfil Individual":
                     icone = "🟢" if status_atual == "ATIVO" else "🔴" if status_atual == "DESISTENTE" else "🔵" if status_atual == "TRANSFERIDO" else "⚪"
                     st.markdown(f"### {icone} {dados['nome_completo']} ({status_atual})")
 
-                    sub_tab_edit, sub_tab_doc = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Documentos (PDF)"])
+                    # --- NOVO: ADICIONADA A ABA DE EXTRATO ---
+                    sub_tab_edit, sub_tab_doc, sub_tab_hist = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Documentos (PDF)", "📜 Extrato de Caminhada"])
                     
                     with sub_tab_edit:
                         st.subheader("✏️ Atualizar Dados do Catequizando")
@@ -1091,6 +1110,23 @@ elif menu == "👤 Perfil Individual":
                                 st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
                             if "pdf_decl_matr" in st.session_state:
                                 st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Matricula_{nome_sel}.pdf", "application/pdf", use_container_width=True)
+
+                    # --- NOVO: CONTEÚDO DA ABA DE EXTRATO ---
+                    with sub_tab_hist:
+                        st.subheader("📜 Histórico de Encontros e Temas")
+                        pres_aluno = df_pres[df_pres['id_catequizando'] == dados['id_catequizando']].copy()
+                        if not pres_aluno.empty:
+                            pres_aluno['data_dt'] = pd.to_datetime(pres_aluno['data_encontro'], errors='coerce')
+                            pres_aluno = pres_aluno.sort_values('data_dt', ascending=False)
+                            
+                            for _, p in pres_aluno.iterrows():
+                                icone_p = "✅" if p['status'] == "PRESENTE" else "❌"
+                                cor_p = "#2e7d32" if p['status'] == "PRESENTE" else "#e03d11"
+                                data_f = formatar_data_br(p['data_encontro'])
+                                tema_f = p.get('tema_do_dia', 'Tema não registrado')
+                                st.markdown(f"<div style='padding:8px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p['status']})</i></div>", unsafe_allow_html=True)
+                        else:
+                            st.info("Nenhum registro de presença/falta para este catequizando.")
 
         with tab_auditoria_geral:
             st.subheader("🚩 Diagnóstico de Pendências por Turma")
