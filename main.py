@@ -1256,8 +1256,8 @@ elif menu == "🏫 Gestão de Turmas":
         "✏️ Detalhes e Edição", "📊 Dashboard Local", "🚀 Movimentação em Massa"
     ])
     
-    dias_opcoes = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-    etapas_lista = [
+    dias_opcoes =["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+    etapas_lista =[
         "PRÉ", "PRIMEIRA ETAPA", "SEGUNDA ETAPA", "TERCEIRA ETAPA", 
         "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"
     ]
@@ -1267,12 +1267,12 @@ elif menu == "🏫 Gestão de Turmas":
         if df_cat.empty:
             st.info("Nenhum catequizando cadastrado no sistema.")
         else:
-            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else[]
             fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
             
             if not fila_espera.empty:
-                colunas_para_exibir = ['nome_completo', 'etapa', 'contato_principal']
-                cols_existentes = [c for c in colunas_para_exibir if c in fila_espera.columns]
+                colunas_para_exibir =['nome_completo', 'etapa', 'contato_principal']
+                cols_existentes =[c for c in colunas_para_exibir if c in fila_espera.columns]
                 st.dataframe(fila_espera[cols_existentes], use_container_width=True, hide_index=True)
             else:
                 st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
@@ -1292,17 +1292,17 @@ elif menu == "🏫 Gestão de Turmas":
             
             st.markdown("---")
             c3, c4 = st.columns(2)
-            turno_t = c3.selectbox("Turno do Encontro", ["MANHÃ", "TARDE", "NOITE"])
+            turno_t = c3.selectbox("Turno do Encontro",["MANHÃ", "TARDE", "NOITE"])
             local_t = c4.text_input("Local/Sala do Encontro", value="SALA").upper()
             
-            cats_selecionados = st.multiselect("Catequistas Responsáveis (Opcional)", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [])
+            cats_selecionados = st.multiselect("Catequistas Responsáveis (Opcional)", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else[])
             
             if st.form_submit_button("🚀 SALVAR NOVA TURMA"):
                 if n_t and n_dias:
                     try:
                         planilha = conectar_google_sheets()
                         if planilha:
-                            nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
+                            nova_t =[f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
                             planilha.worksheet("turmas").append_row(nova_t)
                             
                             if cats_selecionados:
@@ -1311,7 +1311,7 @@ elif menu == "🏫 Gestão de Turmas":
                                     celula = aba_u.find(c_nome, in_column=1)
                                     if celula:
                                         v_atual = aba_u.cell(celula.row, 5).value or ""
-                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                        v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
                                         if n_t not in v_list:
                                             v_list.append(n_t)
                                             aba_u.update_cell(celula.row, 5, ", ".join(v_list))
@@ -1335,12 +1335,12 @@ elif menu == "🏫 Gestão de Turmas":
                 ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="edit_etapa_turma")
                 ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="edit_ano_turma")
                 
-                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
+                dias_atuais =[x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
                 ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes], key="edit_dias_turma")
                 
                 st.markdown("---")
                 c3, c4 = st.columns(2)
-                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
+                opcoes_turno =["MANHÃ", "TARDE", "NOITE"]
                 turno_atual = str(d.get('turno', 'MANHÃ')).upper()
                 et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0, key="edit_turno_turma")
                 el = c4.text_input("Local / Sala", value=d.get('local', 'SALA'), key="edit_local_turma").upper()
@@ -1349,7 +1349,7 @@ elif menu == "🏫 Gestão de Turmas":
                 pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="edit_pc_turma")
                 
                 lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
-                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
+                cats_atuais_lista =[c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
                 ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_turma")
                 
                 col_btn_save, col_btn_del = st.columns([3, 1])
@@ -1371,7 +1371,7 @@ elif menu == "🏫 Gestão de Turmas":
                                     celula = aba_u.find(c_nome, in_column=1)
                                     if celula:
                                         v_atual = aba_u.cell(celula.row, 5).value or ""
-                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                        v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
                                         mudou = False
                                         if c_nome in ed_cats:
                                             if en not in v_list: v_list.append(en); mudou = True
@@ -1436,7 +1436,7 @@ elif menu == "🏫 Gestão de Turmas":
                     freq_global = round(pres_t['status_num'].mean() * 100, 1)
                 m3.metric("Frequência", f"{freq_global}%")
                 
-                idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
+                idades =[calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
                 idade_media_val = round(sum(idades)/len(idades), 1) if idades else 0
                 m4.metric("Idade Média", f"{idade_media_val}a")
 
@@ -1457,7 +1457,7 @@ elif menu == "🏫 Gestão de Turmas":
                 faixas = {"PRÉ": (4, 6), "PRIMEIRA ETAPA": (7, 8), "SEGUNDA ETAPA": (9, 10), "TERCEIRA ETAPA": (11, 13), "PERSEVERANÇA": (14, 15), "ADULTOS": (16, 99)}
                 min_ideal, max_ideal = faixas.get(etapa_base, (0, 99))
                 
-                fora_da_faixa = []
+                fora_da_faixa =[]
                 for _, r in alunos_t.iterrows():
                     idade_c = calcular_idade(r['data_nascimento'])
                     if idade_c < min_ideal: fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔽 Abaixo"})
@@ -1525,7 +1525,7 @@ elif menu == "🏫 Gestão de Turmas":
                             total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
                             prog_it = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
 
-                            lista_geral = []
+                            lista_geral =[]
                             for _, r in alunos_t.iterrows():
                                 f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
                                 has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
@@ -1568,7 +1568,7 @@ elif menu == "🏫 Gestão de Turmas":
 
                 st.divider()
                 st.markdown("### 📋 Lista Nominal de Caminhada")
-                lista_preview = []
+                lista_preview =[]
                 for _, r in alunos_t.iterrows():
                     f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
                     idade_c = calcular_idade(r['data_nascimento'])
@@ -1581,7 +1581,7 @@ elif menu == "🏫 Gestão de Turmas":
         st.subheader("🚀 Movimentação em Massa")
         if not df_turmas.empty and not df_cat.empty:
             c1, c2 = st.columns(2)
-            opcoes_origem = ["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
+            opcoes_origem =["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
             t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_turma")
             t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_turma")
             
@@ -1595,7 +1595,7 @@ elif menu == "🏫 Gestão de Turmas":
 
                     st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos", on_change=toggle_all_mov)
                     
-                    lista_ids_selecionados = []
+                    lista_ids_selecionados =[]
                     cols = st.columns(2)
                     
                     for i, (_, al) in enumerate(alunos_mov.iterrows()):
