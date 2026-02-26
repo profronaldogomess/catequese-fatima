@@ -1,9 +1,11 @@
+# ==============================================================================
 # ARQUIVO: main.py
-# VERSÃO: 3.2.0 - INTEGRAL (HOMOLOGAÇÃO + ADMIN BYPASS + SEGURANÇA)
+# VERSÃO: 4.0.0 - UI/UX MODERNIZADA, MOBILE-FIRST E BLINDAGEM DE DADOS
+# ==============================================================================
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
-import datetime as dt_module # Adicionar esta linha
+import datetime as dt_module
 import time
 import os 
 import uuid
@@ -24,7 +26,7 @@ st.set_page_config(
 
 # --- 2. INICIALIZAÇÃO DE COMPONENTES DE SEGURANÇA ---
 def get_cookie_manager():
-    return stx.CookieManager(key="catequese_fatima_cookies_v3_2")
+    return stx.CookieManager(key="catequese_fatima_cookies_v4")
 
 cookie_manager = get_cookie_manager()
 
@@ -40,7 +42,7 @@ status_sistema = verificar_status_sistema()
 # Verificação de Identidade para Bypass
 is_admin = (st.session_state.logado and st.session_state.usuario.get('papel') == 'ADMIN')
 
-# Banner de Homologação (Aparece apenas na branch de teste)
+# Banner de Homologação
 if IS_HOMOLOGACAO:
     st.warning("🧪 **AMBIENTE DE TESTES (HOMOLOGAÇÃO)** - As alterações feitas aqui podem não ser definitivas.")
 
@@ -49,7 +51,6 @@ if status_sistema == "MANUTENCAO" and not is_admin:
     from utils import exibir_tela_manutencao
     exibir_tela_manutencao()
     
-    # Porta de entrada para o Administrador
     with st.expander("🔐 Acesso Técnico (Administração)"):
         with st.form("login_admin_manutencao"):
             u_adm = st.text_input("E-mail Admin")
@@ -70,16 +71,16 @@ if status_sistema == "MANUTENCAO" and not is_admin:
 MIN_DATA = date(1900, 1, 1)
 MAX_DATA = date(2030, 12, 31)
 
-# --- 4. INJEÇÃO DE CSS (ESTILIZAÇÃO DIFERENCIADA PARA HOMOLOGAÇÃO) ---
-cor_sidebar = "#417b99" if not IS_HOMOLOGACAO else "#5d4037" # Azul para oficial, Marrom para teste
+# --- 4. INJEÇÃO DE CSS (ESTILIZAÇÃO MOBILE-FIRST) ---
+cor_sidebar = "#417b99" if not IS_HOMOLOGACAO else "#5d4037"
 
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #ffffff; color: #333333; }}
     .stTextInput input, .stDateInput input, .stNumberInput input, .stTextArea textarea {{
-        background-color: #f0f2f6 !important; color: #000000 !important; border: 1px solid #ccc;
+        background-color: #f0f2f6 !important; color: #000000 !important; border: 1px solid #ccc; border-radius: 8px;
     }}
-    div[data-baseweb="select"] > div {{ background-color: #f0f2f6 !important; color: #000000 !important; }}
+    div[data-baseweb="select"] > div {{ background-color: #f0f2f6 !important; color: #000000 !important; border-radius: 8px; }}
     input, textarea, select {{ color: black !important; -webkit-text-fill-color: black !important; }}
     [data-testid="stSidebar"] {{ background-color: {cor_sidebar}; }}
     [data-testid="stSidebar"] * {{ color: white !important; }}
@@ -88,41 +89,35 @@ st.markdown(f"""
     p, li {{ color: #333333; }}
     div.stButton > button {{
         background-color: #e03d11; color: white !important; border: none;
-        font-weight: bold; border-radius: 8px; padding: 10px 20px;
+        font-weight: bold; border-radius: 8px; padding: 10px 20px; transition: 0.3s;
     }}
-    div.stButton > button:hover {{ background-color: #c0320d; color: white !important; }}
+    div.stButton > button:hover {{ background-color: #c0320d; color: white !important; transform: scale(1.02); }}
     [data-testid="stMetricValue"] {{ color: #e03d11 !important; }}
     .block-container {{ padding-top: 2rem; padding-bottom: 5rem; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. IMPORTAÇÕES DE MOTORES INTERNOS (INTEGRIDADE TOTAL) ---
+# --- 5. IMPORTAÇÕES DE MOTORES INTERNOS ---
 from database import (
     ler_aba, salvar_lote_catequizandos, atualizar_catequizando, 
     conectar_google_sheets, atualizar_turma, salvar_presencas, 
     salvar_encontro, salvar_tema_cronograma, 
     buscar_encontro_por_data, atualizar_usuario, salvar_formacao, 
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
-    registrar_evento_sacramento_completo,salvar_reuniao_pais,salvar_presenca_reuniao_pais,atualizar_reuniao_pais
+    registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, atualizar_reuniao_pais
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
     obter_aniversariantes_mes, converter_para_data, verificar_status_ministerial, 
     obter_aniversariantes_hoje, obter_aniversariantes_mes_unificado, 
     gerar_ficha_cadastral_catequizando, gerar_ficha_catequista_pdf, 
-    gerar_fichas_turma_completa, gerar_relatorio_diocesano_v4,
-    gerar_relatorio_pastoral_v3, gerar_relatorio_sacramentos_tecnico_v2,
-    formatar_data_br, gerar_relatorio_familia_pdf,
-    gerar_relatorio_local_turma_v2, gerar_fichas_catequistas_lote, 
-    gerar_card_aniversario, gerar_termo_saida_pdf, gerar_auditoria_lote_completa,
-    gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
+    gerar_fichas_turma_completa, formatar_data_br, gerar_relatorio_familia_pdf,
+    gerar_fichas_catequistas_lote, gerar_card_aniversario, gerar_termo_saida_pdf, 
+    gerar_auditoria_lote_completa, gerar_fichas_paroquia_total, gerar_relatorio_evasao_pdf,
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
-     gerar_lista_assinatura_reuniao_pdf,gerar_relatorio_diocesano_v5, gerar_relatorio_pastoral_v4,
-    gerar_relatorio_diocesano_pdf, gerar_relatorio_diocesano_v2, gerar_relatorio_local_turma_v3,
-    gerar_relatorio_sacramentos_tecnico_v3,
-    gerar_relatorio_pastoral_v2, gerar_relatorio_pastoral_interno_pdf, 
-    gerar_pdf_perfil_turma, gerar_relatorio_sacramentos_tecnico_pdf, 
-    gerar_relatorio_local_turma_pdf
+    gerar_lista_assinatura_reuniao_pdf, gerar_relatorio_diocesano_pdf, 
+    gerar_relatorio_pastoral_pdf, gerar_relatorio_local_turma_pdf,
+    gerar_relatorio_sacramentos_tecnico_pdf
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -142,10 +137,8 @@ def mostrar_logo_login():
     else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
 
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
-
-# A. Auto-Login via Cookies (COM BLOQUEIO DE REENTRADA)
 if not st.session_state.logado and not st.session_state.get('logout_em_curso', False):
-    auth_cookie = cookie_manager.get("fatima_auth_v2")
+    auth_cookie = cookie_manager.get("fatima_auth_v4")
     if auth_cookie:
         user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
         if user:
@@ -156,17 +149,14 @@ if not st.session_state.logado and not st.session_state.get('logout_em_curso', F
                 st.session_state.session_id = new_sid
                 st.rerun()
 
-# B. Validação de Sessão Única (COM TELA DE BLOQUEIO PERSISTENTE)
 if st.session_state.logado and st.session_state.usuario:
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
     if sid_no_db and sid_no_db != st.session_state.session_id:
-        # Em vez de apenas deslogar, criamos um estado de bloqueio
         st.session_state.sessao_derrubada = True
         st.session_state.logado = False
-        try: cookie_manager.delete("fatima_auth_v2")
+        try: cookie_manager.delete("fatima_auth_v4")
         except: pass
 
-# NOVA SEÇÃO: TELA DE AVISO ESTÁTICA (Para a mensagem não sumir)
 if st.session_state.get('sessao_derrubada'):
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.error("🚨 **ACESSO ENCERRADO: CONEXÃO DUPLICADA**")
@@ -182,9 +172,8 @@ if st.session_state.get('sessao_derrubada'):
         st.session_state.usuario = None
         st.session_state.session_id = None
         st.rerun()
-    st.stop() # Trava o código aqui. Nada abaixo será executado.
+    st.stop()
 
-# C. Tela de Login Manual
 if not st.session_state.logado:
     if st.session_state.get('logout_em_curso'):
         st.session_state.logout_em_curso = False
@@ -206,13 +195,13 @@ if not st.session_state.logado:
                     st.session_state.usuario = user
                     st.session_state.session_id = new_sid
                     if lembrar:
-                        cookie_manager.set("fatima_auth_v2", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
+                        cookie_manager.set("fatima_auth_v4", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
                     st.rerun()
                 else: st.error("Erro ao validar sessão única.")
             else: st.error("🚫 Acesso negado.")
     st.stop()
 
-# --- 8. CARREGAMENTO GLOBAL DE DADOS (PÓS-LOGIN) ---
+# --- 8. CARREGAMENTO GLOBAL DE DADOS ---
 df_cat = ler_aba("catequizandos")
 df_turmas = ler_aba("turmas")
 df_pres = ler_aba("presencas")
@@ -226,35 +215,24 @@ equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios
 mostrar_logo_sidebar() 
 st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
 
-# PROTEÇÃO: Só tenta ler o nome se o objeto usuario existir
 if st.session_state.logado and st.session_state.usuario:
     nome_exibicao = st.session_state.usuario.get('nome', 'Usuário')
     st.sidebar.success(f"Bem-vindo(a),\n**{nome_exibicao}**")
 
-# Alertas de Ambiente e Manutenção
-if IS_HOMOLOGACAO:
-    st.sidebar.info("🧪 MODO HOMOLOGAÇÃO")
-if status_sistema == "MANUTENCAO":
-    st.sidebar.warning("⚠️ MANUTENÇÃO ATIVA")
+if IS_HOMOLOGACAO: st.sidebar.info("🧪 MODO HOMOLOGAÇÃO")
+if status_sistema == "MANUTENCAO": st.sidebar.warning("⚠️ MANUTENÇÃO ATIVA")
 
 st.sidebar.divider()
 
-if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_99x"):
+if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_global"):
     st.cache_data.clear(); st.toast("Dados atualizados!", icon="✅"); time.sleep(1); st.rerun()
 
-if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_99x"):
-    # 1. Ativa flag para impedir que o auto-login te conecte de volta no próximo ciclo
+if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_global"):
     st.session_state.logout_em_curso = True
-    
-    # 2. Deleta o cookie no navegador
-    cookie_manager.delete("fatima_auth_v2")
-    
-    # 3. Limpa o estado da sessão atual
+    cookie_manager.delete("fatima_auth_v4")
     st.session_state.logado = False
     st.session_state.session_id = None
     st.session_state.usuario = None
-    
-    # 4. Força o reinício para a tela de login
     st.rerun()
 
 papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
@@ -274,19 +252,16 @@ else:
     ])
 
 # ==============================================================================
-# PÁGINA 1: DASHBOARD DE INTELIGÊNCIA PASTORAL (VERSÃO ATIVA 2026)
+# PÁGINA 1: DASHBOARD DE INTELIGÊNCIA PASTORAL
 # ==============================================================================
 if menu == "🏠 Início / Dashboard":
     st.title("📊 Radar de Gestão Pastoral")
 
-    # --- 1. MURAL DE CELEBRAÇÃO PAROQUIAL (ANIVERSARIANTES) ---
     st.markdown("### 🎂 Mural de Celebração")
-    
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     aniversariantes_agora = obter_aniversariantes_hoje(df_cat, df_usuarios)
     df_niver_mes_geral = obter_aniversariantes_mes_unificado(df_cat, df_usuarios)
 
-    # 1.1 DESTAQUE DE HOJE (CATEQUISTAS E CATEQUIZANDOS)
     if aniversariantes_agora:
         for item in aniversariantes_agora:
             partes = item.split(" | ")
@@ -303,10 +278,8 @@ if menu == "🏠 Início / Dashboard":
                     st.image(card_img, use_container_width=True)
                     st.download_button("📥 Baixar Card", card_img, f"Parabens_Hoje_{nome_completo}.png", "image/png")
     
-    # 1.2 MURAL DO MÊS (TODA A PARÓQUIA)
     with st.expander("📅 Ver todos os aniversariantes do mês (Paróquia)", expanded=not aniversariantes_agora):
         if not df_niver_mes_geral.empty:
-            # Botão para Card Coletivo Paroquial
             if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (GERAL)", use_container_width=True):
                 lista_para_card = [f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_mes_geral.iterrows()]
                 card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
@@ -317,7 +290,6 @@ if menu == "🏠 Início / Dashboard":
             st.write("")
             st.markdown("---")
             
-            # LISTA COM CARDS INDIVIDUAIS (4 colunas para caber mais gente)
             cols_dash = st.columns(4)
             for i, (_, niver) in enumerate(df_niver_mes_geral.iterrows()):
                 with cols_dash[i % 4]:
@@ -340,37 +312,29 @@ if menu == "🏠 Início / Dashboard":
 
     st.divider()
 
-    # --- 2. RADAR DE URGÊNCIAS (A INTELIGÊNCIA ATIVA) ---
     st.subheader("🚩 Radar de Atenção Imediata")
     r1, r2, r3, r4 = st.columns(4)
 
-    # Lógica de Cálculo das Urgências
     df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
     
-    # Urgência 1: Documentação
     pend_doc = len(df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
     r1.metric("📄 Doc. Pendente", pend_doc, delta="Ação Necessária", delta_color="inverse")
 
-    # Urgência 2: Evasão (Baseado em faltas)
     risco_c, _ = processar_alertas_evasao(df_pres)
     r2.metric("🚩 Risco de Evasão", len(risco_c), delta="Visita Urgente", delta_color="inverse")
 
-    # Urgência 3: Sacramentos (Crianças sem Batismo)
     sem_batismo = len(df_ativos[df_ativos['batizado_sn'] == 'NÃO'])
     r3.metric("🕊️ Sem Batismo", sem_batismo, delta="Regularizar", delta_color="inverse")
 
-    # Urgência 4: Família (Situação Matrimonial)
     fam_reg = len(df_cat[df_cat['est_civil_pais'].isin(['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)'])])
     r4.metric("🏠 Famílias Irregulares", fam_reg, delta="Pastoral Familiar", delta_color="inverse")
 
     st.divider()
 
-    # --- 3. CENSO VISUAL E DESEMPENHO ---
     tab_censo, tab_equipe, tab_evasao = st.tabs(["📈 Censo Sacramental", "👥 Saúde da Equipe", "🚩 Cuidado e Evasão"])
 
     with tab_censo:
         c1, c2 = st.columns([1, 1])
-        
         with c1:
             st.markdown("#### 🕊️ Cobertura de Batismo (Ativos)")
             if not df_ativos.empty:
@@ -406,8 +370,6 @@ if menu == "🏠 Início / Dashboard":
         st.markdown("#### 🛡️ Maturidade Ministerial da Equipe")
         if not equipe_tecnica.empty:
             col_e1, col_e2 = st.columns(2)
-            
-            # Cálculo de Maturidade
             status_list = []
             for _, row in equipe_tecnica.iterrows():
                 status, _ = verificar_status_ministerial(row.get('data_inicio_catequese', ''), row.get('data_batismo', ''), 
@@ -444,22 +406,20 @@ if menu == "🏠 Início / Dashboard":
 
     st.divider()
 
-    # --- 4. CENTRAL DE DOCUMENTAÇÃO (ESTAÇÃO DE IMPRESSÃO) ---
     st.subheader("🏛️ Estação de Impressão e Auditoria")
-    
     col_doc_sec, col_doc_past, col_doc_lote = st.columns(3)
     
     with col_doc_sec:
         st.markdown("**🏛️ Secretaria**")
-        if st.button("🏛️ Relatório Diocesano v5", use_container_width=True):
-            st.session_state.pdf_diocesano = gerar_relatorio_diocesano_v5(df_turmas, df_cat, df_usuarios)
+        if st.button("🏛️ Relatório Diocesano", use_container_width=True):
+            st.session_state.pdf_diocesano = gerar_relatorio_diocesano_pdf(df_turmas, df_cat, df_usuarios)
         if "pdf_diocesano" in st.session_state:
             st.download_button("📥 Baixar Diocesano", st.session_state.pdf_diocesano, "Diocesano.pdf", use_container_width=True)
 
     with col_doc_past:
         st.markdown("**📋 Pastoral**")
-        if st.button("📋 Relatório Pastoral v4", use_container_width=True):
-            st.session_state.pdf_pastoral = gerar_relatorio_pastoral_v4(df_turmas, df_cat, df_pres, df_pres_reuniao)
+        if st.button("📋 Relatório Pastoral", use_container_width=True):
+            st.session_state.pdf_pastoral = gerar_relatorio_pastoral_pdf(df_turmas, df_cat, df_pres, df_pres_reuniao)
         if "pdf_pastoral" in st.session_state:
             st.download_button("📥 Baixar Pastoral", st.session_state.pdf_pastoral, "Pastoral.pdf", use_container_width=True)
 
@@ -471,10 +431,9 @@ if menu == "🏠 Início / Dashboard":
             st.download_button("📥 Baixar Fichas", st.session_state.pdf_lote_f, "Fichas_Lote.pdf", use_container_width=True)
 
 # ==============================================================================
-# PÁGINA: 📚 MINHA TURMA (COCKPIT DO CATEQUISTA 2026 - FOCO EM PESSOAS)
+# PÁGINA: 📚 MINHA TURMA (COCKPIT DO CATEQUISTA)
 # ==============================================================================
 elif menu == "📚 Minha Turma":
-    # 1. IDENTIFICAÇÃO DE PERMISSÕES
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -491,20 +450,16 @@ elif menu == "📚 Minha Turma":
 
     st.title(f"📚 Painel: {turma_ativa}")
 
-    # 2. CARREGAMENTO DE DADOS ESPECÍFICOS
     meus_alunos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
     minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
     df_cron_t = ler_aba("cronograma")
     df_enc_t = ler_aba("encontros")
     df_reu_t = ler_aba("presenca_reuniao")
 
-    # --- SEÇÃO 1: MURAL DE CELEBRAÇÃO (ANIVERSARIANTES HOJE E MÊS) ---
     st.markdown("### 🎂 Mural de Celebração")
-    
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     df_niver_t = obter_aniversariantes_mes(meus_alunos)
     
-    # 1.1 DESTAQUE DE HOJE
     niver_hoje = []
     if not meus_alunos.empty:
         for _, r in meus_alunos.iterrows():
@@ -526,10 +481,8 @@ elif menu == "📚 Minha Turma":
                     st.image(card_img, use_container_width=True)
                     st.download_button("📥 Baixar Card", card_img, f"Parabens_{nome_n}.png", "image/png")
     
-    # 1.2 MURAL DO MÊS COM OPÇÕES INDIVIDUAIS E COLETIVAS
     with st.expander("📅 Ver todos os aniversariantes do mês", expanded=not niver_hoje):
         if not df_niver_t.empty:
-            # Botão para Card Coletivo
             if st.button("🖼️ GERAR CARD COLETIVO DA TURMA", use_container_width=True):
                 lista_card = [f"{int(row['dia'])} | CATEQUIZANDO | {row['nome']}" for _, row in df_niver_t.iterrows()]
                 card_col = gerar_card_aniversario(lista_card, tipo="MES")
@@ -540,47 +493,38 @@ elif menu == "📚 Minha Turma":
             st.write("")
             st.markdown("---")
             
-            # LISTA COM CARDS INDIVIDUAIS
             cols_n = st.columns(2) 
             for i, (_, niver) in enumerate(df_niver_t.iterrows()):
                 with cols_n[i % 2]:
-                    # Container visual para cada aniversariante
                     st.markdown(f"""
                         <div style='background-color:#f0f2f6; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
                             <b style='color:#417b99;'>Dia {int(niver['dia'])}</b> - {niver['nome']}
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # Botão para gerar o card individual deste catequizando
                     if st.button(f"🎨 Gerar Card Individual", key=f"btn_indiv_t_{i}"):
-                        # Busca o dia correto para o card
                         card_indiv = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome']}", tipo="DIA")
                         if card_indiv:
                             st.image(card_indiv, use_container_width=True)
                             st.download_button(f"📥 Baixar Card de {niver['nome'].split()[0]}", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{i}")
-                    st.write("") # Espaçador
+                    st.write("")
         else:
             st.write("Nenhum aniversariante este mês nesta turma.")
 
     st.divider()
 
-    # --- SEÇÃO 2: SAÚDE DA TURMA (MÉTRICAS) ---
     c1, c2, c3 = st.columns(3)
-    
-    # Itinerário
     total_planejado = len(df_cron_t[df_cron_t['etapa'] == turma_ativa]) if not df_cron_t.empty else 0
     total_feito = len(df_enc_t[df_enc_t['turma'] == turma_ativa]) if not df_enc_t.empty else 0
     progresso = (total_feito / (total_feito + total_planejado)) if (total_feito + total_planejado) > 0 else 0
     c1.metric("Caminhada da Fé", f"{total_feito} temas", f"{progresso*100:.0f}% concluído")
 
-    # Frequência
     if not minhas_pres.empty:
         freq = (minhas_pres['status'] == 'PRESENTE').mean() * 100
         c2.metric("Frequência Média", f"{freq:.1f}%")
     else:
         c2.metric("Frequência Média", "0%")
 
-    # Engajamento Familiar
     if not df_reu_t.empty and not meus_alunos.empty:
         pais_presentes = df_reu_t[df_reu_t.iloc[:, 3] == turma_ativa].iloc[:, 1].nunique()
         perc_pais = (pais_presentes / len(meus_alunos)) * 100
@@ -590,53 +534,39 @@ elif menu == "📚 Minha Turma":
 
     st.divider()
 
-    # --- SEÇÃO 3: RADAR DE ATENÇÃO (AGORA COM LISTA DE NOMES) ---
     st.subheader("🚩 Radar de Atenção")
     risco_c, atencao_p = processar_alertas_evasao(minhas_pres)
     
-    # 1. Alerta de Evasão
     if risco_c:
         with st.expander(f"🔴 {len(risco_c)} em Risco Crítico (3+ faltas)"):
-            for r in risco_c:
-                st.write(f"• {r}")
+            for r in risco_c: st.write(f"• {r}")
     
-    # 2. Alerta de Documentos
     df_pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
     if not df_pend_doc.empty:
         with st.expander(f"⚠️ {len(df_pend_doc)} com Documentos Pendentes"):
-            for n in df_pend_doc['nome_completo'].tolist():
-                st.write(f"• {n}")
+            for n in df_pend_doc['nome_completo'].tolist(): st.write(f"• {n}")
     
-    # 3. Alerta de Batismo
     df_sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
     if not df_sem_batismo.empty:
         with st.expander(f"🕊️ {len(df_sem_batismo)} sem registro de Batismo"):
-            for n in df_sem_batismo['nome_completo'].tolist():
-                st.write(f"• {n}")
+            for n in df_sem_batismo['nome_completo'].tolist(): st.write(f"• {n}")
 
     if not risco_c and df_pend_doc.empty and df_sem_batismo.empty:
         st.success("✨ Turma em caminhada estável. Nenhum alerta crítico.")
 
     st.divider()
 
-    # --- SEÇÃO 4: CAMINHADA INDIVIDUAL (FILTRO POR NOME - UM POR VEZ) ---
     st.subheader("👥 Consulta Individual")
-    
     lista_nomes = sorted(meus_alunos['nome_completo'].tolist())
-    nome_sel = st.selectbox("🔍 Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t")
+    nome_sel = st.selectbox("🔍 Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t", help="Busque pelo nome para ver o dossiê rápido.")
 
     if nome_sel:
         row = meus_alunos[meus_alunos['nome_completo'] == nome_sel].iloc[0]
-        
-        # Lógica de Ícones Sacramentais
         bat = "💧" if row['batizado_sn'] == "SIM" else "⚪"
         euc = "🍞" if "EUCARISTIA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
         cri = "🔥" if "CRISMA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-        
-        # Lógica de Família
         tem_reu = "👪 Ativos" if not df_reu_t.empty and row['id_catequizando'] in df_reu_t.iloc[:, 1].values else "👪 Ausentes"
         
-        # Card Único em Destaque
         st.markdown(f"""
             <div style='background-color:#ffffff; padding:20px; border-radius:15px; border-left:10px solid #417b99; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
                 <h3 style='margin:0; color:#417b99;'>{row['nome_completo']}</h3>
@@ -645,7 +575,6 @@ elif menu == "📚 Minha Turma":
             </div>
         """, unsafe_allow_html=True)
         
-        # Dossiê já aberto para facilitar no mobile
         st.markdown("#### 📋 Dossiê Rápido")
         idade_c = calcular_idade(row['data_nascimento'])
         c_d1, c_d2 = st.columns(2)
@@ -655,7 +584,6 @@ elif menu == "📚 Minha Turma":
         
         st.info(f"📝 **Última Obs. Pastoral:**\n{row.get('obs_pastoral_familia', 'Sem registros.')}")
         
-        # Botão WhatsApp
         num_limpo = "".join(filter(str.isdigit, str(row['contato_principal'])))
         if num_limpo:
             st.markdown(f'''<a href="https://wa.me/5573{num_limpo[-9:]}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-weight:bold;">📲 Falar com Responsável</div></a>''', unsafe_allow_html=True)
@@ -663,19 +591,15 @@ elif menu == "📚 Minha Turma":
         st.info("👆 Use a busca acima para ver a ficha de um catequizando específico.")
 
     st.divider()
-    # ... (Seção 5: Itinerário continua igual)
 
-    # --- SEÇÃO 5: PRÓXIMOS PASSOS ---
     st.subheader("🎯 Itinerário")
     col_p1, col_p2 = st.columns(2)
-    
     with col_p1:
         st.info("**Último Tema Dado:**")
         if not df_enc_t.empty:
             ultimo = df_enc_t[df_enc_t['turma'] == turma_ativa].sort_values('data', ascending=False)
             if not ultimo.empty: st.write(ultimo.iloc[0]['tema'])
             else: st.write("Nenhum registro.")
-    
     with col_p2:
         st.success("**Próximo Tema Planejado:**")
         if not df_cron_t.empty:
@@ -684,12 +608,11 @@ elif menu == "📚 Minha Turma":
             else: st.write("Cronograma em dia!")
 
 # ==============================================================================
-# PÁGINA: 📖 DIÁRIO DE ENCONTROS (VERSÃO 5.3 - CORREÇÃO DE KEYERROR + DATAS BR)
+# PÁGINA: 📖 DIÁRIO DE ENCONTROS
 # ==============================================================================
 elif menu == "📖 Diário de Encontros":
     st.title("📖 Central de Itinerário e Encontros")
     
-    # 1. FILTRO DE TURMA
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -701,30 +624,22 @@ elif menu == "📖 Diário de Encontros":
 
     turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
 
-    # --- 2. BARRA DE PROGRESSO (COM BLINDAGEM CONTRA KEYERROR) ---
     df_cron_p = ler_aba("cronograma")
     if not df_cron_p.empty:
         cron_turma = df_cron_p[df_cron_p['etapa'] == turma_focal]
         if not cron_turma.empty:
             total_temas = len(cron_turma)
-            # Verifica se a coluna 'status' existe para não quebrar o sistema
-            if 'status' in cron_turma.columns:
-                realizados = len(cron_turma[cron_turma['status'] == 'REALIZADO'])
-            else:
-                realizados = 0
-            
+            realizados = len(cron_turma[cron_turma['status'] == 'REALIZADO']) if 'status' in cron_turma.columns else 0
             progresso = realizados / total_temas if total_temas > 0 else 0
             st.write(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
             st.progress(progresso)
 
-    # --- 3. INBOX DE PENDÊNCIAS (DATAS EM FORMATO BR) ---
     df_pres_local = ler_aba("presencas")
     df_enc_local = ler_aba("encontros")
     
     if not df_pres_local.empty:
         chamadas_turma = df_pres_local[df_pres_local['id_turma'] == turma_focal]['data_encontro'].unique().tolist()
         temas_turma = df_enc_local[df_enc_local['turma'] == turma_focal]['data'].unique().tolist() if not df_enc_local.empty else []
-        
         pendencias = [d for d in chamadas_turma if d not in temas_turma]
         
         if pendencias:
@@ -743,17 +658,15 @@ elif menu == "📖 Diário de Encontros":
 
     st.divider()
 
-    # --- 4. PLANEJAMENTO E REGISTRO (DATA_INPUT BR) ---
     col_plan, col_reg = st.columns([1, 1])
 
     with col_plan:
         st.subheader("📅 Planejar Próximos Temas")
-        with st.form("form_plan_v5", clear_on_submit=True):
-            novo_tema = st.text_input("Título do Tema").upper()
+        with st.form("form_plan_diario", clear_on_submit=True):
+            novo_tema = st.text_input("Título do Tema", help="Ex: Encontro 01 - Deus nos ama").upper()
             detalhes_tema = st.text_area("Objetivo (Opcional)", height=100)
             if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
                 if novo_tema:
-                    # Salva com o status PENDENTE para a barra de progresso funcionar no futuro
                     if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_focal, novo_tema, detalhes_tema, "PENDENTE"]):
                         st.success("Planejado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
@@ -761,17 +674,16 @@ elif menu == "📖 Diário de Encontros":
         st.subheader("✅ Registrar Encontro de Hoje")
         temas_sugeridos = [""]
         if not df_cron_p.empty:
-            # Filtro seguro para temas não realizados
             if 'status' in df_cron_p.columns:
                 temas_sugeridos += df_cron_p[(df_cron_p['etapa'] == turma_focal) & (df_cron_p['status'] != 'REALIZADO')]['titulo_tema'].tolist()
             else:
                 temas_sugeridos += df_cron_p[df_cron_p['etapa'] == turma_focal]['titulo_tema'].tolist()
 
-        with st.form("form_reg_v5", clear_on_submit=True):
+        with st.form("form_reg_diario", clear_on_submit=True):
             data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
             tema_selecionado = st.selectbox("Selecionar do Cronograma:", temas_sugeridos)
             tema_manual = st.text_input("Ou digite o Tema:", value=tema_selecionado).upper()
-            obs_e = st.text_area("Observações", height=68)
+            obs_e = st.text_area("Observações", height=68, help="Anotações sobre o comportamento da turma ou avisos dados.")
             
             if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
                 if tema_manual:
@@ -780,16 +692,13 @@ elif menu == "📖 Diário de Encontros":
                         marcar_tema_realizado_cronograma(turma_sel=turma_focal, tema=tema_manual)
                         st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-    # --- 5. LINHA DO TEMPO (DATAS BR + BUSCA) ---
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
     if not df_enc_local.empty:
         hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
-        
         busca_h = st.text_input("🔍 Pesquisar tema no histórico:").upper()
-        if busca_h:
-            hist_turma = hist_turma[hist_turma['tema'].str.contains(busca_h, na=False)]
+        if busca_h: hist_turma = hist_turma[hist_turma['tema'].str.contains(busca_h, na=False)]
 
         for _, row in hist_turma.iterrows():
             data_val = row['data']
@@ -797,7 +706,6 @@ elif menu == "📖 Diário de Encontros":
             
             with st.expander(f"📅 {data_br_h} - {row['tema']}"):
                 st.write(f"**Catequista:** {row['catequista']}")
-                # Busca flexível pela coluna de observações
                 obs_val = row.get('obs', row.get('observações', row.get('observacoes', 'Sem relato')))
                 st.write(f"**Relato:** {obs_val}")
                 
@@ -819,12 +727,11 @@ elif menu == "📖 Diário de Encontros":
         st.info("Nenhum encontro registrado ainda.")
 
 # ==================================================================================
-# BLOCO ATUALIZADO: CADASTRO INTELIGENTE 2025 (COM FORMATAÇÃO BR E INTERATIVIDADE)
+# PÁGINA: 📝 CADASTRAR CATEQUIZANDO (COM TOOLTIPS E AJUDA)
 # ==================================================================================
 elif menu == "📝 Cadastrar Catequizando":
     st.title("📝 Cadastro de Catequizandos")
     
-    # 1. ORIENTAÇÕES DE PREENCHIMENTO (BANNER DE AJUDA)
     with st.expander("💡 GUIA DE PREENCHIMENTO (LEIA ANTES DE COMEÇAR)", expanded=True):
         st.markdown("""
             *   **Nomes:** Escreva sempre em **MAIÚSCULAS** (Ex: JOÃO DA SILVA).
@@ -838,35 +745,29 @@ elif menu == "📝 Cadastrar Catequizando":
     with tab_manual:
         tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
         
-        st.info("""
-            **📋 Documentação Necessária (Xerox para a Pasta):**
-            ✔ RG ou Certidão  |  ✔ Comprovante de Residência  |  ✔ Batistério  |  ✔ Certidão de Eucaristia
-        """)
+        st.info("**📋 Documentação Necessária (Xerox para a Pasta):** ✔ RG ou Certidão | ✔ Comprovante de Residência | ✔ Batistério | ✔ Certidão de Eucaristia")
 
-        # --- INÍCIO DOS CAMPOS ---
         st.subheader("📍 1. Identificação")
         c1, c2, c3 = st.columns([2, 1, 1])
-        nome = c1.text_input("Nome Completo (EM MAIÚSCULAS)").upper()
-        # Formato de data brasileiro no widget
+        nome = c1.text_input("Nome Completo", help="Digite em MAIÚSCULAS sem abreviações.").upper()
         data_nasc = c2.date_input("Data de Nascimento", value=date(2010, 1, 1), format="DD/MM/YYYY")
         
         lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-        etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas)
+        etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas, help="Selecione a turma onde o catequizando será alocado.")
 
         c4, c5, c6 = st.columns([1.5, 1, 1.5])
-        label_fone = "WhatsApp do Catequizando (DDD+Nº)" if tipo_ficha == "Adulto" else "WhatsApp do Responsável (DDD+Nº)"
-        contato = c4.text_input(label_fone, help="Ex: 73988887777")
+        label_fone = "WhatsApp do Catequizando" if tipo_ficha == "Adulto" else "WhatsApp do Responsável"
+        contato = c4.text_input(label_fone, help="Apenas números com DDD. Ex: 73988887777")
         batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
-        endereco = c6.text_input("Endereço (Rua, Nº, Bairro)").upper()
+        endereco = c6.text_input("Endereço", help="Ex: RUA SÃO JOÃO, 123, FÁTIMA").upper()
 
-        # 2. BLOCO DINÂMICO: FAMÍLIA OU EMERGÊNCIA
         st.divider()
         if tipo_ficha == "Adulto":
             st.subheader("🚨 2. Contato de Emergência")
             ce1, ce2, ce3 = st.columns([2, 1, 1])
             nome_emergencia = ce1.text_input("Nome do Contato (Cônjuge, Filho, Amigo)").upper()
             vinculo_emergencia = ce2.selectbox("Vínculo", ["CÔNJUGE", "FILHO(A)", "IRMÃO/Ã", "PAI/MÃE", "AMIGO(A)", "OUTRO"])
-            tel_emergencia = ce3.text_input("Telefone de Emergência")
+            tel_emergencia = ce3.text_input("Telefone de Emergência", help="Apenas números com DDD.")
             
             nome_mae, prof_mae, tel_mae = "N/A", "N/A", "N/A"
             nome_pai, prof_pai, tel_pai = "N/A", "N/A", "N/A"
@@ -878,12 +779,12 @@ elif menu == "📝 Cadastrar Catequizando":
                 st.markdown("##### 👩‍🦱 Dados da Mãe")
                 nome_mae = st.text_input("Nome da Mãe").upper()
                 prof_mae = st.text_input("Profissão da Mãe").upper()
-                tel_mae = st.text_input("WhatsApp da Mãe")
+                tel_mae = st.text_input("WhatsApp da Mãe", help="Apenas números com DDD.")
             with col_pai:
                 st.markdown("##### 👨‍ Dados do Pai")
                 nome_pai = st.text_input("Nome do Pai").upper()
                 prof_pai = st.text_input("Profissão do Pai").upper()
-                tel_pai = st.text_input("WhatsApp do Pai")
+                tel_pai = st.text_input("WhatsApp do Pai", help="Apenas números com DDD.")
 
             st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
             cr1, cr2, cr3 = st.columns([2, 1, 1])
@@ -891,7 +792,6 @@ elif menu == "📝 Cadastrar Catequizando":
             vinculo_resp = cr2.selectbox("Vínculo", ["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
             tel_responsavel = cr3.text_input("Telefone do Cuidador")
 
-        # 3. VIDA ECLESIAL E GRUPOS (COM CAIXA DINÂMICA)
         st.divider()
         st.subheader("⛪ 3. Vida Eclesial e Engajamento")
         fe1, fe2 = st.columns(2)
@@ -909,29 +809,26 @@ elif menu == "📝 Cadastrar Catequizando":
             qtd_irmaos = fe2.number_input("Quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
             estado_civil, sacramentos = "N/A", "N/A"
 
-        # --- CORREÇÃO: CAIXA DE GRUPO APARECE SE MARCAR SIM ---
         part_grupo = st.radio("Participa (ou a família participa) de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
         qual_grupo = "N/A"
         if part_grupo == "SIM":
             qual_grupo = st.text_input("Qual grupo/pastoral e quem participa?").upper()
 
-        # 4. SAÚDE E CHECKLIST
         st.divider()
         st.subheader("🏥 4. Saúde e Documentação")
         s1, s2 = st.columns(2)
         
-        # --- CORREÇÃO: MEDICAMENTO COM PERGUNTA SIM/NÃO ---
         tem_med = s1.radio("Toma algum medicamento ou tem alergia?", ["NÃO", "SIM"], horizontal=True)
         medicamento = "NÃO"
         if tem_med == "SIM":
             medicamento = s1.text_input("Descreva o medicamento/alergia:").upper()
             
-        tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"])
+        tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"], help="Marque SIM para autismo, TDAH ou outras necessidades de inclusão.")
         
         st.markdown("---")
         st.markdown("**📁 Checklist de Documentos Entregues (Xerox):**")
         docs_obrigatorios = ["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
-        docs_entregues = st.multiselect("Marque o que foi entregue HOJE:", docs_obrigatorios)
+        docs_entregues = st.multiselect("Marque o que foi entregue HOJE:", docs_obrigatorios, help="Só marque o que você já tem em mãos.")
         
         faltando = [d for d in docs_obrigatorios if d not in docs_entregues]
         doc_status_k = ", ".join(faltando) if faltando else "COMPLETO"
@@ -940,14 +837,12 @@ elif menu == "📝 Cadastrar Catequizando":
         turno = c_pref1.selectbox("Turno de preferência", ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
         local_enc = c_pref2.text_input("Local do Encontro (Sala/Setor)").upper()
 
-        # BOTÃO DE SALVAR (FORA DE UM FORM PARA PERMITIR A INTERATIVIDADE ACIMA)
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("💾 FINALIZAR E SALVAR INSCRIÇÃO 2025", use_container_width=True):
+        if st.button("💾 FINALIZAR E SALVAR INSCRIÇÃO", use_container_width=True):
             if nome and contato and etapa_inscricao != "CATEQUIZANDOS SEM TURMA":
                 with st.spinner("Gravando no Banco de Dados..."):
                     novo_id = f"CAT-{int(time.time())}"
                     
-                    # Lógica de Responsável e Observação
                     if tipo_ficha == "Adulto":
                         resp_final = nome_emergencia
                         obs_familia = f"EMERGÊNCIA: {vinculo_emergencia} - TEL: {tel_emergencia}"
@@ -955,7 +850,6 @@ elif menu == "📝 Cadastrar Catequizando":
                         resp_final = responsavel_nome if responsavel_nome else f"{nome_mae} / {nome_pai}"
                         obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
 
-                    # Montagem das 30 colunas (A-AD)
                     registro = [[
                         novo_id, etapa_inscricao, nome, str(data_nasc), batizado, 
                         contato, endereco, nome_mae, nome_pai, resp_final, 
@@ -972,17 +866,15 @@ elif menu == "📝 Cadastrar Catequizando":
 
     with tab_csv:
         st.subheader("📂 Importação em Massa (CSV)")
-        
         with st.expander("📖 LEIA AS INSTRUÇÕES DE FORMATAÇÃO", expanded=True):
             st.markdown("""
                 **Para que a importação funcione corretamente, seu arquivo CSV deve seguir estas regras:**
                 1. **Colunas Obrigatórias:** `nome_completo` e `etapa`.
                 2. **Formato de Data:** Use o padrão `DD/MM/AAAA`.
                 3. **Turmas:** Se a turma escrita no CSV não existir no sistema, o catequizando será movido para **'CATEQUIZANDOS SEM TURMA'**.
-                4. **Rigor:** O sistema processará as 30 colunas. Colunas ausentes no CSV serão preenchidas como 'N/A'.
             """)
 
-        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_v2025_final")
+        arquivo_csv = st.file_uploader("Selecione o arquivo .csv", type="csv", key="uploader_csv_cadastro")
         
         if arquivo_csv:
             try:
@@ -996,7 +888,6 @@ elif menu == "📝 Cadastrar Catequizando":
                     st.error("❌ Erro: O arquivo precisa ter as colunas 'nome_completo' e 'etapa'.")
                 else:
                     turmas_cadastradas = [str(t).upper() for t in df_turmas['nome_turma'].tolist()] if not df_turmas.empty else []
-                    
                     st.markdown("### 🔍 Revisão dos Dados")
                     st.write(f"Total de registros: {len(df_import)}")
                     st.dataframe(df_import.head(10), use_container_width=True)
@@ -1009,49 +900,31 @@ elif menu == "📝 Cadastrar Catequizando":
                                 t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
                                 
                                 registro = [
-                                    f"CAT-CSV-{int(time.time()) + i}", # A: ID
-                                    t_final,                            # B: Etapa
-                                    str(linha.get(col_nome, 'SEM NOME')).upper(), # C: Nome
-                                    str(linha.get('data_nascimento', '01/01/2000')), # D
-                                    str(linha.get('batizado_sn', 'NÃO')).upper(), # E
-                                    str(linha.get('contato_principal', 'N/A')), # F
-                                    str(linha.get('endereco_completo', 'N/A')).upper(), # G
-                                    str(linha.get('nome_mae', 'N/A')).upper(), # H
-                                    str(linha.get('nome_pai', 'N/A')).upper(), # I
-                                    str(linha.get('nome_responsavel', 'N/A')).upper(), # J
-                                    str(linha.get('doc_em_falta', 'NADA')).upper(), # K
-                                    str(linha.get('engajado_grupo', 'N/A')).upper(), # L
-                                    "ATIVO", # M
-                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), # N
-                                    str(linha.get('tgo_sn', 'NÃO')).upper(), # O
-                                    str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(), # P
-                                    str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(), # Q
-                                    str(linha.get('profissao_mae', 'N/A')).upper(), # R
-                                    str(linha.get('tel_mae', 'N/A')), # S
-                                    str(linha.get('profissao_pai', 'N/A')).upper(), # T
-                                    str(linha.get('tel_pai', 'N/A')), # U
-                                    str(linha.get('est_civil_pais', 'N/A')).upper(), # V
-                                    str(linha.get('sac_pais', 'N/A')).upper(), # W
-                                    str(linha.get('participa_grupo', 'NÃO')).upper(), # X
-                                    str(linha.get('qual_grupo', 'N/A')).upper(), # Y
-                                    str(linha.get('tem_irmaos', 'NÃO')).upper(), # Z
-                                    linha.get('qtd_irmaos', 0), # AA
-                                    str(linha.get('turno', 'N/A')).upper(), # AB
-                                    str(linha.get('local_encontro', 'N/A')).upper(), # AC
-                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}" # AD
+                                    f"CAT-CSV-{int(time.time()) + i}", t_final, str(linha.get(col_nome, 'SEM NOME')).upper(), 
+                                    str(linha.get('data_nascimento', '01/01/2000')), str(linha.get('batizado_sn', 'NÃO')).upper(), 
+                                    str(linha.get('contato_principal', 'N/A')), str(linha.get('endereco_completo', 'N/A')).upper(), 
+                                    str(linha.get('nome_mae', 'N/A')).upper(), str(linha.get('nome_pai', 'N/A')).upper(), 
+                                    str(linha.get('nome_responsavel', 'N/A')).upper(), str(linha.get('doc_em_falta', 'NADA')).upper(), 
+                                    str(linha.get('engajado_grupo', 'N/A')).upper(), "ATIVO", 
+                                    str(linha.get('toma_medicamento_sn', 'NÃO')).upper(), str(linha.get('tgo_sn', 'NÃO')).upper(), 
+                                    str(linha.get('estado_civil_pais_ou_proprio', 'N/A')).upper(), str(linha.get('sacramentos_ja_feitos', 'N/A')).upper(), 
+                                    str(linha.get('profissao_mae', 'N/A')).upper(), str(linha.get('tel_mae', 'N/A')), 
+                                    str(linha.get('profissao_pai', 'N/A')).upper(), str(linha.get('tel_pai', 'N/A')), 
+                                    str(linha.get('est_civil_pais', 'N/A')).upper(), str(linha.get('sac_pais', 'N/A')).upper(), 
+                                    str(linha.get('participa_grupo', 'NÃO')).upper(), str(linha.get('qual_grupo', 'N/A')).upper(), 
+                                    str(linha.get('tem_irmaos', 'NÃO')).upper(), linha.get('qtd_irmaos', 0), 
+                                    str(linha.get('turno', 'N/A')).upper(), str(linha.get('local_encontro', 'N/A')).upper(), 
+                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}"
                                 ]
                                 lista_final.append(registro)
                             
                             if salvar_lote_catequizandos(lista_final):
-                                st.success(f"✅ {len(lista_final)} catequizandos importados!")
-                                st.balloons()
-                                time.sleep(2)
-                                st.rerun()
+                                st.success(f"✅ {len(lista_final)} catequizandos importados!"); st.balloons(); time.sleep(2); st.rerun()
             except Exception as e:
                 st.error(f"❌ Erro: {e}")
 
 # ==============================================================================
-# PÁGINA: 👤 PERFIL INDIVIDUAL (VERSÃO INTEGRAL - GESTÃO, AUDITORIA E EVASÃO)
+# PÁGINA: 👤 PERFIL INDIVIDUAL
 # ==============================================================================
 elif menu == "👤 Perfil Individual":
     st.title("👤 Gestão de Perfis e Documentação")
@@ -1059,36 +932,28 @@ elif menu == "👤 Perfil Individual":
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia. Cadastre catequizandos para acessar esta área.")
     else:
-        # 1. CRIAÇÃO DAS ABAS PRINCIPAIS (ORGANIZAÇÃO TOTAL)
         tab_individual, tab_auditoria_geral, tab_evasao_gestao = st.tabs([
-            "👤 Consulta e Edição Individual", 
-            "🚩 Auditoria de Documentos por Turma",
-            "📄 Gestão de Evasão e Declarações"
+            "👤 Consulta e Edição Individual", "🚩 Auditoria de Documentos por Turma", "📄 Gestão de Evasão e Declarações"
         ])
 
-        # --- ABA 1: CONSULTA E EDIÇÃO INDIVIDUAL ---
         with tab_individual:
             st.subheader("🔍 Localizar e Visualizar Perfil")
             c1, c2 = st.columns([2, 1])
-            busca = c1.text_input("Pesquisar por nome:", key="busca_perfil_v6").upper()
+            busca = c1.text_input("Pesquisar por nome:", key="busca_perfil").upper()
             lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-            filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil_v6")
+            filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil")
 
             df_f = df_cat.copy()
-            if busca: 
-                df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
-            if filtro_t != "TODAS": 
-                df_f = df_f[df_f['etapa'] == filtro_t]
+            if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
+            if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
             
-            # Exibe a tabela de busca rápida
             cols_necessarias = ['nome_completo', 'etapa', 'status']
             st.dataframe(df_f[cols_necessarias], use_container_width=True, hide_index=True)
             
             st.divider()
 
-            # SELEÇÃO DO CATEQUIZANDO PARA AÇÕES
             df_f['display_select'] = df_f['nome_completo'] + " | Turma: " + df_f['etapa'] + " | ID: " + df_f['id_catequizando']
-            escolha_display = st.selectbox("Selecione para VER PRÉVIA, EDITAR ou GERAR FICHA:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil_v6")
+            escolha_display = st.selectbox("Selecione para VER PRÉVIA, EDITAR ou GERAR FICHA:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil")
 
             if escolha_display:
                 id_sel = escolha_display.split(" | ID: ")[-1]
@@ -1099,16 +964,13 @@ elif menu == "👤 Perfil Individual":
                     nome_sel = dados['nome_completo']
                     status_atual = str(dados['status']).upper()
 
-                    # --- BANNER DE CONTATO RÁPIDO NO PERFIL (ALINHADO AO BANCO) ---
                     obs_p = str(dados.get('obs_pastoral_familia', ''))
                     tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
                     st.warning(f"🚨 **CONTATO DE EMERGÊNCIA:** {dados['nome_responsavel']} | **TEL:** {tel_e}")
                     
-                    # Ícone de Status Dinâmico
                     icone = "🟢" if status_atual == "ATIVO" else "🔴" if status_atual == "DESISTENTE" else "🔵" if status_atual == "TRANSFERIDO" else "⚪"
                     st.markdown(f"### {icone} {dados['nome_completo']} ({status_atual})")
 
-                    # SUB-ABAS DE AÇÃO INDIVIDUAL
                     sub_tab_edit, sub_tab_doc = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Documentos (PDF)"])
                     
                     with sub_tab_edit:
@@ -1116,32 +978,25 @@ elif menu == "👤 Perfil Individual":
                         idade_atual = calcular_idade(dados['data_nascimento'])
                         is_adulto = idade_atual >= 18
 
-                        # --- 1. IDENTIFICAÇÃO E STATUS ---
                         st.markdown("#### 📍 1. Identificação e Status")
                         ce1, ce2 = st.columns([2, 1])
                         ed_nome = ce1.text_input("Nome Completo", value=dados['nome_completo']).upper()
                         
                         opcoes_status = ["ATIVO", "TRANSFERIDO", "DESISTENTE", "INATIVO"]
                         idx_status = opcoes_status.index(status_atual) if status_atual in opcoes_status else 0
-                        ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status)
+                        ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status, help="Se mudar para Desistente, ele sairá das listas de chamada.")
 
                         c3, c4, c5 = st.columns([1, 1, 2])
                         ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), format="DD/MM/YYYY")
                         ed_batizado = c4.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
                         
-                        # --- LÓGICA DE ALINHAMENTO DE TURMA (CORREÇÃO DO SEU ERRO) ---
                         lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
-                        try:
-                            # Encontra a posição exata da turma que está no banco de dados
-                            idx_turma_banco = lista_t_nomes.index(dados['etapa'])
-                        except:
-                            idx_turma_banco = 0
-                        
-                        ed_etapa = c5.selectbox("Turma Atual (Conforme Banco de Dados)", lista_t_nomes, index=idx_turma_banco)
+                        try: idx_turma_banco = lista_t_nomes.index(dados['etapa'])
+                        except: idx_turma_banco = 0
+                        ed_etapa = c5.selectbox("Turma Atual", lista_t_nomes, index=idx_turma_banco)
 
                         st.divider()
 
-                        # --- 2. CONTATOS E FAMÍLIA (ADAPTATIVO) ---
                         if is_adulto:
                             st.markdown("#### 🚨 2. Contato de Emergência / Vínculo")
                             cx1, cx2, cx3 = st.columns([2, 1, 1])
@@ -1169,7 +1024,6 @@ elif menu == "👤 Perfil Individual":
 
                         st.divider()
 
-                        # --- 3. VIDA ECLESIAL ---
                         st.markdown("#### ⛪ 3. Vida Eclesial e Engajamento")
                         fe1, fe2 = st.columns(2)
                         part_grupo_init = str(dados.get('participa_grupo', 'NÃO')).upper()
@@ -1193,7 +1047,6 @@ elif menu == "👤 Perfil Individual":
 
                         st.divider()
 
-                        # --- 4. SAÚDE E CHECKLIST DE DOCUMENTOS ---
                         st.markdown("#### 🏥 4. Saúde e Documentação")
                         s1, s2 = st.columns(2)
                         med_atual = str(dados.get('toma_medicamento_sn', 'NÃO')).upper()
@@ -1210,10 +1063,7 @@ elif menu == "👤 Perfil Individual":
                         ed_doc_status_k = ", ".join(novas_faltas) if novas_faltas else "COMPLETO"
 
                         if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True):
-                            # Montagem rigorosa das 30 colunas (A-AD)
-                            # Se for adulto, atualizamos a observação com o novo telefone de emergência
                             obs_final = f"EMERGÊNCIA: {ed_resp} - TEL: {ed_tel_resp}" if is_adulto else dados.get('obs_pastoral_familia', '')
-                            
                             lista_up = [
                                 dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
                                 ed_contato, ed_end, ed_mae, ed_pai, ed_resp, ed_doc_status_k, 
@@ -1232,17 +1082,16 @@ elif menu == "👤 Perfil Individual":
                         st.write(f"Gerar documentos para: **{nome_sel}**")
                         col_doc_a, col_doc_b = st.columns(2)
                         with col_doc_a:
-                            if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_v6", use_container_width=True):
+                            if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_perfil", use_container_width=True):
                                 st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
                             if "pdf_catequizando" in st.session_state:
                                 st.download_button("📥 BAIXAR FICHA PDF", st.session_state.pdf_catequizando, f"Ficha_{nome_sel}.pdf", "application/pdf", use_container_width=True)
                         with col_doc_b:
-                            if st.button("📜 Gerar Declaração de Matrícula", key="btn_decl_matr_v6", use_container_width=True):
+                            if st.button("📜 Gerar Declaração de Matrícula", key="btn_decl_matr_perfil", use_container_width=True):
                                 st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
                             if "pdf_decl_matr" in st.session_state:
                                 st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Matricula_{nome_sel}.pdf", "application/pdf", use_container_width=True)
 
-        # --- ABA 2: AUDITORIA DE DOCUMENTAÇÃO POR TURMA ---
         with tab_auditoria_geral:
             st.subheader("🚩 Diagnóstico de Pendências por Turma")
             lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -1275,7 +1124,6 @@ elif menu == "👤 Perfil Individual":
                             idade_p = calcular_idade(p['data_nascimento'])
                             is_adulto_p = idade_p >= 18
                             
-                            # Lógica de quem cobrar (Mãe, Pai ou Próprio)
                             if is_adulto_p:
                                 nome_alvo, vinculo_alvo, tel_alvo = p['nome_completo'], "Próprio", p['contato_principal']
                             else:
@@ -1317,11 +1165,8 @@ elif menu == "👤 Perfil Individual":
                                 col_p3.caption("Sem Tel.")
                             st.markdown("<br>", unsafe_allow_html=True)
 
-        # --- ABA 3: GESTÃO DE EVASÃO E DECLARAÇÕES ---
         with tab_evasao_gestao:
             st.subheader("🚩 Gestão de Evasão e Documentos de Saída")
-            
-            # Métricas de Evasão
             df_saidas = df_cat[df_cat['status'] != 'ATIVO']
             c_ev1, c_ev2, c_ev3 = st.columns(3)
             c_ev1.metric("🔴 Desistentes", len(df_saidas[df_saidas['status'] == 'DESISTENTE']))
@@ -1338,13 +1183,10 @@ elif menu == "👤 Perfil Individual":
                 
                 st.divider()
                 st.markdown("#### 📄 Gerar Declaração Oficial (Transferência ou Matrícula)")
-                
-                # Seleção para Documento
                 sel_cat_ev = st.selectbox("Selecione o Catequizando para o Documento:", [""] + df_saidas['nome_completo'].tolist(), key="sel_ev_doc")
                 
                 if sel_cat_ev:
                     dados_ev = df_saidas[df_saidas['nome_completo'] == sel_cat_ev].iloc[0]
-                    
                     col_d1, col_d2 = st.columns(2)
                     tipo_doc = col_d1.selectbox("Tipo de Documento:", ["Declaração de Transferência", "Declaração de Matrícula"])
                     paroquia_dest = ""
@@ -1353,7 +1195,6 @@ elif menu == "👤 Perfil Individual":
 
                     if st.button(f"📥 GERAR {tipo_doc.upper()}", use_container_width=True):
                         with st.spinner("Renderizando documento oficial..."):
-                            # Chama a função no utils.py (Certifique-se de que ela existe lá)
                             pdf_ev_final = gerar_declaracao_pastoral_pdf(dados_ev.to_dict(), tipo_doc, paroquia_dest)
                             st.session_state.pdf_declaracao_saida = pdf_ev_final
                     
@@ -1361,18 +1202,16 @@ elif menu == "👤 Perfil Individual":
                         st.download_button("💾 BAIXAR DECLARAÇÃO (PDF)", st.session_state.pdf_declaracao_saida, f"Declaracao_{sel_cat_ev}.pdf", use_container_width=True)
                     
                     st.divider()
-                    # Ação de Reativação
                     if st.button(f"🔄 REATIVAR {sel_cat_ev} (Voltou para a Catequese)", type="primary"):
                         lista_up_v = dados_ev.tolist()
                         while len(lista_up_v) < 30: lista_up_v.append("N/A")
-                        lista_up_v[12] = "ATIVO" # Coluna M
+                        lista_up_v[12] = "ATIVO"
                         if atualizar_catequizando(dados_ev['id_catequizando'], lista_up_v):
                             st.success(f"{sel_cat_ev} reativado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                            
-# ==============================================================================
-# --- PÁGINA: GESTÃO DE TURMAS (VERSÃO BLINDADA CONTRA KEYERROR) 
-# ==============================================================================
 
+# ==============================================================================
+# PÁGINA: 🏫 GESTÃO DE TURMAS
+# ==============================================================================
 elif menu == "🏫 Gestão de Turmas":
     st.title("🏫 Gestão de Turmas e Fila de Espera")
     
@@ -1392,18 +1231,12 @@ elif menu == "🏫 Gestão de Turmas":
         if df_cat.empty:
             st.info("Nenhum catequizando cadastrado no sistema.")
         else:
-            # Identifica turmas que realmente existem no banco para achar os 'órfãos'
             turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
-            
-            # Filtra quem está sem turma ou em turma que não existe mais
             fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
             
             if not fila_espera.empty:
-                # Blindagem: Só tenta filtrar colunas se o DataFrame não estiver vazio
                 colunas_para_exibir = ['nome_completo', 'etapa', 'contato_principal']
-                # Garante que só usaremos colunas que realmente existem no DF
                 cols_existentes = [c for c in colunas_para_exibir if c in fila_espera.columns]
-                
                 st.dataframe(fila_espera[cols_existentes], use_container_width=True, hide_index=True)
             else:
                 st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
@@ -1414,9 +1247,9 @@ elif menu == "🏫 Gestão de Turmas":
 
     with t2:
         st.subheader("➕ Cadastrar Nova Turma")
-        with st.form("form_criar_t_v15"):
+        with st.form("form_criar_turma"):
             c1, c2 = st.columns(2)
-            n_t = c1.text_input("Nome da Turma (Ex: PRÉ ETAPA 2026)").upper()
+            n_t = c1.text_input("Nome da Turma", help="Ex: PRÉ ETAPA 2026").upper()
             e_t = c1.selectbox("Etapa Base", etapas_lista)
             ano = c2.number_input("Ano Letivo", value=2026)
             n_dias = st.multiselect("Dias de Encontro", dias_opcoes)
@@ -1426,20 +1259,16 @@ elif menu == "🏫 Gestão de Turmas":
             turno_t = c3.selectbox("Turno do Encontro", ["MANHÃ", "TARDE", "NOITE"])
             local_t = c4.text_input("Local/Sala do Encontro", value="SALA").upper()
             
-            # Catequistas agora são opcionais na criação
             cats_selecionados = st.multiselect("Catequistas Responsáveis (Opcional)", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else [])
             
             if st.form_submit_button("🚀 SALVAR NOVA TURMA"):
-                # Validação: Apenas Nome e Dias são obrigatórios para a turma existir
                 if n_t and n_dias:
                     try:
                         planilha = conectar_google_sheets()
                         if planilha:
-                            # 1. Grava na aba 'turmas' (A turma nasce aqui, independente de catequista)
                             nova_t = [f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
                             planilha.worksheet("turmas").append_row(nova_t)
                             
-                            # 2. Sincroniza Perfis (Apenas se houver catequistas selecionados)
                             if cats_selecionados:
                                 aba_u = planilha.worksheet("usuarios")
                                 for c_nome in cats_selecionados:
@@ -1452,57 +1281,53 @@ elif menu == "🏫 Gestão de Turmas":
                                             aba_u.update_cell(celula.row, 5, ", ".join(v_list))
                             
                             st.success(f"✅ Turma '{n_t}' criada com sucesso!")
-                            st.cache_data.clear()
-                            time.sleep(1); st.rerun()
+                            st.cache_data.clear(); time.sleep(1); st.rerun()
                     except Exception as e: st.error(f"Erro ao salvar: {e}")
                 else: st.warning("⚠️ O Nome da Turma e os Dias de Encontro são obrigatórios.")
 
     with t3:
         st.subheader("✏️ Detalhes e Edição da Turma")
         if not df_turmas.empty:
-            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_final_v15")
+            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_turma")
             
             if sel_t:
                 d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
                 nome_turma_original = str(d['nome_turma'])
                 
                 c1, c2 = st.columns(2)
-                en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="edit_nome_v15").upper()
-                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="edit_etapa_v15")
-                ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="edit_ano_v15")
+                en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="edit_nome_turma").upper()
+                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="edit_etapa_turma")
+                ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="edit_ano_turma")
                 
                 dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
-                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes], key="edit_dias_v15")
+                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes], key="edit_dias_turma")
                 
                 st.markdown("---")
                 c3, c4 = st.columns(2)
                 opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
                 turno_atual = str(d.get('turno', 'MANHÃ')).upper()
-                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0, key="edit_turno_v15")
-                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA'), key="edit_local_v15").upper()
+                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0, key="edit_turno_turma")
+                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA'), key="edit_local_turma").upper()
                 
-                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="edit_pe_v15")
-                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="edit_pc_v15")
+                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''), key="edit_pe_turma")
+                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''), key="edit_pc_turma")
                 
                 lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
                 cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
-                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_v15")
+                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_turma")
                 
                 col_btn_save, col_btn_del = st.columns([3, 1])
                 
                 with col_btn_save:
-                    if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_v15", use_container_width=True):
+                    if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_turma", use_container_width=True):
                         with st.spinner("Processando atualizações e movendo catequizandos..."):
-                            # 1. Atualiza os dados da Turma
                             lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
                             
                             if atualizar_turma(d['id_turma'], lista_up):
-                                # 2. SE O NOME MUDOU: Sincroniza os catequizandos (Cascata)
                                 if en != nome_turma_original:
                                     from database import sincronizar_renomeacao_turma_catequizandos
                                     sincronizar_renomeacao_turma_catequizandos(nome_turma_original, en)
                                 
-                                # 3. Sincroniza Perfis dos Catequistas (Lógica original mantida)
                                 planilha = conectar_google_sheets()
                                 aba_u = planilha.worksheet("usuarios")
                                 for _, cat_row in equipe_tecnica.iterrows():
@@ -1522,25 +1347,20 @@ elif menu == "🏫 Gestão de Turmas":
                                         if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
                                 
                                 st.success(f"✅ Turma e Catequizandos atualizados para '{en}'!")
-                                st.cache_data.clear()
-                                time.sleep(1)
-                                st.rerun()
+                                st.cache_data.clear(); time.sleep(1); st.rerun()
 
-                # --- NOVO MECANISMO: EXCLUIR TURMA ---
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
                     st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
-                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_t")
+                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_turma")
                     
                     if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
                         with st.spinner("Movendo catequizandos e excluindo itinerário..."):
-                            # 1. Localiza e move catequizandos para a Fila de Espera
                             alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
                             if not alunos_da_turma.empty:
                                 ids_para_mover = alunos_da_turma['id_catequizando'].tolist()
                                 mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
                             
-                            # 2. Remove vínculo dos catequistas na aba usuarios
                             planilha = conectar_google_sheets()
                             aba_u = planilha.worksheet("usuarios")
                             for _, cat_row in equipe_tecnica.iterrows():
@@ -1550,22 +1370,17 @@ elif menu == "🏫 Gestão de Turmas":
                                     if sel_t in v_list:
                                         v_list.remove(sel_t)
                                         celula_u = aba_u.find(cat_row['nome'], in_column=1)
-                                        if celula_u:
-                                            aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
+                                        if celula_u: aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
                             
-                            # 3. Exclui a turma da aba turmas
                             if excluir_turma(d['id_turma']):
                                 st.success(f"Turma excluída! {len(alunos_da_turma)} catequizandos movidos para a Fila de Espera.")
-                                st.cache_data.clear()
-                                time.sleep(2)
-                                st.rerun()
+                                st.cache_data.clear(); time.sleep(2); st.rerun()
 
     with t4:
         st.subheader("📊 Inteligência Pastoral da Turma")
         if not df_turmas.empty:
-            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_t_v7_final")
+            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_turma")
             
-            # --- CARREGAMENTO DE DADOS ---
             alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
             info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
             pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
@@ -1574,42 +1389,32 @@ elif menu == "🏫 Gestão de Turmas":
             df_pres_reu = ler_aba("presenca_reuniao")
             
             if not alunos_t.empty:
-                # --- 1. MÉTRICAS EXPANDIDAS (ORIGINAIS + NOVAS) ---
                 m1, m2, m3, m4, m5, m6 = st.columns(6)
-                
-                # Catequistas (Original)
                 qtd_cats_real = len(str(info_t['catequista_responsavel']).split(','))
                 m1.metric("Catequistas", qtd_cats_real)
-                
-                # Catequizandos (Original)
                 m2.metric("Catequizandos", len(alunos_t))
                 
-                # Frequência (Original)
                 freq_global = 0.0
                 if not pres_t.empty:
                     pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
                     freq_global = round(pres_t['status_num'].mean() * 100, 1)
                 m3.metric("Frequência", f"{freq_global}%")
                 
-                # Idade Média (Original)
                 idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
                 idade_media_val = round(sum(idades)/len(idades), 1) if idades else 0
                 m4.metric("Idade Média", f"{idade_media_val}a")
 
-                # Engajamento Familiar (NOVO)
                 perc_pais = 0
                 if not df_pres_reu.empty:
                     pais_presentes = df_pres_reu[df_pres_reu.iloc[:, 3] == t_alvo].iloc[:, 1].nunique()
                     perc_pais = int((pais_presentes / len(alunos_t)) * 100) if len(alunos_t) > 0 else 0
                 m5.metric("Engajamento Pais", f"{perc_pais}%")
 
-                # Progresso Itinerário (NOVO)
                 total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
                 total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
                 progresso = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
                 m6.metric("Itinerário", f"{progresso}%")
 
-                # --- 2. RADAR DE ENTURMAÇÃO (ORIGINAL MANTIDO) ---
                 st.divider()
                 st.markdown("#### 🚀 Radar de Enturmação (Sugestão de Movimentação)")
                 etapa_base = str(info_t['etapa']).upper()
@@ -1629,22 +1434,15 @@ elif menu == "🏫 Gestão de Turmas":
                 else:
                     st.success(f"✅ Todos na faixa etária ideal.")
 
-                # --- 3. PRONTIDÃO SACRAMENTAL E SAÚDE (NOVA INTEGRAÇÃO) ---
                 st.divider()
                 col_sac, col_sau = st.columns(2)
-                
                 with col_sac:
                     st.markdown("#### 🕊️ Prontidão Sacramental")
                     sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
-                    if sem_batismo > 0:
-                        st.error(f"🚨 **{sem_batismo}** catequizandos sem Batismo.")
-                    else:
-                        st.success("✅ Todos os catequizandos são batizados.")
-                    
-                    # Checa documentos
+                    if sem_batismo > 0: st.error(f"🚨 **{sem_batismo}** catequizandos sem Batismo.")
+                    else: st.success("✅ Todos os catequizandos são batizados.")
                     docs_pend = len(alunos_t[~alunos_t['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
-                    if docs_pend > 0:
-                        st.warning(f"📄 **{docs_pend}** com pendência de documentos.")
+                    if docs_pend > 0: st.warning(f"📄 **{docs_pend}** com pendência de documentos.")
 
                 with col_sau:
                     st.markdown("#### 🏥 Cuidado e Inclusão")
@@ -1654,7 +1452,6 @@ elif menu == "🏫 Gestão de Turmas":
                     if med_count > 0: st.warning(f"💊 **{med_count}** fazem uso de medicamento/alergia.")
                     if tgo_count == 0 and med_count == 0: st.write("Nenhuma observação de saúde registrada.")
 
-                # --- 4. LINHA DO TEMPO PEDAGÓGICA (NOVA INTEGRAÇÃO) ---
                 st.divider()
                 st.markdown("#### 📖 Itinerário Pedagógico")
                 c_it1, c_it2 = st.columns(2)
@@ -1671,50 +1468,40 @@ elif menu == "🏫 Gestão de Turmas":
                         for _, p in proximos.iterrows(): st.write(f"📌 {p['titulo_tema']}")
                     else: st.write("Cronograma concluído ou vazio.")
 
-                # --- 5. DOCUMENTAÇÃO E AUDITORIA (ORIGINAL MANTIDO) ---
                 st.divider()
                 st.markdown("#### 📄 Documentação e Auditoria")
                 col_doc1, col_doc2 = st.columns(2)
                 
                 with col_doc1:
-                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_v7"):
+                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_turma"):
                         with st.spinner("Analisando prontidão da turma..."):
-                            # 1. Coleta de Métricas Avançadas
                             sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
                             batizados = len(alunos_t) - sem_batismo
                             tgo_c = len(alunos_t[alunos_t['tgo_sn'] == 'SIM'])
                             saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
                             
-                            # Engajamento Pais
                             perc_pais = 0
                             if not df_pres_reu.empty:
                                 pais_presentes = df_pres_reu[df_pres_reu.iloc[:, 3] == t_alvo].iloc[:, 1].nunique()
                                 perc_pais = int((pais_presentes / len(alunos_t)) * 100) if len(alunos_t) > 0 else 0
 
-                            # Progresso Itinerário
                             total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
                             total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
                             prog_it = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
 
-                            # 2. Preparação da Lista Nominal Enriquecida
                             lista_geral = []
                             for _, r in alunos_t.iterrows():
                                 f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
                                 has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
                                 lista_geral.append({
-                                    'nome': r['nome_completo'], 
-                                    'faltas': f,
-                                    'batismo': r['batizado_sn'],
-                                    'eucaristia': has_euc,
-                                    'status': r['status']
+                                    'nome': r['nome_completo'], 'faltas': f, 'batismo': r['batizado_sn'],
+                                    'eucaristia': has_euc, 'status': r['status']
                                 })
 
-                            # 3. Chamada da IA com contexto rico
                             resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%. Pais: {perc_pais}%. Batizados: {batizados}. Pendentes Batismo: {sem_batismo}. TGO: {tgo_c}."
                             parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
 
-                            # 4. Geração do PDF v3
-                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_v3(
+                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_pdf(
                                 t_alvo, 
                                 {
                                     'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 
@@ -1726,9 +1513,8 @@ elif menu == "🏫 Gestão de Turmas":
                                 {'geral': lista_geral}, 
                                 parecer_ia
                             )
-                    # --- BOTÃO DE DOWNLOAD (APARECE APÓS A GERAÇÃO) ---
                     if f"pdf_auditoria_{t_alvo}" in st.session_state:
-                        st.write("") # Pequeno espaçador visual
+                        st.write("")
                         st.download_button(
                             label=f"📥 BAIXAR AUDITORIA: {t_alvo}",
                             data=st.session_state[f"pdf_auditoria_{t_alvo}"],
@@ -1737,14 +1523,13 @@ elif menu == "🏫 Gestão de Turmas":
                             use_container_width=True
                         )
                 with col_doc2:
-                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_v7"):
+                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
                         with st.spinner("Gerando fichas individuais..."):
                             pdf_fichas = gerar_fichas_turma_completa(t_alvo, alunos_t)
                             st.session_state[f"pdf_fichas_{t_alvo}"] = pdf_fichas
                     if f"pdf_fichas_{t_alvo}" in st.session_state:
                         st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
 
-                # --- 6. LISTA NOMINAL DE CAMINHADA (ORIGINAL MANTIDO) ---
                 st.divider()
                 st.markdown("### 📋 Lista Nominal de Caminhada")
                 lista_preview = []
@@ -1761,39 +1546,31 @@ elif menu == "🏫 Gestão de Turmas":
         if not df_turmas.empty and not df_cat.empty:
             c1, c2 = st.columns(2)
             opcoes_origem = ["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
-            t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_v6")
-            t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_v6")
+            t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_turma")
+            t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_turma")
             
             if t_origem:
-                # Filtra apenas os ativos da turma de origem
                 alunos_mov = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
                 
                 if not alunos_mov.empty:
-                    # Lógica de selecionar todos
-                    def toggle_all_v6():
+                    def toggle_all_mov():
                         for _, al in alunos_mov.iterrows():
-                            st.session_state[f"mov_al_v6_{al['id_catequizando']}"] = st.session_state.chk_mov_todos_v6
+                            st.session_state[f"mov_al_{al['id_catequizando']}"] = st.session_state.chk_mov_todos
 
-                    st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos_v6", on_change=toggle_all_v6)
+                    st.checkbox("Selecionar todos os catequizandos", key="chk_mov_todos", on_change=toggle_all_mov)
                     
                     lista_ids_selecionados = []
                     cols = st.columns(2)
                     
-                    # Itera sobre os alunos calculando a idade em tempo real
                     for i, (_, al) in enumerate(alunos_mov.iterrows()):
-                        # CÁLCULO DA IDADE PARA EXIBIÇÃO
                         idade_atual = calcular_idade(al['data_nascimento'])
-                        
                         with cols[i % 2]:
-                            # NOME + IDADE NO LABEL DO CHECKBOX
                             label_exibicao = f"{al['nome_completo']} ({idade_atual} anos)"
-                            
-                            if st.checkbox(label_exibicao, key=f"mov_al_v6_{al['id_catequizando']}"):
+                            if st.checkbox(label_exibicao, key=f"mov_al_{al['id_catequizando']}"):
                                 lista_ids_selecionados.append(al['id_catequizando'])
                     
                     st.divider()
-                    # Botão de execução com contador
-                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS PARA {t_destino}", key="btn_exec_mov_v6", use_container_width=True):
+                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS PARA {t_destino}", key="btn_exec_mov", use_container_width=True):
                         if t_destino and t_origem != t_destino and lista_ids_selecionados:
                             if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
                                 st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
@@ -1803,7 +1580,7 @@ elif menu == "🏫 Gestão de Turmas":
                     st.info("Não há catequizandos ativos nesta turma de origem.")
 
 # ==============================================================================
-# BLOCO INTEGRAL: GESTÃO DE SACRAMENTOS (CORREÇÃO DE CENSO E AUDITORIA)
+# PÁGINA: 🕊️ GESTÃO DE SACRAMENTOS
 # ==============================================================================
 elif menu == "🕊️ Gestão de Sacramentos":
     st.title("🕊️ Auditoria e Gestão de Sacramentos")
@@ -1813,11 +1590,9 @@ elif menu == "🕊️ Gestão de Sacramentos":
     
     with tab_plan:
         st.subheader("📅 Planejamento de Cerimônias")
-        
         if df_turmas.empty:
             st.warning("Cadastre turmas para planejar sacramentos.")
         else:
-            # 1. SELEÇÃO DA TURMA E SACRAMENTO
             c1, c2 = st.columns(2)
             t_plan = c1.selectbox("Selecione a Turma:", df_turmas['nome_turma'].tolist(), key="sel_t_plan")
             tipo_s_plan = c2.selectbox("Sacramento Previsto:", ["EUCARISTIA", "CRISMA"], key="sel_s_plan")
@@ -1826,25 +1601,21 @@ elif menu == "🕊️ Gestão de Sacramentos":
             col_data = 'previsao_eucaristia' if tipo_s_plan == "EUCARISTIA" else 'previsao_crisma'
             data_atual_prevista = info_t.get(col_data, "")
             
-            # 2. DEFINIÇÃO DA DATA
             with st.expander("⚙️ Definir/Alterar Data da Cerimônia", expanded=not data_atual_prevista):
                 nova_data_p = st.date_input("Data da Missa/Celebração:", 
                                           value=converter_para_data(data_atual_prevista) if data_atual_prevista else date.today())
                 if st.button("📌 SALVAR DATA NO CRONOGRAMA DA TURMA"):
                     lista_up_t = info_t.tolist()
-                    # Coluna G (6) é Eucaristia, H (7) é Crisma no rigor das 10 colunas da aba turmas
                     idx_col = 6 if tipo_s_plan == "EUCARISTIA" else 7
                     lista_up_t[idx_col] = str(nova_data_p)
                     if atualizar_turma(info_t['id_turma'], lista_up_t):
                         st.success("Data salva!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-            # 3. DIAGNÓSTICO DE CANDIDATOS
             if data_atual_prevista:
                 st.divider()
                 st.info(f"🗓️ Celebração de **{tipo_s_plan}** prevista para: **{formatar_data_br(data_atual_prevista)}**")
                 
                 alunos_t = df_cat[(df_cat['etapa'] == t_plan) & (df_cat['status'] == 'ATIVO')]
-                
                 prontos = alunos_t[alunos_t['batizado_sn'] == 'SIM']
                 pendentes = alunos_t[alunos_t['batizado_sn'] != 'SIM']
                 
@@ -1873,7 +1644,6 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     else:
                         st.success("Nenhum impedimento na turma!")
 
-                # 4. AÇÃO PÓS-CERIMÔNIA
                 st.divider()
                 with st.expander("🏁 FINALIZAR PROCESSO (Pós-Celebração)"):
                     st.warning("CUIDADO: Esta ação registrará o sacramento para todos os APTOS acima e atualizará o histórico deles permanentemente.")
@@ -1885,9 +1655,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             st.success("Glória a Deus! Todos os registros foram atualizados."); st.balloons(); time.sleep(2); st.rerun()
 
     with tab_dash:
-        # 1. Censo de Sacramentos REALIZADOS NO SISTEMA EM 2026 (Aba sacramentos_recebidos)
         df_recebidos = ler_aba("sacramentos_recebidos")
-        
         bat_ano, euc_ano, cri_ano = 0, 0, 0
         if not df_recebidos.empty:
             try:
@@ -1910,53 +1678,41 @@ elif menu == "🕊️ Gestão de Sacramentos":
             </div>
         """, unsafe_allow_html=True)
 
-        # 2. Quadro Geral de Sacramentos (Censo Paroquial Completo)
         if not df_cat.empty:
             df_censo = df_cat.copy()
             df_censo['idade_real'] = df_censo['data_nascimento'].apply(calcular_idade)
-            
-            # Divisão de Públicos
             df_kids = df_censo[df_censo['idade_real'] < 18]
             df_adults = df_censo[df_censo['idade_real'] >= 18]
             
-            # --- PÚBLICO INFANTIL / JUVENIL ---
             st.subheader("📊 Censo Sacramental: Infantil / Juvenil")
             c1, c2, c3 = st.columns(3)
-            
-            with c1: # Batismo Kids
+            with c1:
                 total_k = len(df_kids)
                 k_bat = len(df_kids[df_kids['batizado_sn'].str.upper() == 'SIM'])
                 perc_k_bat = (k_bat / total_k * 100) if total_k > 0 else 0
                 st.metric("Batizados", f"{k_bat} / {total_k}", f"{perc_k_bat:.1f}%")
-            
-            with c2: # Eucaristia Kids
+            with c2:
                 k_euc = df_kids['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
                 perc_k_euc = (k_euc / total_k * 100) if total_k > 0 else 0
                 st.metric("1ª Eucaristia", f"{k_euc} / {total_k}", f"{perc_k_euc:.1f}%")
-                
-            with c3: # Crisma Kids (Geralmente Perseverança)
+            with c3:
                 k_cri = df_kids['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
                 perc_k_cri = (k_cri / total_k * 100) if total_k > 0 else 0
                 st.metric("Crismados", f"{k_cri} / {total_k}", f"{perc_k_cri:.1f}%")
 
             st.markdown("---")
-
-            # --- PÚBLICO ADULTOS ---
             st.subheader("📊 Censo Sacramental: Adultos")
             a1, a2, a3 = st.columns(3)
-            
-            with a1: # Batismo Adultos
+            with a1:
                 total_a = len(df_adults)
                 a_bat = len(df_adults[df_adults['batizado_sn'].str.upper() == 'SIM'])
                 perc_a_bat = (a_bat / total_a * 100) if total_a > 0 else 0
                 st.metric("Batizados", f"{a_bat} / {total_a}", f"{perc_a_bat:.1f}%")
-            
-            with a2: # Eucaristia Adultos
+            with a2:
                 a_euc = df_adults['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False).sum()
                 perc_a_euc = (a_euc / total_a * 100) if total_a > 0 else 0
                 st.metric("Eucaristia", f"{a_euc} / {total_a}", f"{perc_a_euc:.1f}%")
-                
-            with a3: # Crisma Adultos
+            with a3:
                 a_cri = df_adults['sacramentos_ja_feitos'].str.contains("CRISMA", na=False).sum()
                 perc_a_cri = (a_cri / total_a * 100) if total_a > 0 else 0
                 st.metric("Crismados", f"{a_cri} / {total_a}", f"{perc_a_cri:.1f}%")
@@ -1974,138 +1730,40 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
                 
                 if not alunos_t.empty:
-                    # Lógica de Filtro por Etapa
-                    # Pré, 1ª e 2ª Etapa: Só checa Batismo
-                    # 3ª Etapa e Adultos: Checa Batismo, Eucaristia e Crisma
                     is_avancado_ou_adulto = any(x in etapa_base for x in ["3ª", "TERCEIRA", "ADULTO"])
-                    
-                    # Identificar Pendentes
                     pend_bat = alunos_t[alunos_t['batizado_sn'] != "SIM"]
-                    
                     pend_euc = pd.DataFrame()
                     pend_cri = pd.DataFrame()
                     
                     if is_avancado_ou_adulto:
-                        # Checa se a palavra não existe na coluna de sacramentos
                         pend_euc = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False)]
                         pend_cri = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False, case=False)]
                     
-                    # Só exibe o expander se houver alguma pendência na turma
                     tem_pendencia = not pend_bat.empty or not pend_euc.empty or not pend_cri.empty
                     
                     if tem_pendencia:
                         with st.expander(f"🚨 {nome_t} ({etapa_base}) - Pendências Identificadas"):
-                            # Define colunas dinâmicas: 1 para iniciantes, 3 para avançados
                             cols_p = st.columns(3 if is_avancado_ou_adulto else 1)
-                            
                             with cols_p[0]:
                                 st.markdown("**🕊️ Falta Batismo**")
                                 if not pend_bat.empty:
-                                    for n in pend_bat['nome_completo'].tolist():
-                                        st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
-                                else:
-                                    st.success("Tudo OK")
+                                    for n in pend_bat['nome_completo'].tolist(): st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
+                                else: st.success("Tudo OK")
                             
                             if is_avancado_ou_adulto:
                                 with cols_p[1]:
                                     st.markdown("**🍞 Falta Eucaristia**")
                                     if not pend_euc.empty:
-                                        for n in pend_euc['nome_completo'].tolist():
-                                            st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
-                                    else:
-                                        st.success("Tudo OK")
+                                        for n in pend_euc['nome_completo'].tolist(): st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
+                                    else: st.success("Tudo OK")
                                         
                                 with cols_p[2]:
                                     st.markdown("**🔥 Falta Crisma**")
                                     if not pend_cri.empty:
-                                        for n in pend_cri['nome_completo'].tolist():
-                                            st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
-                                    else:
-                                        st.success("Tudo OK")
+                                        for n in pend_cri['nome_completo'].tolist(): st.markdown(f"<span style='color:#e03d11;'>❌ {n}</span>", unsafe_allow_html=True)
+                                    else: st.success("Tudo OK")
                     else:
-                        # Se a turma estiver 100% em dia, mostra apenas uma linha discreta
                         st.markdown(f"<small style='color:green;'>✅ {nome_t}: Todos os sacramentos em dia.</small>", unsafe_allow_html=True)
-
-        # 2. Segmentação de Público por IDADE (Correção do Denominador)
-        if not df_cat.empty:
-            # Criamos uma cópia para não afetar o DF global e calculamos a idade real
-            df_censo = df_cat.copy()
-            df_censo['idade_real'] = df_censo['data_nascimento'].apply(calcular_idade)
-            
-            df_kids = df_censo[df_censo['idade_real'] < 18]
-            df_adults = df_censo[df_censo['idade_real'] >= 18]
-            
-            st.subheader("📊 Quadro Geral de Sacramentos (Censo Paroquial)")
-            col_k, col_a = st.columns(2)
-            
-            with col_k:
-                st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO INFANTIL / JUVENIL</b></div>", unsafe_allow_html=True)
-                total_k = len(df_kids)
-                if total_k > 0:
-                    k_bat = len(df_kids[df_kids['batizado_sn'].str.upper() == 'SIM'])
-                    perc_k = (k_bat / total_k) * 100
-                    st.metric("Batizados (Kids)", f"{k_bat} / {total_k}", f"{perc_k:.1f}% batizados")
-                else: st.write("Nenhum registro infantil.")
-
-            with col_a:
-                st.markdown("<div style='background-color:#f0f2f6; padding:10px; border-radius:5px;'><b>PÚBLICO ADULTOS</b></div>", unsafe_allow_html=True)
-                total_a = len(df_adults)
-                if total_a > 0:
-                    a_bat = len(df_adults[df_adults['batizado_sn'].str.upper() == 'SIM'])
-                    perc_a = (a_bat / total_a) * 100
-                    st.metric("Batizados (Adultos)", f"{a_bat} / {total_a}", f"{perc_a:.1f}% batizados")
-                else: st.write("Nenhum registro de adultos.")
-        else:
-            st.warning("Base de catequizandos vazia.")
-
-        st.divider()
-        st.subheader("🏫 Auditoria Nominal e Pastoral por Turma")
-        
-        analise_detalhada_ia = []
-        if not df_turmas.empty:
-            for _, t in df_turmas.iterrows():
-                # Filtro robusto: remove espaços extras e converte para maiúsculo
-                nome_t = str(t['nome_turma']).strip().upper()
-                alunos_t = df_cat[df_cat['etapa'].str.strip().str.upper() == nome_t] if not df_cat.empty else pd.DataFrame()
-                
-                if not alunos_t.empty:
-                    pres_t = df_pres[df_pres['id_turma'] == t['nome_turma']] if not df_pres.empty else pd.DataFrame()
-                    freq_media = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
-                    
-                    idades = [calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()]
-                    # Impedimentos baseados em situação matrimonial (para adultos)
-                    impedimentos = len(alunos_t[alunos_t['estado_civil_pais_ou_proprio'].isin(['DIVORCIADO(A)', 'CASADO(A) CIVIL', 'CONVIVEM'])])
-                    
-                    batizados_list = alunos_t[alunos_t['batizado_sn'].str.upper() == 'SIM']
-                    pendentes_list = alunos_t[alunos_t['batizado_sn'].str.upper() != 'SIM']
-                    
-                    with st.expander(f"📍 {t['nome_turma']} ({t['etapa']}) - Frequência: {freq_media:.1f}%"):
-                        col_p1, col_p2 = st.columns([2, 1])
-                        with col_p1:
-                            st.write(f"**Faixa Etária:** {min(idades)} a {max(idades)} anos")
-                            if impedimentos > 0 and min(idades) >= 18: 
-                                st.warning(f"⚠️ {impedimentos} adultos com situação matrimonial a regularizar.")
-                            
-                            st.markdown("---")
-                            cb1, cb2 = st.columns(2)
-                            with cb1:
-                                st.success(f"✅ Batizados ({len(batizados_list)})")
-                                for n_bat in batizados_list['nome_completo'].tolist(): st.write(f"· {n_bat}")
-                            with cb2:
-                                st.error(f"❌ Pendentes ({len(pendentes_list)})")
-                                for n_pend in pendentes_list['nome_completo'].tolist(): st.write(f"· {n_pend}")
-                        
-                        with col_p2:
-                            st.markdown("**Previsões:**")
-                            st.write(f"Eucaristia: `{t.get('previsao_eucaristia', 'N/A')}`")
-                            st.write(f"Crisma: `{t.get('previsao_crisma', 'N/A')}`")
-
-                    analise_detalhada_ia.append({
-                        "turma": t['nome_turma'], "etapa": t['etapa'], "freq": f"{freq_media:.1f}%",
-                        "batizados": len(batizados_list), "pendentes": len(pendentes_list),
-                        "nomes_pendentes": pendentes_list['nome_completo'].tolist(),
-                        "impedimentos_civel": impedimentos
-                    })
 
         st.divider()
         st.subheader("🏛️ Relatório Oficial de Auditoria")
@@ -2123,7 +1781,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 del st.session_state.pdf_sac_tecnico
                 st.rerun()
         else:
-            if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac_v3", use_container_width=True):
+            if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac", use_container_width=True):
                 with st.spinner("O Auditor IA está analisando impedimentos..."):
                     analise_detalhada_ia = []
                     for _, t in df_turmas.iterrows():
@@ -2131,43 +1789,23 @@ elif menu == "🕊️ Gestão de Sacramentos":
                         alunos_t = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
                         if not alunos_t.empty:
                             pend_bat = len(alunos_t[alunos_t['batizado_sn'] != "SIM"])
-                            
-                            # CONTAGEM REAL DE IMPEDIMENTOS (3ª Etapa ou Adultos sem Batismo)
-                            imp_count = len(alunos_t[
-                                (("3ª" in str(t['etapa'])) | ("ADULTO" in str(t['etapa']).upper())) & 
-                                (alunos_t['batizado_sn'] != "SIM")
-                            ])
-                            
+                            imp_count = len(alunos_t[(("3ª" in str(t['etapa'])) | ("ADULTO" in str(t['etapa']).upper())) & (alunos_t['batizado_sn'] != "SIM")])
                             analise_detalhada_ia.append({
-                                "turma": nome_t, 
-                                "etapa": t['etapa'], 
-                                "batizados": len(alunos_t) - pend_bat, 
-                                "pendentes": pend_bat,
-                                "impedimentos_civel": imp_count # Agora mostra o número real de casos críticos
+                                "turma": nome_t, "etapa": t['etapa'], "batizados": len(alunos_t) - pend_bat, 
+                                "pendentes": pend_bat, "impedimentos_civel": imp_count
                             })
-                    # 2. Lista de Impedimentos Nominais (Para a Seção 2)
+                    
                     impedimentos_detalhados = []
                     for _, cat in df_cat[df_cat['status'] == 'ATIVO'].iterrows():
                         if ("3ª" in str(cat['etapa']) or "ADULTO" in str(cat['etapa']).upper()) and cat['batizado_sn'] != "SIM":
-                            impedimentos_detalhados.append({
-                                "nome": cat['nome_completo'],
-                                "turma": cat['etapa'],
-                                "motivo": "Falta Batismo (Impedimento de Iniciação)"
-                            })
+                            impedimentos_detalhados.append({"nome": cat['nome_completo'], "turma": cat['etapa'], "motivo": "Falta Batismo (Impedimento de Iniciação)"})
                     
-                    # 3. Chamada da IA
                     resumo_ia = str({"turmas": analise_detalhada_ia, "impedimentos": impedimentos_detalhados})
                     analise_ia_sac = gerar_relatorio_sacramentos_ia(resumo_ia)
                     
-                    # 4. Geração do PDF v3
-                    st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_v3(
-                        analise_detalhada_ia, 
-                        impedimentos_detalhados, 
-                        analise_ia_sac
-                    )
+                    st.session_state.pdf_sac_tecnico = gerar_relatorio_sacramentos_tecnico_pdf(analise_detalhada_ia, impedimentos_detalhados, analise_ia_sac)
                     st.rerun()
 
-    # --- ABAS DE REGISTRO E HISTÓRICO ---
     with tab_reg:
         st.subheader("✍️ Registro de Sacramento")
         modo_reg = st.radio("Como deseja registrar?", ["Individual (Busca por Nome)", "Por Turma (Mutirão)"], horizontal=True)
@@ -2213,13 +1851,11 @@ elif menu == "🕊️ Gestão de Sacramentos":
         df_eventos = ler_aba("sacramentos_eventos")
         
         if not df_eventos.empty:
-            # --- 1. FILTROS INTELIGENTES ---
             st.markdown("#### 🔍 Filtrar Registros")
             c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
             
             filtro_tipo = c1.selectbox("Sacramento:", ["TODOS", "BATISMO", "EUCARISTIA", "CRISMA"], key="f_sac")
             
-            # Preparação de datas para os filtros
             df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
             anos_disp = sorted(df_eventos['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
             filtro_ano = c2.selectbox("Ano:", ["TODOS"] + [str(a) for a in anos_disp], key="f_ano")
@@ -2231,61 +1867,43 @@ elif menu == "🕊️ Gestão de Sacramentos":
             }
             filtro_mes = c3.selectbox("Mês:", list(meses_br.values()), key="f_mes")
             
-            # Aplicar Filtros no DataFrame de exibição
             df_f = df_eventos.copy()
-            if filtro_tipo != "TODOS":
-                df_f = df_f[df_f['tipo'] == filtro_tipo]
-            if filtro_ano != "TODOS":
-                df_f = df_f[df_f['data_dt'].dt.year == int(filtro_ano)]
+            if filtro_tipo != "TODOS": df_f = df_f[df_f['tipo'] == filtro_tipo]
+            if filtro_ano != "TODOS": df_f = df_f[df_f['data_dt'].dt.year == int(filtro_ano)]
             if filtro_mes != "TODOS":
-                # Inverte o dicionário para pegar o número do mês
                 mes_num = [k for k, v in meses_br.items() if v == filtro_mes][0]
                 df_f = df_f[df_f['data_dt'].dt.strftime('%m') == mes_num]
 
-            # Exibição da Tabela Filtrada
-            st.dataframe(
-                df_f[['id_evento', 'tipo', 'data', 'turmas', 'catequista']].sort_values(by='data', ascending=False), 
-                use_container_width=True, 
-                hide_index=True
-            )
+            st.dataframe(df_f[['id_evento', 'tipo', 'data', 'turmas', 'catequista']].sort_values(by='data', ascending=False), use_container_width=True, hide_index=True)
 
-            # --- 2. ÁREA DE EDIÇÃO (CORREÇÃO) ---
             st.divider()
             with st.expander("✏️ Editar Registro de Evento"):
                 st.info("Selecione um evento pelo ID para corrigir a data ou o tipo.")
                 id_para_editar = st.selectbox("Selecione o ID do Evento:", [""] + df_f['id_evento'].tolist())
                 
                 if id_para_editar:
-                    # Localiza os dados atuais
                     dados_atuais = df_eventos[df_eventos['id_evento'] == id_para_editar].iloc[0]
-                    
                     with st.form("form_edit_sac_evento"):
                         col_e1, col_e2 = st.columns(2)
-                        ed_tipo = col_e1.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"], 
-                                                 index=["BATISMO", "EUCARISTIA", "CRISMA"].index(dados_atuais['tipo']))
+                        ed_tipo = col_e1.selectbox("Tipo de Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"], index=["BATISMO", "EUCARISTIA", "CRISMA"].index(dados_atuais['tipo']))
                         ed_data = col_e2.date_input("Data Correta", value=pd.to_datetime(dados_atuais['data']).date())
                         ed_turmas = st.text_input("Turmas (Nomes separados por vírgula)", value=dados_atuais['turmas'])
                         
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                             from database import atualizar_evento_sacramento
                             novos_dados = [id_para_editar, ed_tipo, str(ed_data), ed_turmas, dados_atuais['catequista']]
-                            
                             if atualizar_evento_sacramento(id_para_editar, novos_dados):
-                                st.success("✅ Evento atualizado com sucesso!")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("❌ Erro ao atualizar. Verifique a conexão.")
+                                st.success("✅ Evento atualizado com sucesso!"); time.sleep(1); st.rerun()
+                            else: st.error("❌ Erro ao atualizar. Verifique a conexão.")
         else:
             st.info("Nenhum evento registrado no histórico.")
 
 # ==============================================================================
-# PÁGINA: ✅ CHAMADA INTELIGENTE (VERSÃO MOBILE-FIRST 2026)
+# PÁGINA: ✅ CHAMADA INTELIGENTE (MOBILE-FIRST)
 # ==============================================================================
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
 
-    # 1. IDENTIFICAÇÃO DE PERMISSÕES
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -2295,17 +1913,14 @@ elif menu == "✅ Fazer Chamada":
     if not turmas_permitidas:
         st.error("❌ Você não possui turmas vinculadas."); st.stop()
 
-    # 2. CABEÇALHO DE CONFIGURAÇÃO (MOBILE FRIENDLY)
     with st.container():
         c1, c2 = st.columns([1, 1])
         turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
         data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    # 3. LÓGICA DE TEMA (SUGESTÃO DO CRONOGRAMA)
     df_cron_c = ler_aba("cronograma")
     sugestao_tema = ""
     if not df_cron_c.empty:
-        # Busca o primeiro tema pendente daquela turma
         filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
         if not filtro_cron.empty:
             sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
@@ -2315,17 +1930,14 @@ elif menu == "✅ Fazer Chamada":
 
     tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
                              value=st.session_state.get(f"tema_input_{turma_sel}", ""), 
-                             key=f"tema_field_{turma_sel}").upper()
+                             key=f"tema_field_{turma_sel}", help="Digite o tema para liberar o botão de salvar.").upper()
 
-    # 4. LISTA DE CATEQUIZANDOS (CARDS)
     lista_cat = df_cat[(df_cat['etapa'] == turma_sel) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
     
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
     else:
         st.divider()
-        
-        # Botão Marcar Todos (Compacto)
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
             for _, r in lista_cat.iterrows():
                 st.session_state[f"p_{r['id_catequizando']}_{data_enc}"] = True
@@ -2337,20 +1949,9 @@ elif menu == "✅ Fazer Chamada":
         contador_a = 0
         contador_niver = 0
 
-        # CSS para os Cards Mobile
         st.markdown("""
             <style>
-            .card-chamada {
-                background-color: #f8f9f0;
-                padding: 15px;
-                border-radius: 10px;
-                border-left: 8px solid #417b99;
-                margin-bottom: 10px;
-            }
-            .card-niver {
-                border-left: 8px solid #ffa000 !important;
-                background-color: #fff9e6 !important;
-            }
+            .card-niver { border-left: 8px solid #ffa000 !important; background-color: #fff9e6 !important; }
             </style>
         """, unsafe_allow_html=True)
 
@@ -2358,13 +1959,8 @@ elif menu == "✅ Fazer Chamada":
             is_niver = eh_aniversariante_da_semana(row['data_nascimento'])
             if is_niver: contador_niver += 1
             
-            # Container do Card
             with st.container():
-                # Estilização visual baseada no aniversário
-                classe_card = "card-niver" if is_niver else ""
-                
                 col_info, col_check = st.columns([3, 1])
-                
                 with col_info:
                     niver_tag = "🎂 <b>NIVER!</b> " if is_niver else ""
                     st.markdown(f"{niver_tag}{row['nome_completo']}", unsafe_allow_html=True)
@@ -2374,7 +1970,6 @@ elif menu == "✅ Fazer Chamada":
                             if card_img: st.image(card_img, width=150)
 
                 with col_check:
-                    # Toggle é melhor para mobile que checkbox
                     presente = st.toggle("P", key=f"p_{row['id_catequizando']}_{data_enc}")
                     if presente: contador_p += 1
                     else: contador_a += 1
@@ -2386,7 +1981,6 @@ elif menu == "✅ Fazer Chamada":
                 ])
             st.markdown("---")
 
-        # 5. TERMÔMETRO E FINALIZAÇÃO
         st.subheader("📊 Resumo da Chamada")
         c_res1, c_res2, c_res3 = st.columns(3)
         c_res1.metric("✅ Presentes", contador_p)
@@ -2395,11 +1989,9 @@ elif menu == "✅ Fazer Chamada":
 
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
             if salvar_presencas(registros_presenca):
-                # Se o tema veio do cronograma, marca como realizado
                 if tema_dia == sugestao_tema:
                     from database import marcar_tema_realizado_cronograma
                     marcar_tema_realizado_cronograma(turma_sel, tema_dia)
-                
                 st.success(f"✅ Chamada de {turma_sel} salva com sucesso!"); st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
@@ -2407,7 +1999,7 @@ elif menu == "✅ Fazer Chamada":
             st.warning("⚠️ O botão de salvar será liberado após preencher o Tema do Encontro.")
 
 # ==============================================================================
-# BLOCO INTEGRAL: GESTÃO DE CATEQUISTAS (DASHBOARD + EDIÇÃO + NOVO ACESSO)
+# PÁGINA: 👥 GESTÃO DE CATEQUISTAS
 # ==============================================================================
 elif menu == "👥 Gestão de Catequistas":
     st.title("👥 Gestão de Catequistas e Formação")
@@ -2468,12 +2060,12 @@ elif menu == "👥 Gestão de Catequistas":
     with tab_lista:
         st.subheader("📋 Relação e Perfil Individual")
         if not equipe_tecnica.empty:
-            busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat_v2026").upper()
+            busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat").upper()
             df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
             st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
             
             st.divider()
-            escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat_v2026")
+            escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat")
             
             if escolha_c:
                 u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
@@ -2485,7 +2077,6 @@ elif menu == "👥 Gestão de Catequistas":
                         st.markdown(f"### {u['nome']}")
                         st.write(f"**E-mail:** {u['email']}")
                         st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
-                        # Exibição do Contato de Emergência no Perfil
                         st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[12] if len(u) > 12 else 'Não cadastrado'}")
                         st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
                         st.write(f"**Turmas:** {u['turma_vinculada']}")
@@ -2496,7 +2087,6 @@ elif menu == "👥 Gestão de Catequistas":
                             st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
                 with col_edit:
-                    # Configurações de Data
                     hoje = date.today()
                     d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
 
@@ -2505,7 +2095,6 @@ elif menu == "👥 Gestão de Catequistas":
                         try: return converter_para_data(valor)
                         except: return None
 
-                    # Carregamento dos dados atuais
                     val_nasc = converter_ou_none(u.get('data_nascimento', '')) or hoje
                     val_ini = converter_ou_none(u.get('data_inicio_catequese', '')) or hoje
                     val_bat = converter_ou_none(u.get('data_batismo', ''))
@@ -2514,7 +2103,7 @@ elif menu == "👥 Gestão de Catequistas":
                     val_min = converter_ou_none(u.get('data_ministerio', ''))
                     val_emerg = u.iloc[12] if len(u) > 12 else ""
 
-                    with st.form(f"form_edit_cat_final_{u['email']}"):
+                    with st.form(f"form_edit_cat_{u['email']}"):
                         st.markdown("#### 📍 Dados Cadastrais e Emergência")
                         c1, c2 = st.columns(2)
                         ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
@@ -2534,17 +2123,13 @@ elif menu == "👥 Gestão de Catequistas":
                         st.divider()
                         st.markdown("#### ⛪ Itinerário Sacramental (Marque apenas se possuir)")
                         
-                        # Lógica para evitar datas fictícias
                         col1, col2, col3 = st.columns(3)
-                        
                         with col1:
                             has_ini = st.checkbox("Início na Catequese", value=True)
                             dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_ini)
-                        
                         with col2:
                             has_bat = st.checkbox("Possui Batismo?", value=(val_bat is not None))
                             dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
-                        
                         with col3:
                             has_euc = st.checkbox("Possui 1ª Eucaristia?", value=(val_euc is not None))
                             dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
@@ -2553,7 +2138,6 @@ elif menu == "👥 Gestão de Catequistas":
                         with col4:
                             has_cri = st.checkbox("Possui Crisma?", value=(val_cri is not None))
                             dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
-                        
                         with col5:
                             has_min = st.checkbox("É Ministro de Catequese?", value=(val_min is not None))
                             dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
@@ -2562,15 +2146,14 @@ elif menu == "👥 Gestão de Catequistas":
                             dados_up = [
                                 ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
                                 ed_tel, str(ed_nasc), dt_ini, dt_bat, dt_euc, dt_cri, dt_min, 
-                                str(u.iloc[12]) if len(u) > 12 else "", # Coluna 13 (M) - SessionID
-                                ed_emergencia                          # Coluna 14 (N) - Emergência
+                                str(u.iloc[12]) if len(u) > 12 else "", ed_emergencia
                             ]
                             if atualizar_usuario(u['email'], dados_up):
                                 st.success("✅ Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
-        with st.form("form_novo_cat_v13", clear_on_submit=True):
+        with st.form("form_novo_cat", clear_on_submit=True):
             c1, c2 = st.columns(2)
             n_nome = c1.text_input("Nome Completo (EM MAIÚSCULAS)").upper()
             n_email = c2.text_input("E-mail (Login)")
@@ -2578,13 +2161,7 @@ elif menu == "👥 Gestão de Catequistas":
             c3, c4, c5 = st.columns(3)
             n_senha = c3.text_input("Senha Inicial", type="password")
             n_tel = c4.text_input("Telefone / WhatsApp")
-            
-            # --- CORREÇÃO DO CALENDÁRIO (1930 a 2011) ---
-            n_nasc = c5.date_input("Data de Nascimento", 
-                                   value=date(1990, 1, 1),
-                                   min_value=date(1930, 1, 1),
-                                   max_value=date(2011, 12, 31),
-                                   format="DD/MM/YYYY")
+            n_nasc = c5.date_input("Data de Nascimento", value=date(1990, 1, 1), min_value=date(1930, 1, 1), max_value=date(2011, 12, 31), format="DD/MM/YYYY")
             
             c_papel, c_emerg = st.columns(2)
             n_papel = c_papel.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"])
@@ -2596,18 +2173,12 @@ elif menu == "👥 Gestão de Catequistas":
             if st.form_submit_button("🚀 CRIAR ACESSO E DEFINIR PERMISSÕES"):
                 if n_nome and n_email and n_senha:
                     with st.spinner("Criando novo acesso..."):
-                        # Montagem rigorosa das 14 colunas (A até N)
-                        # A:Nome, B:Email, C:Senha, D:Papel, E:Turmas, F:Tel, G:Nasc, H:Ini, I:Bat, J:Euc, K:Cri, L:Min, M:SID, N:Emerg
                         novo_user_lista = [
                             n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
-                            n_tel, str(n_nasc), "", "", "", "", "", 
-                            "",             # Coluna 13 (M) - Vazio para o primeiro login
-                            n_emergencia    # Coluna 14 (N) - Emergência
+                            n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia
                         ]
-                        
                         from database import adicionar_novo_usuario
                         if adicionar_novo_usuario(novo_user_lista):
-                            # Sincronização com a aba turmas (Opcional, mas mantido)
                             try:
                                 planilha = conectar_google_sheets()
                                 if n_turmas:
@@ -2619,35 +2190,21 @@ elif menu == "👥 Gestão de Catequistas":
                                             nova_v = f"{v_atual}, {n_nome}".strip(", ")
                                             aba_t.update_cell(cel_t.row, 5, nova_v)
                             except: pass
-                            
-                            st.success(f"✅ {n_nome} cadastrado com sucesso!")
-                            st.balloons()
-                            time.sleep(1)
-                            st.rerun()
+                            st.success(f"✅ {n_nome} cadastrado com sucesso!"); st.balloons(); time.sleep(1); st.rerun()
                 else:
                     st.warning("⚠️ Nome, E-mail e Senha são obrigatórios.")
 
     with tab_formacao:
         st.subheader("🎓 Itinerário de Formação Continuada")
         
-        # --- BLINDAGEM DE COLUNAS ---
-        # Identifica qual coluna representa o Status (geralmente a 6ª coluna, índice 5)
         if not df_formacoes.empty:
-            if 'status' in df_formacoes.columns:
-                col_status = 'status'
-            elif 'col_5' in df_formacoes.columns:
-                col_status = 'col_5'
-            else:
-                # Se não achar pelos nomes, pega a 6ª coluna disponível
-                col_status = df_formacoes.columns[5] if len(df_formacoes.columns) > 5 else None
-        else:
-            col_status = None
+            if 'status' in df_formacoes.columns: col_status = 'status'
+            elif 'col_5' in df_formacoes.columns: col_status = 'col_5'
+            else: col_status = df_formacoes.columns[5] if len(df_formacoes.columns) > 5 else None
+        else: col_status = None
 
-        sub_tab_plan, sub_tab_valida, sub_tab_hist = st.tabs([
-            "📅 Planejar Formação", "✅ Validar Presença", "📜 Histórico e Edição"
-        ])
+        sub_tab_plan, sub_tab_valida, sub_tab_hist = st.tabs(["📅 Planejar Formação", "✅ Validar Presença", "📜 Histórico e Edição"])
 
-        # --- SUB-ABA 1: PLANEJAR (FUTURO) ---
         with sub_tab_plan:
             with st.form("form_plan_formacao", clear_on_submit=True):
                 f_tema = st.text_input("Tema da Formação").upper()
@@ -2659,13 +2216,10 @@ elif menu == "👥 Gestão de Catequistas":
                 if st.form_submit_button("📌 AGENDAR FORMAÇÃO"):
                     if f_tema:
                         id_f = f"FOR-{int(time.time())}"
-                        # Salva com status PENDENTE
                         if salvar_formacao([id_f, f_tema, str(f_data), f_formador, f_local, "PENDENTE"]):
                             st.success(f"Formação '{f_tema}' agendada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-        # --- SUB-ABA 2: VALIDAR (AGORA) ---
         with sub_tab_valida:
-            # Usa a coluna identificada na blindagem para filtrar
             df_f_pendentes = pd.DataFrame()
             if col_status and not df_formacoes.empty:
                 df_f_pendentes = df_formacoes[df_formacoes[col_status].str.upper() == "PENDENTE"]
@@ -2693,7 +2247,6 @@ elif menu == "👥 Gestão de Catequistas":
                     if selecionados:
                         lista_p = [[dados_f['id_formacao'], email] for email in selecionados]
                         if salvar_presenca_formacao(lista_p):
-                            # Atualiza para CONCLUIDA
                             nova_lista_f = [dados_f['id_formacao'], dados_f['tema'], dados_f['data'], dados_f['formador'], dados_f['local'], "CONCLUIDA"]
                             from database import atualizar_formacao
                             atualizar_formacao(dados_f['id_formacao'], nova_lista_f)
@@ -2701,7 +2254,6 @@ elif menu == "👥 Gestão de Catequistas":
                     else:
                         st.error("Selecione ao menos um catequista.")
 
-        # --- SUB-ABA 3: HISTÓRICO E EDIÇÃO (PASSADO) ---
         with sub_tab_hist:
             if not df_formacoes.empty:
                 st.markdown("#### 🔍 Consultar e Corrigir")
@@ -2710,10 +2262,8 @@ elif menu == "👥 Gestão de Catequistas":
                 ano_sel = st.selectbox("Filtrar por Ano:", ["TODOS"] + [str(a) for a in anos])
                 
                 df_hist = df_formacoes.copy()
-                if ano_sel != "TODOS":
-                    df_hist = df_hist[df_hist['data_dt'].dt.year == int(ano_sel)]
+                if ano_sel != "TODOS": df_hist = df_hist[df_hist['data_dt'].dt.year == int(ano_sel)]
                 
-                # Exibe as colunas existentes de forma segura
                 cols_view = ['tema', 'data', 'formador', 'local']
                 if col_status in df_hist.columns: cols_view.append(col_status)
                 
@@ -2731,8 +2281,7 @@ elif menu == "👥 Gestão de Catequistas":
                             ed_local = st.text_input("Local", value=d_edit['local']).upper()
                             
                             status_atual_val = str(d_edit[col_status]).upper() if col_status else "PENDENTE"
-                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], 
-                                                   index=0 if status_atual_val == "PENDENTE" else 1)
+                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if status_atual_val == "PENDENTE" else 1)
                             
                             c_btn1, c_btn2 = st.columns([3, 1])
                             if c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
@@ -2740,20 +2289,25 @@ elif menu == "👥 Gestão de Catequistas":
                                 if atualizar_formacao(d_edit['id_formacao'], [d_edit['id_formacao'], ed_tema, str(ed_data), ed_formador, ed_local, ed_status]):
                                     st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                             
+                            # Trava de Exclusão
+                            st.markdown("---")
+                            confirma_del = st.checkbox("Confirmo a exclusão desta formação")
                             if c_btn2.form_submit_button("🗑️ EXCLUIR", use_container_width=True):
-                                from database import excluir_formacao_completa
-                                if excluir_formacao_completa(d_edit['id_formacao']):
-                                    st.success("Excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                if confirma_del:
+                                    from database import excluir_formacao_completa
+                                    if excluir_formacao_completa(d_edit['id_formacao']):
+                                        st.success("Excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                else:
+                                    st.error("Marque a caixa de confirmação para excluir.")
             else:
                 st.info("Nenhuma formação registrada.")
 
 # ==============================================================================
-# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR (VERSÃO CONSOLIDADA 2026 - GESTOR & CATEQUISTA)
+# PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR
 # ==============================================================================
 elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
     st.title("👨‍👩‍👧‍👦 Gestão da Igreja Doméstica")
     
-    # --- 1. FUNÇÕES DE APOIO E INTELIGÊNCIA (WHATSAPP E RADAR) ---
     def limpar_wa(tel):
         if not tel or str(tel).strip() in ["N/A", "", "None"]: return None
         num = "".join(filter(str.isdigit, str(tel)))
@@ -2767,22 +2321,17 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         (df_cat['id_catequizando'] != id_atual)]
         return irmaos[['nome_completo', 'etapa']].to_dict('records')
 
-    # ==========================================================================
-    # VISÃO A: COORDENADOR / ADMIN (CENTRAL DE COMANDO)
-    # ==========================================================================
     if eh_gestor:
         tab_reunioes, tab_censo, tab_agenda, tab_visitas, tab_ia = st.tabs([
             "📅 Reuniões de Pais", "📊 Censo Familiar", "📞 Agenda Geral", "🏠 Visitas", "✨ IA"
         ])
 
-        # --- ABA 1: REUNIÕES DE PAIS (AGENDAR, PDF, CHAMADA E EDIÇÃO) ---
         with tab_reunioes:
             st.subheader("📅 Ciclo de Encontros com as Famílias")
             sub_r1, sub_r2, sub_r3, sub_r4 = st.tabs([
                 "➕ Agendar", "📄 Lista Física (PDF)", "✅ Validar Presença (Digital)", "📜 Histórico e Edição"
             ])
             
-            # 1.1 AGENDAR REUNIÃO
             with sub_r1:
                 with st.form("form_plan_reuniao", clear_on_submit=True):
                     r_tema = st.text_input("Tema da Reunião").upper()
@@ -2795,7 +2344,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                             if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, str(r_data), r_turma, r_local, "PENDENTE"]):
                                 st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-            # 1.2 GERAR PDF PARA ASSINATURA FÍSICA
             with sub_r2:
                 df_reunioes_v = ler_aba("reunioes_pais")
                 if not df_reunioes_v.empty:
@@ -2810,7 +2358,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         st.download_button("📥 Baixar Lista para Impressão", pdf_out, f"Lista_{sel_r_pdf}.pdf")
                 else: st.info("Nenhuma reunião agendada.")
 
-            # 1.3 VALIDAR PRESENÇA (CHAMADA DIGITAL DOS PAIS)
             with sub_r3:
                 if not df_reunioes_v.empty:
                     sel_r_pres = st.selectbox("Selecione a Reunião para Chamada Digital:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pres")
@@ -2837,7 +2384,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                                 st.success("Presenças registradas!"); st.balloons(); time.sleep(1); st.rerun()
                 else: st.info("Nenhuma reunião para validar.")
 
-            # 1.4 HISTÓRICO E EDIÇÃO DE REUNIÕES
             with sub_r4:
                 if not df_reunioes_v.empty:
                     st.write("### ✏️ Editar Dados da Reunião")
@@ -2857,7 +2403,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     st.write("### 📜 Histórico Geral")
                     st.dataframe(df_reunioes_v, use_container_width=True, hide_index=True)
 
-        # --- ABA 2: CENSO MATRIMONIAL ---
         with tab_censo:
             st.subheader("📊 Diagnóstico da Igreja Doméstica")
             c1, c2 = st.columns(2)
@@ -2869,14 +2414,12 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 sac_series = df_cat['sac_pais'].str.split(', ').explode()
                 st.bar_chart(sac_series.value_counts())
 
-# --- ABA 3: AGENDA GERAL (COM DOIS MÉTODOS DE IA) ---
         with tab_agenda:
             busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):", key="txt_busca_fam").upper()
             df_age = df_cat[df_cat['nome_completo'].str.contains(busca_g, na=False) | df_cat['nome_mae'].str.contains(busca_g, na=False)] if busca_g else df_cat
             
             for _, row in df_age.iterrows():
                 with st.container():
-                    # Estilização do Card
                     st.markdown(f"""
                         <div style='background-color:#f8f9f0; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
                             <b style='color:#417b99;'>{row['nome_completo']}</b> | Turma: {row['etapa']}
@@ -2885,32 +2428,24 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     
                     c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
                     
-                    # --- No botão de COBRAR DOCS ---
                     if c_btn1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}"):
                         nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
-                        msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], nome_alvo)
-                        
-                        # BLINDAGEM CONTRA ERRO DE MATH SYNTAX
+                        msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], row['etapa'], nome_alvo, "Responsável")
                         msg_segura = msg.replace("$", "\$") 
                         st.info(f"**Mensagem de Cobrança:**\n\n{msg_segura}")
 
-                    # --- No botão de ATUALIZAR FICHA ---
                     if c_btn2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}"):
                         nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
                         resumo = f"Endereço: {row['endereco_completo']} | Saúde: {row['toma_medicamento_sn']}"
                         msg = gerar_mensagem_atualizacao_cadastral_ia(row['nome_completo'], resumo, nome_alvo)
-                        
-                        # BLINDAGEM CONTRA ERRO DE MATH SYNTAX
                         msg_segura = msg.replace("$", "\$")
                         st.info(f"**Mensagem de Atualização:**\n\n{msg_segura}")
                     
-                    # WHATSAPP DIRETO
                     tel_limpo = limpar_wa(row['contato_principal'])
                     if tel_limpo:
                         c_btn3.markdown(f'''<a href="https://wa.me/{tel_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 Abrir WhatsApp</div></a>''', unsafe_allow_html=True)
                     st.markdown("<br>", unsafe_allow_html=True)
 
-        # --- ABA 4: RELATOS DE VISITAS ---
         with tab_visitas:
             st.subheader("🏠 Acompanhamento Familiar")
             busca_v = st.text_input("Localizar Família para Relato:").upper()
@@ -2928,15 +2463,11 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                             atualizar_catequizando(filho['id_catequizando'], lista_up)
                         st.success("Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-        # --- ABA 5: IA ---
         with tab_ia:
             if st.button("🚀 EXECUTAR DIAGNÓSTICO FAMILIAR IA"):
                 resumo_fam = str(df_cat['est_civil_pais'].value_counts().to_dict())
                 st.info(analisar_saude_familiar_ia(resumo_fam))
 
-    # ==========================================================================
-    # VISÃO B: CATEQUISTA (MODELO MOBILE-FIRST / CARDS)
-    # ==========================================================================
     else:
         vinculo = str(st.session_state.usuario.get('turma_vinculada', '')).split(',')[0].strip()
         st.subheader(f"📱 Agenda Pastoral: {vinculo}")
@@ -2954,13 +2485,11 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # Radar de Irmãos
                 irmaos = buscar_irmaos(row['nome_mae'], row['nome_pai'], row['id_catequizando'])
                 if irmaos:
                     with st.expander("🔗 IRMÃOS NA CATEQUESE"):
                         for ir in irmaos: st.write(f"👦 {ir['nome_completo']} ({ir['etapa']})")
 
-                # Botões WhatsApp Mobile
                 c1, c2, c3 = st.columns(3)
                 lm = limpar_wa(row['tel_mae'])
                 if lm: c1.markdown(f'''<a href="https://wa.me/{lm}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">👩‍🦱 MÃE</div></a>''', unsafe_allow_html=True)
