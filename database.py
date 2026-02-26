@@ -1,6 +1,8 @@
+# ==============================================================================
 # ARQUIVO: database.py
-# VERSÃO: 3.0.4 - INTEGRALIDADE TOTAL E DEFESA DE COTA (ANTI-429)
+# VERSÃO: 4.0.0 - BLINDAGEM DE DADOS E PREVENÇÃO DE CORRUPÇÃO
 # MISSÃO: Motor de Dados Eclesiástico com Segurança de Sessão Única e Cookies.
+# ==============================================================================
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -55,7 +57,7 @@ def ler_aba(nome_aba):
 
 # --- 2. NOVAS FUNÇÕES DE INFRAESTRUTURA E SEGURANÇA ---
 
-@st.cache_data(ttl=60) # Reduzido de 300 para 60 segundos para resposta mais rápida
+@st.cache_data(ttl=60)
 def verificar_status_sistema():
     """Consulta a aba 'config' para travar o sistema se necessário."""
     planilha = conectar_google_sheets()
@@ -74,9 +76,8 @@ def atualizar_session_id(email, novo_id):
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
-            celula = aba.find(str(email))
+            celula = aba.find(str(email), in_column=2) # Busca estritamente na coluna de E-mail (B)
             if celula:
-                # Força a gravação na Coluna 13 (M)
                 aba.update_cell(celula.row, 13, str(novo_id))
                 st.cache_data.clear()
                 return True
@@ -103,7 +104,13 @@ def salvar_lote_catequizandos(lista_de_listas):
     if planilha:
         try:
             aba = planilha.worksheet("catequizandos")
-            aba.append_rows(lista_de_listas)
+            # Garante que todas as linhas tenham exatamente 30 colunas antes de inserir
+            lista_blindada = []
+            for linha in lista_de_listas:
+                linha_segura = linha + ["N/A"] * (30 - len(linha)) if len(linha) < 30 else linha[:30]
+                lista_blindada.append(linha_segura)
+            
+            aba.append_rows(lista_blindada)
             st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
@@ -133,10 +140,11 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
     if planilha:
         try:
             aba = planilha.worksheet("catequizandos")
-            celula = aba.find(str(id_catequizando))
+            celula = aba.find(str(id_catequizando), in_column=1) # Busca estrita na Coluna A
             if celula:
-                # RIGOR 30 COLUNAS: Atualiza de A até AD
-                aba.update(f"A{celula.row}:AD{celula.row}", [novos_dados_lista])
+                # RIGOR 30 COLUNAS: Preenche com N/A se faltar dado, corta se sobrar
+                dados_seguros = novos_dados_lista + ["N/A"] * (30 - len(novos_dados_lista)) if len(novos_dados_lista) < 30 else novos_dados_lista[:30]
+                aba.update(f"A{celula.row}:AD{celula.row}", [dados_seguros])
                 st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
@@ -161,7 +169,7 @@ def excluir_turma(id_turma):
     if planilha:
         try:
             aba = planilha.worksheet("turmas")
-            celula = aba.find(str(id_turma))
+            celula = aba.find(str(id_turma), in_column=1) # Busca estrita na Coluna A
             if celula:
                 aba.delete_rows(celula.row)
                 st.cache_data.clear(); return True
@@ -200,10 +208,11 @@ def atualizar_turma(id_turma, novos_dados_lista):
     if planilha:
         try:
             aba = planilha.worksheet("turmas")
-            celula = aba.find(str(id_turma))
+            celula = aba.find(str(id_turma), in_column=1) # Busca estrita na Coluna A
             if celula:
                 # RIGOR 10 COLUNAS: Atualiza de A até J
-                aba.update(f"A{celula.row}:J{celula.row}", [novos_dados_lista])
+                dados_seguros = novos_dados_lista + [""] * (10 - len(novos_dados_lista)) if len(novos_dados_lista) < 10 else novos_dados_lista[:10]
+                aba.update(f"A{celula.row}:J{celula.row}", [dados_seguros])
                 st.cache_data.clear(); return True
         except: return False
     return False
@@ -214,14 +223,11 @@ def atualizar_usuario(email_original, novos_dados_lista):
     if planilha:
         try:
             aba = planilha.worksheet("usuarios")
-            celula = aba.find(str(email_original))
+            celula = aba.find(str(email_original), in_column=2) # Busca estrita na Coluna B (Email)
             if celula:
                 # Garante que a lista tenha exatamente 14 itens antes de gravar
-                while len(novos_dados_lista) < 14:
-                    novos_dados_lista.append("")
-                
-                # Atualiza o intervalo exato de A até N
-                aba.update(f"A{celula.row}:N{celula.row}", [novos_dados_lista[:14]], value_input_option='USER_ENTERED')
+                dados_seguros = novos_dados_lista + [""] * (14 - len(novos_dados_lista)) if len(novos_dados_lista) < 14 else novos_dados_lista[:14]
+                aba.update(f"A{celula.row}:N{celula.row}", [dados_seguros], value_input_option='USER_ENTERED')
                 st.cache_data.clear()
                 return True
         except: pass
@@ -277,10 +283,8 @@ def excluir_tema_cronograma(turma, titulo_tema):
     if planilha:
         try:
             aba = planilha.worksheet("cronograma")
-            # Busca a linha que contém a turma e o tema
             celulas = aba.findall(str(titulo_tema))
             for celula in celulas:
-                # Verifica se na mesma linha a coluna da turma (B=2) coincide
                 if aba.cell(celula.row, 2).value == turma:
                     aba.delete_rows(celula.row)
                     st.cache_data.clear()
@@ -289,22 +293,17 @@ def excluir_tema_cronograma(turma, titulo_tema):
     return False
 
 def sincronizar_renomeacao_turma_catequizandos(nome_antigo, nome_novo):
-    """
-    Varre a aba catequizandos e atualiza o nome da etapa 
-    para todos os vinculados ao nome antigo.
-    """
+    """Varre a aba catequizandos e atualiza o nome da etapa."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("catequizandos")
             dados = aba.get_all_values()
-            if len(dados) < 2: return True # Nada para atualizar
+            if len(dados) < 2: return True 
             
             headers = [h.lower() for h in dados[0]]
             col_etapa = headers.index("etapa") + 1
             
-            # Localiza todas as linhas que precisam de atualização
-            celulas_para_atualizar = []
             for i, linha in enumerate(dados[1:], start=2):
                 if linha[col_etapa-1] == nome_antigo:
                     aba.update_cell(i, col_etapa, nome_novo)
@@ -322,9 +321,8 @@ def atualizar_evento_sacramento(id_evento, novos_dados):
     if planilha:
         try:
             aba = planilha.worksheet("sacramentos_eventos")
-            celula = aba.find(str(id_evento))
+            celula = aba.find(str(id_evento), in_column=1)
             if celula:
-                # Atualiza as colunas A até E (ID, Tipo, Data, Turmas, Catequista)
                 aba.update(f"A{celula.row}:E{celula.row}", [novos_dados])
                 st.cache_data.clear()
                 return True
@@ -337,9 +335,8 @@ def atualizar_formacao(id_f, novos_dados):
     if planilha:
         try:
             aba = planilha.worksheet("formacoes")
-            celula = aba.find(str(id_f))
+            celula = aba.find(str(id_f), in_column=1)
             if celula:
-                # Atualiza as colunas A até F (ID, Tema, Data, Formador, Local, Status)
                 aba.update(f"A{celula.row}:F{celula.row}", [novos_dados])
                 st.cache_data.clear()
                 return True
@@ -351,15 +348,12 @@ def excluir_formacao_completa(id_f):
     planilha = conectar_google_sheets()
     if planilha:
         try:
-            # 1. Remove da aba formacoes
             aba_f = planilha.worksheet("formacoes")
-            cel_f = aba_f.find(str(id_f))
+            cel_f = aba_f.find(str(id_f), in_column=1)
             if cel_f: aba_f.delete_rows(cel_f.row)
             
-            # 2. Remove presenças vinculadas
             aba_p = planilha.worksheet("presenca_formacao")
-            celulas_p = aba_p.findall(str(id_f))
-            # Deleta de baixo para cima para não perder o índice
+            celulas_p = aba_p.findall(str(id_f), in_column=1)
             for cel in sorted(celulas_p, key=lambda x: x.row, reverse=True):
                 aba_p.delete_rows(cel.row)
                 
@@ -399,7 +393,7 @@ def atualizar_reuniao_pais(id_r, novos_dados):
     if planilha:
         try:
             aba = planilha.worksheet("reunioes_pais")
-            celula = aba.find(str(id_r))
+            celula = aba.find(str(id_r), in_column=1)
             if celula:
                 aba.update(f"A{celula.row}:F{celula.row}", [novos_dados])
                 st.cache_data.clear()
@@ -415,12 +409,9 @@ def atualizar_encontro_existente(data_e, turma_e, novos_dados):
     if planilha:
         try:
             aba = planilha.worksheet("encontros")
-            # Busca a célula da data (Coluna A)
-            celulas_data = aba.findall(str(data_e))
+            celulas_data = aba.findall(str(data_e), in_column=1)
             for celula in celulas_data:
-                # Verifica se na mesma linha a turma (Coluna B) coincide
                 if aba.cell(celula.row, 2).value == turma_e:
-                    # Atualiza a linha (Data, Turma, Tema, Catequista, Obs)
                     aba.update(f"A{celula.row}:E{celula.row}", [novos_dados])
                     st.cache_data.clear()
                     return True
@@ -437,7 +428,6 @@ def marcar_tema_realizado_cronograma(turma, tema):
             celulas = aba.findall(str(tema))
             for celula in celulas:
                 if aba.cell(celula.row, 2).value == turma:
-                    # Coluna E (5) recebe o status
                     aba.update_cell(celula.row, 5, "REALIZADO")
                     st.cache_data.clear()
                     return True
@@ -451,12 +441,8 @@ def adicionar_novo_usuario(dados_usuario):
         try:
             aba = planilha.worksheet("usuarios")
             proxima_linha = len(aba.col_values(1)) + 1
-            
-            # Garante 14 colunas
-            while len(dados_usuario) < 14:
-                dados_usuario.append("")
-                
-            aba.update(f"A{proxima_linha}:N{proxima_linha}", [dados_usuario[:14]], value_input_option='USER_ENTERED')
+            dados_seguros = dados_usuario + [""] * (14 - len(dados_usuario)) if len(dados_usuario) < 14 else dados_usuario[:14]
+            aba.update(f"A{proxima_linha}:N{proxima_linha}", [dados_seguros], value_input_option='USER_ENTERED')
             st.cache_data.clear()
             return True
         except: return False
