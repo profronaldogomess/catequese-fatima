@@ -263,15 +263,40 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
 # ==============================================================================
 
 def _desenhar_corpo_ficha(pdf, dados):
-    """Desenha o corpo moderno da ficha de inscrição sem emojis para evitar erro de interrogação."""
+    """Desenha o corpo moderno da ficha de inscrição com herança de Turma."""
+    from database import ler_aba # Importação local para não quebrar dependências
+    
     y_base = pdf.get_y()
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
     is_adulto = idade_real >= 18
     
+    # --- LÓGICA DE HERANÇA (TURNO E LOCAL) ---
+    etapa_aluno = str(dados.get('etapa', '')).strip()
+    turno_oficial = ""
+    local_oficial = ""
+    
+    df_turmas = ler_aba("turmas")
+    if not df_turmas.empty:
+        turma_info = df_turmas[df_turmas['nome_turma'].str.strip() == etapa_aluno]
+        if not turma_info.empty:
+            turno_oficial = str(turma_info.iloc[0].get('turno', '')).upper()
+            local_oficial = str(turma_info.iloc[0].get('local', '')).upper()
+    
+    # Fallback caso a turma não exista no banco
+    if not turno_oficial or turno_oficial == "N/A":
+        turno_oficial = str(dados.get('turno', '')).upper()
+    if not local_oficial or local_oficial == "N/A":
+        local_oficial = str(dados.get('local_encontro', '')).upper()
+
+    # Correção do Bug do "N" (Busca palavra exata)
+    mark_m = "X" if "MANHÃ" in turno_oficial or turno_oficial == "M" else " "
+    mark_t = "X" if "TARDE" in turno_oficial or turno_oficial == "T" else " "
+    mark_n = "X" if "NOITE" in turno_oficial or turno_oficial == "N" else " "
+    
     # --- CABEÇALHO DA FICHA (BOX SUPERIOR) ---
     pdf.set_fill_color(240, 242, 246)
-    pdf.rect(10, y_base, 190, 22, 'F')
-    pdf.rect(10, y_base, 190, 22)
+    pdf.rect(10, y_base, 190, 25, 'F') # Altura aumentada para 25 para caber o Local
+    pdf.rect(10, y_base, 190, 25)
     
     pdf.set_xy(15, y_base + 4)
     pdf.set_font("helvetica", "B", 14)
@@ -284,18 +309,19 @@ def _desenhar_corpo_ficha(pdf, dados):
     
     pdf.set_x(15)
     pdf.set_font("helvetica", "B", 11)
-    pdf.cell(130, 7, limpar_texto(f"ETAPA: {dados.get('etapa', 'N/A')}"), ln=0)
+    pdf.cell(130, 7, limpar_texto(f"ETAPA: {etapa_aluno if etapa_aluno else 'N/A'}"), ln=0)
     
-    # Turno e Local
-    turno = str(dados.get('turno', '')).upper()
-    mark_m = "X" if "M" in turno else " "
-    mark_t = "X" if "T" in turno else " "
-    mark_n = "X" if "N" in turno else " "
     pdf.set_font("helvetica", "", 9)
     pdf.cell(50, 7, limpar_texto(f"TURNO: ( {mark_m} ) M  ( {mark_t} ) T  ( {mark_n} ) N"), ln=1, align='R')
+    
+    # NOVO: Inserção do Local do Encontro
+    pdf.set_x(15)
+    pdf.set_font("helvetica", "B", 9)
+    pdf.set_text_color(100, 100, 100) # Cinza escuro para diferenciar
+    pdf.cell(130, 5, limpar_texto(f"LOCAL: {local_oficial if local_oficial else 'NÃO DEFINIDO'}"), ln=1)
 
     # --- SEÇÃO 1: IDENTIFICAÇÃO ---
-    pdf.ln(5)
+    pdf.set_y(y_base + 28) # Ajuste do Y base para a próxima seção
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
