@@ -1,10 +1,21 @@
+# ==============================================================================
 # ARQUIVO: ai_engine.py
+# VERSÃO: 3.0.0 - PROMPTS BLINDADOS E FILTRO ANTI-MARKDOWN
 # MISSÃO: Motor de Inteligência Artificial para Auditoria Pastoral e Familiar.
+# ==============================================================================
 from google import genai
 import streamlit as st
 from datetime import date
 
 MODELO_IA = "gemini-2.0-flash-lite-preview-02-05" 
+
+def limpar_formatacao_ia(texto):
+    """
+    Garante que a IA não quebre a interface do Streamlit ou o FPDF 
+    com artefatos de Markdown indesejados (como negritos ou itálicos).
+    """
+    if not texto: return ""
+    return texto.replace("**", "").replace("*", "")
 
 def gerar_analise_pastoral(resumo_dados):
     """Gera análise técnica para o Dashboard Principal."""
@@ -16,14 +27,14 @@ def gerar_analise_pastoral(resumo_dados):
         
         DIRETRIZES:
         1. NÃO use saudações.
-        2. NÃO use negrito com asteriscos (**).
+        2. NÃO use formatação markdown (sem asteriscos).
         3. Use linguagem formal e eclesiástica técnica.
         4. Foque em tendências e necessidades de infraestrutura.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
-        return "Análise técnica indisponível."
+        return limpar_formatacao_ia(response.text)
+    except Exception as e:
+        return "Análise técnica indisponível no momento."
 
 def gerar_relatorio_sacramentos_ia(resumo_sacramentos):
     """Gera auditoria com foco em Impedimentos Canônicos e Preparação Pastoral."""
@@ -40,19 +51,16 @@ def gerar_relatorio_sacramentos_ia(resumo_sacramentos):
 
         REGRAS:
         - Use termos: 'Impedimento Canônico', 'Regularização Matrimonial', 'Estado de Graça', 'Sanação'.
-        - NÃO use asteriscos (**) para negrito.
+        - NÃO use formatação markdown (sem asteriscos).
         - Seja técnico, direto e pastoral.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
+        return limpar_formatacao_ia(response.text)
+    except Exception as e:
         return "Auditoria indisponível no momento."
     
 def analisar_saude_familiar_ia(dados_familia):
-    """
-    NOVA FUNÇÃO: Analisa o perfil das famílias para sugerir ações da Pastoral Familiar.
-    Detecta carências sacramentais e necessidades de regularização matrimonial.
-    """
+    """Analisa o perfil das famílias para sugerir ações da Pastoral Familiar."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         prompt = f"""
@@ -65,23 +73,23 @@ def analisar_saude_familiar_ia(dados_familia):
         3. APOIO SOCIAL: Identifique necessidades baseadas na situação familiar.
         
         REGRAS CRÍTICAS:
-        - NÃO use asteriscos (**) para negrito.
+        - NÃO use formatação markdown (sem asteriscos).
         - NÃO use saudações.
         - Use terminologia técnica: 'Igreja Doméstica', 'Matrimônio Religioso', 'RICA'.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
+        return limpar_formatacao_ia(response.text)
     except Exception as e:
-        return f"Análise de saúde familiar indisponível no momento. (Erro: {str(e)})"
+        return "Análise de saúde familiar indisponível no momento."
 
 def gerar_mensagem_whatsapp(tema, presentes, faltosos):
     """Gera texto para engajamento no WhatsApp da turma."""
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-        prompt = f"Escreva uma mensagem curta para WhatsApp. Tema: {tema}. Presentes: {presentes}. Faltosos: {faltosos}."
+        prompt = f"Escreva uma mensagem curta para WhatsApp. Tema: {tema}. Presentes: {presentes}. Faltosos: {faltosos}. Sem usar asteriscos."
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
+        return limpar_formatacao_ia(response.text)
+    except Exception as e:
         return "Olá! Deus abençoe a todos pelo encontro de hoje!"
 
 def analisar_turma_local(nome_turma, dados_resumo):
@@ -95,12 +103,13 @@ def analisar_turma_local(nome_turma, dados_resumo):
         1. JAMAIS use termos como 'aula', 'prova', 'curso', 'aluno' ou 'professor'.
         2. USE: 'encontro', 'itinerário', 'experiência de fé', 'catequizando' e 'catequista'.
         3. FOQUE na caminhada comunitária e na vivência dos sacramentos como marcos da Iniciação.
-        4. NÃO use asteriscos (**) para negrito.
+        4. NÃO use formatação markdown (sem asteriscos).
         5. Seja direto e técnico-pastoral.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except: return "Análise pastoral indisponível."
+        return limpar_formatacao_ia(response.text)
+    except Exception as e: 
+        return "Análise pastoral indisponível."
 
 def gerar_mensagem_reacolhida_ia(nome_catequizando, nome_turma):
     """Gera uma mensagem carinhosa e pastoral para catequizandos faltosos."""
@@ -115,22 +124,21 @@ def gerar_mensagem_reacolhida_ia(nome_catequizando, nome_turma):
         1. O tom deve ser de SAUDADE e ACOLHIMENTO, nunca de cobrança ou bronca.
         2. Use termos como 'sentimos sua falta', 'nossa comunidade fica mais completa com você', 'caminhada de fé'.
         3. JAMAIS use termos escolares como 'aula', 'falta', 'matéria' ou 'curso'.
-        4. NÃO use asteriscos (**) para negrito.
+        4. NÃO use formatação markdown (sem asteriscos).
         5. A mensagem deve ser curta (máximo 3 parágrafos pequenos).
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
+        return limpar_formatacao_ia(response.text)
+    except Exception as e:
         return f"Olá! Sentimos muito a sua falta em nosso último encontro da catequese. A turma {nome_turma} não é a mesma sem você! Esperamos te ver no próximo encontro para continuarmos nossa caminhada de fé. Deus abençoe!"
 
 def gerar_mensagem_cobranca_doc_ia(nome_catequizando, docs, turma, nome_contato, vinculo):
-    """Gera mensagem personalizada para cobrança de documentos (Corrigida para 5 parâmetros)."""
+    """Gera mensagem personalizada para cobrança de documentos."""
     ano_atual = date.today().year
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         
-        # Ajusta o tom da conversa baseado no vínculo (Próprio ou Responsável)
-        if vinculo == "Próprio":
+        if vinculo.upper() == "PRÓPRIO" or vinculo.upper() == "PROPRIO":
             tratamento = f"Olá, {nome_contato}"
             referencia = "sua inscrição"
         else:
@@ -145,16 +153,16 @@ def gerar_mensagem_cobranca_doc_ia(nome_catequizando, docs, turma, nome_contato,
         REGRAS:
         1. Use um tom acolhedor e paroquial.
         2. Não use termos escolares (aula, curso). Use 'itinerário' ou 'caminhada'.
-        3. NÃO use asteriscos (**) para negrito.
+        3. NÃO use formatação markdown (sem asteriscos).
         4. Termine com 'Deus abençoe'.
         """
         response = client.models.generate_content(model=MODELO_IA, contents=prompt)
-        return response.text
-    except:
+        return limpar_formatacao_ia(response.text)
+    except Exception as e:
         return f"Paz e Bem, {nome_contato}! Notamos que faltam documentos ({docs}) para {nome_catequizando} na turma {turma}. Poderia nos entregar? Deus abençoe!"
 
 def gerar_mensagem_atualizacao_cadastral_ia(nome_catequizando, dados_atuais, nome_contato):
-    """Método 2: Foco em Conferência de Dados com Ano Automático."""
+    """Foco em Conferência de Dados com Ano Automático."""
     ano_atual = date.today().year
     try:
         client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
@@ -164,6 +172,7 @@ def gerar_mensagem_atualizacao_cadastral_ia(nome_catequizando, dados_atuais, nom
         continuam os mesmos para a caminhada de {ano_atual}: {dados_atuais}. 
         Tom de acolhida, sem asteriscos e termine com 'Deus abençoe'.
         """
-        return client.models.generate_content(model=MODELO_IA, contents=prompt).text
-    except: 
+        response = client.models.generate_content(model=MODELO_IA, contents=prompt)
+        return limpar_formatacao_ia(response.text)
+    except Exception as e: 
         return f"Olá! Poderia confirmar os dados de {nome_catequizando} para {ano_atual}? Deus abençoe!"
