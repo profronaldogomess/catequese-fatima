@@ -1353,7 +1353,7 @@ elif menu == "🏫 Gestão de Turmas":
                 ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats], key="edit_cats_turma")
                 
                 col_btn_save, col_btn_del = st.columns([3, 1])
-                
+             
                 with col_btn_save:
                     if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", key="btn_save_edit_turma", use_container_width=True):
                         with st.spinner("Processando atualizações e movendo catequizandos..."):
@@ -1361,8 +1361,8 @@ elif menu == "🏫 Gestão de Turmas":
                             
                             if atualizar_turma(d['id_turma'], lista_up):
                                 if en != nome_turma_original:
-                                    from database import sincronizar_renomeacao_turma_catequizandos
-                                    sincronizar_renomeacao_turma_catequizandos(nome_turma_original, en)
+                                    from database import sincronizar_renomeacao_turma_geral
+                                    sincronizar_renomeacao_turma_geral(nome_turma_original, en)
                                 
                                 planilha = conectar_google_sheets()
                                 aba_u = planilha.worksheet("usuarios")
@@ -1382,8 +1382,37 @@ elif menu == "🏫 Gestão de Turmas":
                                             if nome_turma_original in v_list: v_list.remove(nome_turma_original); mudou = True
                                         if mudou: aba_u.update_cell(celula.row, 5, ", ".join(v_list))
                                 
-                                st.success(f"✅ Turma e Catequizandos atualizados para '{en}'!")
+                                st.success(f"✅ Turma e Histórico atualizados para '{en}'!")
                                 st.cache_data.clear(); time.sleep(1); st.rerun()
+
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
+                    st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
+                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_turma")
+                    
+                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
+                        with st.spinner("Movendo catequizandos e limpando histórico..."):
+                            alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
+                            if not alunos_da_turma.empty:
+                                ids_para_mover = alunos_da_turma['id_catequizando'].tolist()
+                                mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
+                            
+                            planilha = conectar_google_sheets()
+                            aba_u = planilha.worksheet("usuarios")
+                            for _, cat_row in equipe_tecnica.iterrows():
+                                v_atual = str(cat_row.get('turma_vinculada', ''))
+                                if sel_t in v_atual:
+                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
+                                    if sel_t in v_list:
+                                        v_list.remove(sel_t)
+                                        celula_u = aba_u.find(cat_row['nome'], in_column=1)
+                                        if celula_u: aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
+                            
+                            if excluir_turma(d['id_turma']):
+                                from database import limpar_lixo_turma_excluida
+                                limpar_lixo_turma_excluida(sel_t)
+                                st.success(f"Turma excluída! {len(alunos_da_turma)} catequizandos movidos para a Fila de Espera e histórico limpo.")
+                                st.cache_data.clear(); time.sleep(2); st.rerun()
 
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
@@ -2122,7 +2151,7 @@ elif menu == "👥 Gestão de Catequistas":
                         if "pdf_catequista" in st.session_state:
                             st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
-                with col_edit:
+            with col_edit:
                     hoje = date.today()
                     d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
 
@@ -2181,20 +2210,62 @@ elif menu == "👥 Gestão de Catequistas":
                             dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                            # CORREÇÃO 2: Converter as datas para string e respeitar os checkboxes
+                            # Converter as datas para string e respeitar os checkboxes
                             str_ini = str(dt_ini) if has_ini else ""
                             str_bat = str(dt_bat) if has_bat else ""
                             str_euc = str(dt_euc) if has_euc else ""
                             str_cri = str(dt_cri) if has_cri else ""
                             str_min = str(dt_min) if has_min else ""
 
-                            dados_up = [
+                            dados_up =[
                                 ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
                                 ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
-                                str(u.iloc[12]) if len(u) > 12 else "", ed_emergencia
+                                str(u.iloc[13]) if len(u) > 13 else "", ed_emergencia
                             ]
+                            
+                            nome_cat_original = str(u.get('nome', ''))
+                            
                             if atualizar_usuario(u['email'], dados_up):
-                                st.success("✅ Cadastro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                # --- INÍCIO DA SINCRONIZAÇÃO REVERSA (USUÁRIOS -> TURMAS) ---
+                                with st.spinner("Sincronizando catequista com as turmas e histórico..."):
+                                    try:
+                                        # Se o nome do catequista mudou, atualiza o histórico primeiro
+                                        if ed_nome != nome_cat_original:
+                                            from database import sincronizar_renomeacao_catequista
+                                            sincronizar_renomeacao_catequista(nome_cat_original, ed_nome)
+                                            
+                                        planilha = conectar_google_sheets()
+                                        if planilha:
+                                            aba_t = planilha.worksheet("turmas")
+                                            nome_cat = ed_nome
+                                            turmas_antigas =[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip()]
+                                            
+                                            # Varrer todas as turmas afetadas (as que ele entrou e as que ele saiu)
+                                            turmas_afetadas = set(turmas_antigas + ed_turmas)
+                                            
+                                            for t_nome in turmas_afetadas:
+                                                cel_t = aba_t.find(t_nome, in_column=2) # Coluna B é nome_turma
+                                                if cel_t:
+                                                    v_atual = aba_t.cell(cel_t.row, 5).value or "" # Coluna E é catequista_responsavel
+                                                    v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
+                                                    mudou = False
+                                                    
+                                                    if t_nome in ed_turmas:
+                                                        if nome_cat not in v_list:
+                                                            v_list.append(nome_cat)
+                                                            mudou = True
+                                                    else:
+                                                        if nome_cat in v_list:
+                                                            v_list.remove(nome_cat)
+                                                            mudou = True
+                                                            
+                                                    if mudou:
+                                                        aba_t.update_cell(cel_t.row, 5, ", ".join(v_list))
+                                    except Exception as e:
+                                        st.warning(f"Aviso: Erro ao sincronizar com a aba turmas: {e}")
+                                # --- FIM DA SINCRONIZAÇÃO ---
+                                
+                                st.success("✅ Cadastro atualizado e sincronizado com as turmas!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     with tab_novo:
         st.subheader("➕ Criar Novo Acesso para Equipe")
