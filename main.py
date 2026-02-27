@@ -591,17 +591,22 @@ elif menu == "📚 Minha Turma":
         # --- NOVO: EXTRATO DE CAMINHADA ---
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander("📜 Ver Extrato de Caminhada (Presenças e Temas)"):
-            pres_aluno = minhas_pres[minhas_pres['id_catequizando'] == row['id_catequizando']].copy()
+            # Blindagem: Só filtra se a planilha não estiver vazia e a coluna existir
+            if not minhas_pres.empty and 'id_catequizando' in minhas_pres.columns:
+                pres_aluno = minhas_pres[minhas_pres['id_catequizando'] == row['id_catequizando']].copy()
+            else:
+                pres_aluno = pd.DataFrame()
+                
             if not pres_aluno.empty:
-                pres_aluno['data_dt'] = pd.to_datetime(pres_aluno['data_encontro'], errors='coerce')
+                pres_aluno['data_dt'] = pd.to_datetime(pres_aluno.get('data_encontro', ''), errors='coerce')
                 pres_aluno = pres_aluno.sort_values('data_dt', ascending=False)
                 
                 for _, p in pres_aluno.iterrows():
-                    icone_p = "✅" if p['status'] == "PRESENTE" else "❌"
-                    cor_p = "#2e7d32" if p['status'] == "PRESENTE" else "#e03d11"
-                    data_f = formatar_data_br(p['data_encontro'])
+                    icone_p = "✅" if p.get('status', '') == "PRESENTE" else "❌"
+                    cor_p = "#2e7d32" if p.get('status', '') == "PRESENTE" else "#e03d11"
+                    data_f = formatar_data_br(p.get('data_encontro', ''))
                     tema_f = p.get('tema_do_dia', 'Tema não registrado')
-                    st.markdown(f"<div style='padding:5px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p['status']})</i></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='padding:5px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p.get('status', '')})</i></div>", unsafe_allow_html=True)
             else:
                 st.info("Nenhum registro de presença/falta para este catequizando.")
 
@@ -1004,9 +1009,9 @@ elif menu == "👤 Perfil Individual":
                         ce1, ce2 = st.columns([2, 1])
                         ed_nome = ce1.text_input("Nome Completo", value=dados['nome_completo']).upper()
                         
-                        opcoes_status = ["ATIVO", "TRANSFERIDO", "DESISTENTE", "INATIVO"]
+                        opcoes_status =["ATIVO", "CONCLUÍDO", "TRANSFERIDO", "DESISTENTE", "INATIVO"]
                         idx_status = opcoes_status.index(status_atual) if status_atual in opcoes_status else 0
-                        ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status, help="Se mudar para Desistente, ele sairá das listas de chamada.")
+                        ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status, help="CONCLUÍDO: Finalizou a Crisma. DESISTENTE: Saiu da catequese.")
 
                         c3, c4, c5 = st.columns([1, 1, 2])
                         ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), format="DD/MM/YYYY")
@@ -1120,17 +1125,22 @@ elif menu == "👤 Perfil Individual":
                     # --- NOVO: CONTEÚDO DA ABA DE EXTRATO ---
                     with sub_tab_hist:
                         st.subheader("📜 Histórico de Encontros e Temas")
-                        pres_aluno = df_pres[df_pres['id_catequizando'] == dados['id_catequizando']].copy()
+                        # Blindagem: Só filtra se a planilha não estiver vazia e a coluna existir
+                        if not df_pres.empty and 'id_catequizando' in df_pres.columns:
+                            pres_aluno = df_pres[df_pres['id_catequizando'] == dados['id_catequizando']].copy()
+                        else:
+                            pres_aluno = pd.DataFrame()
+                            
                         if not pres_aluno.empty:
-                            pres_aluno['data_dt'] = pd.to_datetime(pres_aluno['data_encontro'], errors='coerce')
+                            pres_aluno['data_dt'] = pd.to_datetime(pres_aluno.get('data_encontro', ''), errors='coerce')
                             pres_aluno = pres_aluno.sort_values('data_dt', ascending=False)
                             
                             for _, p in pres_aluno.iterrows():
-                                icone_p = "✅" if p['status'] == "PRESENTE" else "❌"
-                                cor_p = "#2e7d32" if p['status'] == "PRESENTE" else "#e03d11"
-                                data_f = formatar_data_br(p['data_encontro'])
+                                icone_p = "✅" if p.get('status', '') == "PRESENTE" else "❌"
+                                cor_p = "#2e7d32" if p.get('status', '') == "PRESENTE" else "#e03d11"
+                                data_f = formatar_data_br(p.get('data_encontro', ''))
                                 tema_f = p.get('tema_do_dia', 'Tema não registrado')
-                                st.markdown(f"<div style='padding:8px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p['status']})</i></div>", unsafe_allow_html=True)
+                                st.markdown(f"<div style='padding:8px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p.get('status', '')})</i></div>", unsafe_allow_html=True)
                         else:
                             st.info("Nenhum registro de presença/falta para este catequizando.")
 
@@ -1208,13 +1218,36 @@ elif menu == "👤 Perfil Individual":
                             st.markdown("<br>", unsafe_allow_html=True)
 
         with tab_evasao_gestao:
-            st.subheader("🚩 Gestão de Evasão e Documentos de Saída")
+            st.subheader("🚩 Gestão de Evasão e Egressos (Concluídos)")
             df_saidas = df_cat[df_cat['status'] != 'ATIVO']
-            c_ev1, c_ev2, c_ev3 = st.columns(3)
-            c_ev1.metric("🔴 Desistentes", len(df_saidas[df_saidas['status'] == 'DESISTENTE']))
-            c_ev2.metric("🔵 Transferidos", len(df_saidas[df_saidas['status'] == 'TRANSFERIDO']))
-            c_ev3.metric("⚪ Inativos", len(df_saidas[df_saidas['status'] == 'INATIVO']))
             
+            c_ev1, c_ev2, c_ev3, c_ev4 = st.columns(4)
+            c_ev1.metric("🎓 Concluídos", len(df_saidas[df_saidas['status'] == 'CONCLUÍDO']))
+            c_ev2.metric("🔴 Desistentes", len(df_saidas[df_saidas['status'] == 'DESISTENTE']))
+            c_ev3.metric("🔵 Transferidos", len(df_saidas[df_saidas['status'] == 'TRANSFERIDO']))
+            c_ev4.metric("⚪ Inativos", len(df_saidas[df_saidas['status'] == 'INATIVO']))
+            
+            st.divider()
+            
+            df_evasao_real = df_saidas[df_saidas['status'] != 'CONCLUÍDO']
+            df_concluidos = df_saidas[df_saidas['status'] == 'CONCLUÍDO']
+            
+            col_lista1, col_lista2 = st.columns(2)
+            
+            with col_lista1:
+                st.markdown("#### 🎓 Galeria de Egressos (Concluíram)")
+                if not df_concluidos.empty:
+                    st.dataframe(df_concluidos[['nome_completo', 'etapa']], use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhum catequizando marcado como concluído ainda.")
+                    
+            with col_lista2:
+                st.markdown("#### 📋 Caminhadas Interrompidas")
+                if not df_evasao_real.empty:
+                    st.dataframe(df_evasao_real[['nome_completo', 'status', 'obs_pastoral_familia']], use_container_width=True, hide_index=True)
+                else:
+                    st.success("Glória a Deus! Não há registros de evasão.")
+                
             st.divider()
             
             if df_saidas.empty:
@@ -1641,12 +1674,28 @@ elif menu == "🏫 Gestão de Turmas":
                                 lista_ids_selecionados.append(al['id_catequizando'])
                     
                     st.divider()
-                    if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} CATEQUIZANDOS PARA {t_destino}", key="btn_exec_mov", use_container_width=True):
-                        if t_destino and t_origem != t_destino and lista_ids_selecionados:
-                            if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
-                                st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
-                        else: 
-                            st.error("Selecione um destino válido e ao menos um catequizando.")
+                    col_mov1, col_mov2 = st.columns(2)
+                    with col_mov1:
+                        if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} PARA {t_destino}", key="btn_exec_mov", use_container_width=True):
+                            if t_destino and t_origem != t_destino and lista_ids_selecionados:
+                                if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
+                                    st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
+                            else: 
+                                st.error("Selecione um destino válido e ao menos um catequizando.")
+                    
+                    with col_mov2:
+                        if st.button(f"🎓 CONCLUIR CAMINHADA DE {len(lista_ids_selecionados)} CATEQUIZANDOS", key="btn_exec_concluir", type="primary", use_container_width=True, help="Marca o status como CONCLUÍDO (Egresso) após a Crisma."):
+                            if lista_ids_selecionados:
+                                with st.spinner("Registrando conclusão e formatura..."):
+                                    for cid in lista_ids_selecionados:
+                                        cat_row = df_cat[df_cat['id_catequizando'] == cid].iloc[0]
+                                        lista_up = cat_row.tolist()
+                                        while len(lista_up) < 30: lista_up.append("N/A")
+                                        lista_up[12] = "CONCLUÍDO" # Índice 12 é a coluna de Status
+                                        atualizar_catequizando(cid, lista_up)
+                                    st.success(f"✅ Glória a Deus! {len(lista_ids_selecionados)} catequizandos formados com sucesso!"); st.balloons(); st.cache_data.clear(); time.sleep(2); st.rerun()
+                            else:
+                                st.error("Selecione ao menos um catequizando.")
                 else:
                     st.info("Não há catequizandos ativos nesta turma de origem.")
 
