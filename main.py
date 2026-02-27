@@ -2142,7 +2142,7 @@ elif menu == "👥 Gestão de Catequistas":
                         st.markdown(f"### {u['nome']}")
                         st.write(f"**E-mail:** {u['email']}")
                         st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
-                        st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[12] if len(u) > 12 else 'Não cadastrado'}")
+                        st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[13] if len(u) > 13 else 'Não cadastrado'}")
                         st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
                         st.write(f"**Turmas:** {u['turma_vinculada']}")
                     with c2:
@@ -2151,7 +2151,7 @@ elif menu == "👥 Gestão de Catequistas":
                         if "pdf_catequista" in st.session_state:
                             st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
 
-            with col_edit:
+                with col_edit:
                     hoje = date.today()
                     d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
 
@@ -2166,8 +2166,6 @@ elif menu == "👥 Gestão de Catequistas":
                     val_euc = converter_ou_none(u.get('data_eucaristia', ''))
                     val_cri = converter_ou_none(u.get('data_crisma', ''))
                     val_min = converter_ou_none(u.get('data_ministerio', ''))
-                    
-                    # CORREÇÃO 1: O índice correto para Emergência é 13 (Coluna N). O 12 (Coluna M) é o UUID de segurança.
                     val_emerg = u.iloc[13] if len(u) > 13 else ""
 
                     with st.form(f"form_edit_cat_{u['email']}"):
@@ -2181,7 +2179,7 @@ elif menu == "👥 Gestão de Catequistas":
                         ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
                         
                         c5, c6 = st.columns(2)
-                        ed_papel = c5.selectbox("Papel",["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
+                        ed_papel = c5.selectbox("Papel", ["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
                         ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
                         
                         lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
@@ -2210,7 +2208,6 @@ elif menu == "👥 Gestão de Catequistas":
                             dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                            # Converter as datas para string e respeitar os checkboxes
                             str_ini = str(dt_ini) if has_ini else ""
                             str_bat = str(dt_bat) if has_bat else ""
                             str_euc = str(dt_euc) if has_euc else ""
@@ -2226,10 +2223,8 @@ elif menu == "👥 Gestão de Catequistas":
                             nome_cat_original = str(u.get('nome', ''))
                             
                             if atualizar_usuario(u['email'], dados_up):
-                                # --- INÍCIO DA SINCRONIZAÇÃO REVERSA (USUÁRIOS -> TURMAS) ---
                                 with st.spinner("Sincronizando catequista com as turmas e histórico..."):
                                     try:
-                                        # Se o nome do catequista mudou, atualiza o histórico primeiro
                                         if ed_nome != nome_cat_original:
                                             from database import sincronizar_renomeacao_catequista
                                             sincronizar_renomeacao_catequista(nome_cat_original, ed_nome)
@@ -2240,13 +2235,12 @@ elif menu == "👥 Gestão de Catequistas":
                                             nome_cat = ed_nome
                                             turmas_antigas =[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip()]
                                             
-                                            # Varrer todas as turmas afetadas (as que ele entrou e as que ele saiu)
                                             turmas_afetadas = set(turmas_antigas + ed_turmas)
                                             
                                             for t_nome in turmas_afetadas:
-                                                cel_t = aba_t.find(t_nome, in_column=2) # Coluna B é nome_turma
+                                                cel_t = aba_t.find(t_nome, in_column=2)
                                                 if cel_t:
-                                                    v_atual = aba_t.cell(cel_t.row, 5).value or "" # Coluna E é catequista_responsavel
+                                                    v_atual = aba_t.cell(cel_t.row, 5).value or ""
                                                     v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
                                                     mudou = False
                                                     
@@ -2263,7 +2257,6 @@ elif menu == "👥 Gestão de Catequistas":
                                                         aba_t.update_cell(cel_t.row, 5, ", ".join(v_list))
                                     except Exception as e:
                                         st.warning(f"Aviso: Erro ao sincronizar com a aba turmas: {e}")
-                                # --- FIM DA SINCRONIZAÇÃO ---
                                 
                                 st.success("✅ Cadastro atualizado e sincronizado com as turmas!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
