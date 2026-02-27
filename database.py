@@ -292,28 +292,93 @@ def excluir_tema_cronograma(turma, titulo_tema):
         except: pass
     return False
 
-def sincronizar_renomeacao_turma_catequizandos(nome_antigo, nome_novo):
-    """Varre a aba catequizandos e atualiza o nome da etapa."""
+def sincronizar_renomeacao_turma_geral(nome_antigo, nome_novo):
+    """Varre TODAS as abas e atualiza o nome da turma (Efeito Cascata)."""
     planilha = conectar_google_sheets()
-    if planilha:
-        try:
-            aba = planilha.worksheet("catequizandos")
-            dados = aba.get_all_values()
-            if len(dados) < 2: return True 
-            
-            headers = [h.lower() for h in dados[0]]
-            col_etapa = headers.index("etapa") + 1
-            
-            for i, linha in enumerate(dados[1:], start=2):
-                if linha[col_etapa-1] == nome_antigo:
-                    aba.update_cell(i, col_etapa, nome_novo)
-            
-            st.cache_data.clear()
-            return True
-        except Exception as e:
-            st.error(f"Erro na sincronia de nomes: {e}")
-            return False
-    return False
+    if not planilha: return False
+    try:
+        # 1. Catequizandos (Coluna B - etapa)
+        aba_cat = planilha.worksheet("catequizandos")
+        celulas_cat = aba_cat.findall(str(nome_antigo), in_column=2)
+        for cel in celulas_cat: aba_cat.update_cell(cel.row, 2, nome_novo)
+        
+        # 2. Presenças (Coluna D - id_turma)
+        aba_pres = planilha.worksheet("presencas")
+        celulas_pres = aba_pres.findall(str(nome_antigo), in_column=4)
+        for cel in celulas_pres: aba_pres.update_cell(cel.row, 4, nome_novo)
+        
+        # 3. Encontros (Coluna B - turma)
+        aba_enc = planilha.worksheet("encontros")
+        celulas_enc = aba_enc.findall(str(nome_antigo), in_column=2)
+        for cel in celulas_enc: aba_enc.update_cell(cel.row, 2, nome_novo)
+        
+        # 4. Cronograma (Coluna B - etapa)
+        aba_cron = planilha.worksheet("cronograma")
+        celulas_cron = aba_cron.findall(str(nome_antigo), in_column=2)
+        for cel in celulas_cron: aba_cron.update_cell(cel.row, 2, nome_novo)
+        
+        # 5. Reuniões de Pais (Coluna D - turma_alvo)
+        aba_reu = planilha.worksheet("reunioes_pais")
+        celulas_reu = aba_reu.findall(str(nome_antigo), in_column=4)
+        for cel in celulas_reu: aba_reu.update_cell(cel.row, 4, nome_novo)
+        
+        # 6. Presença Reunião (Coluna D - turma)
+        aba_pres_reu = planilha.worksheet("presenca_reuniao")
+        celulas_pres_reu = aba_pres_reu.findall(str(nome_antigo), in_column=4)
+        for cel in celulas_pres_reu: aba_pres_reu.update_cell(cel.row, 4, nome_novo)
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na sincronia em cascata: {e}")
+        return False
+
+def sincronizar_renomeacao_catequista(nome_antigo, nome_novo):
+    """Atualiza o nome do catequista nas turmas e históricos."""
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        # 1. Turmas (Coluna E - catequista_responsavel)
+        aba_t = planilha.worksheet("turmas")
+        dados_t = aba_t.get_all_values()
+        for i, linha in enumerate(dados_t[1:], start=2):
+            cats =[c.strip() for c in str(linha[4]).split(',') if c.strip()]
+            if nome_antigo in cats:
+                cats = [nome_novo if c == nome_antigo else c for c in cats]
+                aba_t.update_cell(i, 5, ", ".join(cats))
+        
+        # 2. Encontros (Coluna D - catequista)
+        aba_enc = planilha.worksheet("encontros")
+        celulas_enc = aba_enc.findall(str(nome_antigo), in_column=4)
+        for cel in celulas_enc: aba_enc.update_cell(cel.row, 4, nome_novo)
+        
+        # 3. Sacramentos Eventos (Coluna E - catequista)
+        aba_sac = planilha.worksheet("sacramentos_eventos")
+        celulas_sac = aba_sac.findall(str(nome_antigo), in_column=5)
+        for cel in celulas_sac: aba_sac.update_cell(cel.row, 5, nome_novo)
+        
+        st.cache_data.clear()
+        return True
+    except: return False
+
+def limpar_lixo_turma_excluida(nome_turma):
+    """Remove registros órfãos de uma turma excluída."""
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        abas_colunas =[
+            ("cronograma", 2), ("encontros", 2), 
+            ("presencas", 4), ("reunioes_pais", 4), ("presenca_reuniao", 4)
+        ]
+        for nome_aba, col in abas_colunas:
+            aba = planilha.worksheet(nome_aba)
+            celulas = aba.findall(str(nome_turma), in_column=col)
+            # Deletar de baixo para cima para não bagunçar os índices
+            for cel in sorted(celulas, key=lambda x: x.row, reverse=True):
+                aba.delete_rows(cel.row)
+        st.cache_data.clear()
+        return True
+    except: return False
 
 def atualizar_evento_sacramento(id_evento, novos_dados):
     """Atualiza os dados de um evento na aba sacramentos_eventos."""
