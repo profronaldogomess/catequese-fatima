@@ -2085,21 +2085,31 @@ elif menu == "✅ Fazer Chamada":
         """, unsafe_allow_html=True)
 
         for _, row in lista_cat.iterrows():
-            is_niver = eh_aniversariante_da_semana(row['data_nascimento'])
-            if is_niver: contador_niver += 1
+            # Passamos a data do encontro (data_enc) para a função avaliar a semana correta
+            status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
+            if status_niver: contador_niver += 1
             
             with st.container():
                 col_info, col_check = st.columns([3, 1])
                 with col_info:
-                    niver_tag = "🎂 <b>NIVER!</b> " if is_niver else ""
+                    if status_niver == "DIA":
+                        niver_tag = "🎂 <b style='color:#e03d11;'>NIVER HOJE!</b> "
+                    elif status_niver == "SEMANA":
+                        niver_tag = "🎈 <b style='color:#ffa000;'>NIVER NA SEMANA!</b> "
+                    else:
+                        niver_tag = ""
+                        
                     st.markdown(f"{niver_tag}{row['nome_completo']}", unsafe_allow_html=True)
-                    if is_niver:
+                    
+                    if status_niver:
                         if st.button(f"🎨 Card Parabéns", key=f"btn_niver_{row['id_catequizando']}"):
-                            card_img = gerar_card_aniversario(f"{data_enc.day} | CATEQUIZANDO | {row['nome_completo']}", tipo="DIA")
+                            # Pega o dia real do aniversário para o card ficar correto
+                            dia_real = formatar_data_br(row['data_nascimento']).split('/')[0]
+                            card_img = gerar_card_aniversario(f"{dia_real} | CATEQUIZANDO | {row['nome_completo']}", tipo="DIA")
                             if card_img: st.image(card_img, width=150)
 
                 with col_check:
-                    # NOVO: Carrega o status anterior se a chamada já existir
+                    # Carrega o status anterior se a chamada já existir
                     default_pres = False
                     if not df_pres_existente.empty:
                         aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
