@@ -1137,15 +1137,36 @@ def sugerir_etapa(data_nascimento):
     elif idade <= 13: return "TERCEIRA ETAPA"
     return "ADULTOS"
 
-def eh_aniversariante_da_semana(data_nasc_str):
+def eh_aniversariante_da_semana(data_nasc_str, data_referencia=None):
+    """
+    Verifica se o aniversário cai na mesma semana (Domingo a Sábado) da data de referência.
+    Retorna: 'DIA' (se for no dia exato), 'SEMANA' (se for na mesma semana), ou False.
+    """
     try:
         d_str = formatar_data_br(data_nasc_str)
         if d_str == "N/A": return False
         nasc = dt_module.datetime.strptime(d_str, "%d/%m/%Y").date()
-        hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
-        nasc_este_ano = nasc.replace(year=hoje.year)
-        diff = (nasc_este_ano - hoje).days
-        return 0 <= diff <= 7
+        
+        if data_referencia is None:
+            data_referencia = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+        elif isinstance(data_referencia, str):
+            data_referencia = dt_module.datetime.strptime(formatar_data_br(data_referencia), "%d/%m/%Y").date()
+        
+        # 1. É exatamente no dia do encontro?
+        if nasc.day == data_referencia.day and nasc.month == data_referencia.month:
+            return "DIA"
+        
+        # 2. É na mesma semana (Domingo a Sábado)?
+        # isoweekday() retorna 1 (Segunda) a 7 (Domingo).
+        dias_para_domingo = data_referencia.isoweekday() % 7
+        domingo = data_referencia - dt_module.timedelta(days=dias_para_domingo)
+        
+        for i in range(7):
+            dia_semana = domingo + dt_module.timedelta(days=i)
+            if nasc.day == dia_semana.day and nasc.month == dia_semana.month:
+                return "SEMANA"
+                
+        return False
     except: return False
 
 def converter_para_data(valor_str):
