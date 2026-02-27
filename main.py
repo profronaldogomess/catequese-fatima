@@ -2040,16 +2040,25 @@ elif menu == "✅ Fazer Chamada":
 
     df_cron_c = ler_aba("cronograma")
     sugestao_tema = ""
-    if not df_cron_c.empty:
-        filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
-        if not filtro_cron.empty:
-            sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
-            st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
-            if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
-                st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
+    
+    # NOVO: Verifica se já existe chamada para esta data e turma
+    df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
+    tema_salvo = ""
+    
+    if not df_pres_existente.empty:
+        st.info("📝 **Editando chamada já realizada neste dia.** Os dados anteriores foram carregados.")
+        tema_salvo = df_pres_existente.iloc[0].get('tema_do_dia', '')
+    else:
+        if not df_cron_c.empty:
+            filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
+            if not filtro_cron.empty:
+                sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
+                st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
+                if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
+                    st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
 
     tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
-                             value=st.session_state.get(f"tema_input_{turma_sel}", ""), 
+                             value=tema_salvo if tema_salvo else st.session_state.get(f"tema_input_{turma_sel}", ""), 
                              key=f"tema_field_{turma_sel}", help="Digite o tema para liberar o botão de salvar.").upper()
 
     lista_cat = df_cat[(df_cat['etapa'] == turma_sel) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
@@ -2064,7 +2073,7 @@ elif menu == "✅ Fazer Chamada":
         
         st.markdown("---")
         
-        registros_presenca = []
+        registros_presenca =[]
         contador_p = 0
         contador_a = 0
         contador_niver = 0
@@ -2090,7 +2099,14 @@ elif menu == "✅ Fazer Chamada":
                             if card_img: st.image(card_img, width=150)
 
                 with col_check:
-                    presente = st.toggle("P", key=f"p_{row['id_catequizando']}_{data_enc}")
+                    # NOVO: Carrega o status anterior se a chamada já existir
+                    default_pres = False
+                    if not df_pres_existente.empty:
+                        aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
+                        if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
+                            default_pres = True
+                            
+                    presente = st.toggle("P", value=default_pres, key=f"p_{row['id_catequizando']}_{data_enc}")
                     if presente: contador_p += 1
                     else: contador_a += 1
 
