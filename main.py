@@ -836,23 +836,26 @@ elif menu == "📝 Cadastrar Catequizando":
         st.subheader("🏥 4. Saúde e Documentação")
         s1, s2 = st.columns(2)
         
-        tem_med = s1.radio("Toma algum medicamento ou tem alergia?", ["NÃO", "SIM"], horizontal=True)
+        tem_med = s1.radio("Toma algum medicamento ou tem alergia?",["NÃO", "SIM"], horizontal=True)
         medicamento = "NÃO"
         if tem_med == "SIM":
             medicamento = s1.text_input("Descreva o medicamento/alergia:").upper()
             
-        tgo = s2.selectbox("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"], help="Marque SIM para autismo, TDAH ou outras necessidades de inclusão.")
+        tem_tgo = s2.radio("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"], horizontal=True, help="Autismo, TDAH, Dislexia, etc.")
+        tgo_final = "NÃO"
+        if tem_tgo == "SIM":
+            tgo_final = s2.text_input("Qual transtorno? (Ex: TEA, TDAH, TOD, etc.)", help="Especifique o transtorno para melhor acompanhamento pastoral.").upper()
         
         st.markdown("---")
         st.markdown("**📁 Checklist de Documentos Entregues (Xerox):**")
-        docs_obrigatorios = ["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
+        docs_obrigatorios =["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
         docs_entregues = st.multiselect("Marque o que foi entregue HOJE:", docs_obrigatorios, help="Só marque o que você já tem em mãos.")
         
         faltando = [d for d in docs_obrigatorios if d not in docs_entregues]
         doc_status_k = ", ".join(faltando) if faltando else "COMPLETO"
 
         c_pref1, c_pref2 = st.columns(2)
-        turno = c_pref1.selectbox("Turno de preferência", ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
+        turno = c_pref1.selectbox("Turno de preferência",["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
         local_enc = c_pref2.text_input("Local do Encontro (Sala/Setor)").upper()
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -871,7 +874,7 @@ elif menu == "📝 Cadastrar Catequizando":
                     registro = [[
                         novo_id, etapa_inscricao, nome, str(data_nasc), batizado, 
                         contato, endereco, nome_mae, nome_pai, resp_final, 
-                        doc_status_k, qual_grupo, "ATIVO", medicamento, tgo, 
+                        doc_status_k, qual_grupo, "ATIVO", medicamento, tgo_final, 
                         estado_civil, sacramentos, prof_mae, tel_mae, prof_pai, 
                         tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo, 
                         tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia
@@ -1070,23 +1073,26 @@ elif menu == "👤 Perfil Individual":
                         s1, s2 = st.columns(2)
                         med_atual = str(dados.get('toma_medicamento_sn', 'NÃO')).upper()
                         ed_tem_med = s1.radio("Toma algum medicamento?", ["NÃO", "SIM"], index=0 if med_atual == "NÃO" else 1, horizontal=True)
-                        ed_med = s1.text_input("Descreva:", value=med_atual if med_atual != "NÃO" else "").upper() if ed_tem_med == "SIM" else "NÃO"
-                        ed_tgo = s2.selectbox("Possui TGO?", ["NÃO", "SIM"], index=0 if dados['tgo_sn'] == "NÃO" else 1)
+                        ed_med = s1.text_input("Descreva o medicamento:", value=med_atual if med_atual != "NÃO" else "").upper() if ed_tem_med == "SIM" else "NÃO"
+                        
+                        tgo_atual = str(dados.get('tgo_sn', 'NÃO')).upper()
+                        ed_tem_tgo = s2.radio("Possui TGO?", ["NÃO", "SIM"], index=0 if tgo_atual == "NÃO" else 1, horizontal=True)
+                        ed_tgo_final = s2.text_input("Qual transtorno?", value=tgo_atual if tgo_atual != "NÃO" else "").upper() if ed_tem_tgo == "SIM" else "NÃO"
 
                         st.markdown("**📁 Checklist de Documentos (Xerox):**")
-                        docs_obrigatorios = ["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
+                        docs_obrigatorios =["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
                         faltas_atuais = str(dados.get('doc_em_falta', '')).upper()
-                        entregues_pre = [d for d in docs_obrigatorios if d not in faltas_atuais]
+                        entregues_pre =[d for d in docs_obrigatorios if d not in faltas_atuais]
                         ed_docs_entregues = st.multiselect("Marque o que JÁ ESTÁ NA PASTA:", docs_obrigatorios, default=entregues_pre)
-                        novas_faltas = [d for d in docs_obrigatorios if d not in ed_docs_entregues]
+                        novas_faltas =[d for d in docs_obrigatorios if d not in ed_docs_entregues]
                         ed_doc_status_k = ", ".join(novas_faltas) if novas_faltas else "COMPLETO"
 
                         if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True):
                             obs_final = f"EMERGÊNCIA: {ed_resp} - TEL: {ed_tel_resp}" if is_adulto else dados.get('obs_pastoral_familia', '')
-                            lista_up = [
+                            lista_up =[
                                 dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
                                 ed_contato, ed_end, ed_mae, ed_pai, ed_resp, ed_doc_status_k, 
-                                ed_qual_grupo, ed_status, ed_med, ed_tgo, ed_est_civil, 
+                                ed_qual_grupo, ed_status, ed_med, ed_tgo_final, ed_est_civil, 
                                 dados.get('sacramentos_ja_feitos', 'N/A'), ed_prof_m, ed_tel_m, 
                                 ed_prof_p, ed_tel_p, ed_est_civil_pais, dados.get('sac_pais', 'N/A'), 
                                 ed_part_grupo, ed_qual_grupo, dados.get('tem_irmaos', 'NÃO'), 
@@ -1511,7 +1517,7 @@ elif menu == "🏫 Gestão de Turmas":
 
                 with col_sau:
                     st.markdown("#### 🏥 Cuidado e Inclusão")
-                    tgo_count = len(alunos_t[alunos_t['tgo_sn'] == 'SIM'])
+                    tgo_count = len(alunos_t[alunos_t['tgo_sn'] != 'NÃO'])
                     med_count = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
                     if tgo_count > 0: st.info(f"💙 **{tgo_count}** catequizando(s) com TGO (Inclusão).")
                     if med_count > 0: st.warning(f"💊 **{med_count}** fazem uso de medicamento/alergia.")
@@ -1542,7 +1548,7 @@ elif menu == "🏫 Gestão de Turmas":
                         with st.spinner("Analisando prontidão da turma..."):
                             sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
                             batizados = len(alunos_t) - sem_batismo
-                            tgo_c = len(alunos_t[alunos_t['tgo_sn'] == 'SIM'])
+                            tgo_c = len(alunos_t[alunos_t['tgo_sn'] != 'NÃO'])
                             saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
                             
                             perc_pais = 0
