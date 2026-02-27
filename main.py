@@ -2137,7 +2137,9 @@ elif menu == "👥 Gestão de Catequistas":
                     val_euc = converter_ou_none(u.get('data_eucaristia', ''))
                     val_cri = converter_ou_none(u.get('data_crisma', ''))
                     val_min = converter_ou_none(u.get('data_ministerio', ''))
-                    val_emerg = u.iloc[12] if len(u) > 12 else ""
+                    
+                    # CORREÇÃO 1: O índice correto para Emergência é 13 (Coluna N). O 12 (Coluna M) é o UUID de segurança.
+                    val_emerg = u.iloc[13] if len(u) > 13 else ""
 
                     with st.form(f"form_edit_cat_{u['email']}"):
                         st.markdown("#### 📍 Dados Cadastrais e Emergência")
@@ -2150,10 +2152,10 @@ elif menu == "👥 Gestão de Catequistas":
                         ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
                         
                         c5, c6 = st.columns(2)
-                        ed_papel = c5.selectbox("Papel", ["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
+                        ed_papel = c5.selectbox("Papel",["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
                         ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
                         
-                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
                         ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
                         
                         st.divider()
@@ -2179,9 +2181,16 @@ elif menu == "👥 Gestão de Catequistas":
                             dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
+                            # CORREÇÃO 2: Converter as datas para string e respeitar os checkboxes
+                            str_ini = str(dt_ini) if has_ini else ""
+                            str_bat = str(dt_bat) if has_bat else ""
+                            str_euc = str(dt_euc) if has_euc else ""
+                            str_cri = str(dt_cri) if has_cri else ""
+                            str_min = str(dt_min) if has_min else ""
+
                             dados_up = [
                                 ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
-                                ed_tel, str(ed_nasc), dt_ini, dt_bat, dt_euc, dt_cri, dt_min, 
+                                ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
                                 str(u.iloc[12]) if len(u) > 12 else "", ed_emergencia
                             ]
                             if atualizar_usuario(u['email'], dados_up):
