@@ -766,31 +766,36 @@ elif menu == "📝 Cadastrar Catequizando":
     tab_manual, tab_csv = st.tabs(["📄 Cadastro Individual", "📂 Importar via CSV"])
 
     with tab_manual:
-        tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True)
+        # MOTOR DE LIMPEZA: Cria uma chave dinâmica que muda após cada salvamento
+        if 'form_cad_key' not in st.session_state:
+            st.session_state.form_cad_key = 0
+        fk = st.session_state.form_cad_key
+
+        tipo_ficha = st.radio("Tipo de Inscrição:", ["Infantil/Juvenil", "Adulto"], horizontal=True, key=f"tipo_ficha_{fk}")
         
         st.info("**📋 Documentação Necessária (Xerox para a Pasta):** ✔ RG ou Certidão | ✔ Comprovante de Residência | ✔ Batistério | ✔ Certidão de Eucaristia")
 
         st.subheader("📍 1. Identificação")
         c1, c2, c3 = st.columns([2, 1, 1])
-        nome = c1.text_input("Nome Completo", help="Digite em MAIÚSCULAS sem abreviações.").upper()
-        data_nasc = c2.date_input("Data de Nascimento", value=date(2010, 1, 1), format="DD/MM/YYYY")
+        nome = c1.text_input("Nome Completo", help="Digite em MAIÚSCULAS sem abreviações.", key=f"nome_{fk}").upper()
+        data_nasc = c2.date_input("Data de Nascimento", value=date(2010, 1, 1), format="DD/MM/YYYY", key=f"data_nasc_{fk}")
         
-        lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-        etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas, help="Selecione a turma onde o catequizando será alocado.")
+        lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else[])
+        etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas, help="Selecione a turma onde o catequizando será alocado.", key=f"etapa_{fk}")
 
         c4, c5, c6 = st.columns([1.5, 1, 1.5])
         label_fone = "WhatsApp do Catequizando" if tipo_ficha == "Adulto" else "WhatsApp do Responsável"
-        contato = c4.text_input(label_fone, help="Apenas números com DDD. Ex: 73988887777")
-        batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"])
-        endereco = c6.text_input("Endereço", help="Ex: RUA SÃO JOÃO, 123, FÁTIMA").upper()
+        contato = c4.text_input(label_fone, help="Apenas números com DDD. Ex: 73988887777", key=f"contato_{fk}")
+        batizado = c5.selectbox("Já é Batizado?", ["SIM", "NÃO"], key=f"batizado_{fk}")
+        endereco = c6.text_input("Endereço", help="Ex: RUA SÃO JOÃO, 123, FÁTIMA", key=f"endereco_{fk}").upper()
 
         st.divider()
         if tipo_ficha == "Adulto":
             st.subheader("🚨 2. Contato de Emergência")
             ce1, ce2, ce3 = st.columns([2, 1, 1])
-            nome_emergencia = ce1.text_input("Nome do Contato (Cônjuge, Filho, Amigo)").upper()
-            vinculo_emergencia = ce2.selectbox("Vínculo", ["CÔNJUGE", "FILHO(A)", "IRMÃO/Ã", "PAI/MÃE", "AMIGO(A)", "OUTRO"])
-            tel_emergencia = ce3.text_input("Telefone de Emergência", help="Apenas números com DDD.")
+            nome_emergencia = ce1.text_input("Nome do Contato (Cônjuge, Filho, Amigo)", key=f"nome_emerg_{fk}").upper()
+            vinculo_emergencia = ce2.selectbox("Vínculo",["CÔNJUGE", "FILHO(A)", "IRMÃO/Ã", "PAI/MÃE", "AMIGO(A)", "OUTRO"], key=f"vinc_emerg_{fk}")
+            tel_emergencia = ce3.text_input("Telefone de Emergência", help="Apenas números com DDD.", key=f"tel_emerg_{fk}")
             
             nome_mae, prof_mae, tel_mae = "N/A", "N/A", "N/A"
             nome_pai, prof_pai, tel_pai = "N/A", "N/A", "N/A"
@@ -800,68 +805,68 @@ elif menu == "📝 Cadastrar Catequizando":
             col_mae, col_pai = st.columns(2)
             with col_mae:
                 st.markdown("##### 👩‍🦱 Dados da Mãe")
-                nome_mae = st.text_input("Nome da Mãe").upper()
-                prof_mae = st.text_input("Profissão da Mãe").upper()
-                tel_mae = st.text_input("WhatsApp da Mãe", help="Apenas números com DDD.")
+                nome_mae = st.text_input("Nome da Mãe", key=f"nome_mae_{fk}").upper()
+                prof_mae = st.text_input("Profissão da Mãe", key=f"prof_mae_{fk}").upper()
+                tel_mae = st.text_input("WhatsApp da Mãe", help="Apenas números com DDD.", key=f"tel_mae_{fk}")
             with col_pai:
                 st.markdown("##### 👨‍ Dados do Pai")
-                nome_pai = st.text_input("Nome do Pai").upper()
-                prof_pai = st.text_input("Profissão do Pai").upper()
-                tel_pai = st.text_input("WhatsApp do Pai", help="Apenas números com DDD.")
+                nome_pai = st.text_input("Nome do Pai", key=f"nome_pai_{fk}").upper()
+                prof_pai = st.text_input("Profissão do Pai", key=f"prof_pai_{fk}").upper()
+                tel_pai = st.text_input("WhatsApp do Pai", help="Apenas números com DDD.", key=f"tel_pai_{fk}")
 
             st.info("🛡️ **Responsável Legal / Cuidador (Caso não more com os pais)**")
             cr1, cr2, cr3 = st.columns([2, 1, 1])
-            responsavel_nome = cr1.text_input("Nome do Cuidador").upper()
-            vinculo_resp = cr2.selectbox("Vínculo", ["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"])
-            tel_responsavel = cr3.text_input("Telefone do Cuidador")
+            responsavel_nome = cr1.text_input("Nome do Cuidador", key=f"resp_nome_{fk}").upper()
+            vinculo_resp = cr2.selectbox("Vínculo",["NENHUM", "AVÓS", "TIOS", "IRMÃOS", "PADRINHOS", "OUTRO"], key=f"vinc_resp_{fk}")
+            tel_responsavel = cr3.text_input("Telefone do Cuidador", key=f"tel_resp_{fk}")
 
         st.divider()
         st.subheader("⛪ 3. Vida Eclesial e Engajamento")
         fe1, fe2 = st.columns(2)
         
         if tipo_ficha == "Adulto":
-            estado_civil = fe1.selectbox("Seu Estado Civil", ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"])
-            sacramentos_list = fe2.multiselect("Sacramentos que VOCÊ já possui:", ["BATISMO", "EUCARISTIA", "MATRIMÔNIO"])
+            estado_civil = fe1.selectbox("Seu Estado Civil",["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"], key=f"est_civil_{fk}")
+            sacramentos_list = fe2.multiselect("Sacramentos que VOCÊ já possui:",["BATISMO", "EUCARISTIA", "MATRIMÔNIO"], key=f"sac_list_{fk}")
             sacramentos = ", ".join(sacramentos_list)
             est_civil_pais, sac_pais, tem_irmaos, qtd_irmaos = "N/A", "N/A", "NÃO", 0
         else:
-            est_civil_pais = fe1.selectbox("Estado Civil dos Pais", ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"])
-            sac_pais_list = fe2.multiselect("Sacramentos dos Pais:", ["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"])
+            est_civil_pais = fe1.selectbox("Estado Civil dos Pais",["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"], key=f"est_civil_pais_{fk}")
+            sac_pais_list = fe2.multiselect("Sacramentos dos Pais:",["BATISMO", "CRISMA", "EUCARISTIA", "MATRIMÔNIO"], key=f"sac_pais_list_{fk}")
             sac_pais = ", ".join(sac_pais_list)
-            tem_irmaos = fe1.radio("Tem irmãos na catequese?", ["NÃO", "SIM"], horizontal=True)
-            qtd_irmaos = fe2.number_input("Quantos?", min_value=0, step=1) if tem_irmaos == "SIM" else 0
+            tem_irmaos = fe1.radio("Tem irmãos na catequese?",["NÃO", "SIM"], horizontal=True, key=f"tem_irmaos_{fk}")
+            qtd_irmaos = fe2.number_input("Quantos?", min_value=0, step=1, key=f"qtd_irmaos_{fk}") if tem_irmaos == "SIM" else 0
             estado_civil, sacramentos = "N/A", "N/A"
 
-        part_grupo = st.radio("Participa (ou a família participa) de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True)
+        part_grupo = st.radio("Participa (ou a família participa) de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True, key=f"part_grupo_{fk}")
         qual_grupo = "N/A"
         if part_grupo == "SIM":
-            qual_grupo = st.text_input("Qual grupo/pastoral e quem participa?").upper()
+            qual_grupo = st.text_input("Qual grupo/pastoral e quem participa?", key=f"qual_grupo_{fk}").upper()
 
         st.divider()
         st.subheader("🏥 4. Saúde e Documentação")
         s1, s2 = st.columns(2)
         
-        tem_med = s1.radio("Toma algum medicamento ou tem alergia?",["NÃO", "SIM"], horizontal=True)
+        tem_med = s1.radio("Toma algum medicamento ou tem alergia?",["NÃO", "SIM"], horizontal=True, key=f"tem_med_{fk}")
         medicamento = "NÃO"
         if tem_med == "SIM":
-            medicamento = s1.text_input("Descreva o medicamento/alergia:").upper()
+            medicamento = s1.text_input("Descreva o medicamento/alergia:", key=f"medicamento_{fk}").upper()
             
-        tem_tgo = s2.radio("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"], horizontal=True, help="Autismo, TDAH, Dislexia, etc.")
+        tem_tgo = s2.radio("Possui TGO (Transtorno Global do Desenvolvimento)?", ["NÃO", "SIM"], horizontal=True, help="Autismo, TDAH, Dislexia, etc.", key=f"tem_tgo_{fk}")
         tgo_final = "NÃO"
         if tem_tgo == "SIM":
-            tgo_final = s2.text_input("Qual transtorno? (Ex: TEA, TDAH, TOD, etc.)", help="Especifique o transtorno para melhor acompanhamento pastoral.").upper()
+            tgo_final = s2.text_input("Qual transtorno? (Ex: TEA, TDAH, TOD, etc.)", help="Especifique o transtorno para melhor acompanhamento pastoral.", key=f"tgo_final_{fk}").upper()
         
         st.markdown("---")
         st.markdown("**📁 Checklist de Documentos Entregues (Xerox):**")
         docs_obrigatorios =["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
-        docs_entregues = st.multiselect("Marque o que foi entregue HOJE:", docs_obrigatorios, help="Só marque o que você já tem em mãos.")
+        docs_entregues = st.multiselect("Marque o que foi entregue HOJE:", docs_obrigatorios, help="Só marque o que você já tem em mãos.", key=f"docs_entregues_{fk}")
         
-        faltando = [d for d in docs_obrigatorios if d not in docs_entregues]
+        faltando =[d for d in docs_obrigatorios if d not in docs_entregues]
         doc_status_k = ", ".join(faltando) if faltando else "COMPLETO"
 
         c_pref1, c_pref2 = st.columns(2)
-        turno = c_pref1.selectbox("Turno de preferência",["MANHÃ (M)", "TARDE (T)", "NOITE (N)"])
-        local_enc = c_pref2.text_input("Local do Encontro (Sala/Setor)").upper()
+        turno = c_pref1.selectbox("Turno de preferência",["MANHÃ (M)", "TARDE (T)", "NOITE (N)"], key=f"turno_{fk}")
+        local_enc = c_pref2.text_input("Local do Encontro (Sala/Setor)", key=f"local_enc_{fk}").upper()
 
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("💾 FINALIZAR E SALVAR INSCRIÇÃO", use_container_width=True):
@@ -886,7 +891,12 @@ elif menu == "📝 Cadastrar Catequizando":
                     ]]
                     
                     if salvar_lote_catequizandos(registro):
-                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!"); st.balloons(); time.sleep(1); st.rerun()
+                        st.success(f"✅ {nome} CADASTRADO COM SUCESSO!")
+                        st.balloons()
+                        time.sleep(1.5)
+                        # O Pulo do Gato: Muda a chave para forçar a limpeza total da tela
+                        st.session_state.form_cad_key += 1 
+                        st.rerun()
             else:
                 st.error("⚠️ Por favor, preencha o Nome, WhatsApp e selecione uma Turma.")
 
