@@ -104,7 +104,8 @@ from database import (
     salvar_encontro, salvar_tema_cronograma, 
     buscar_encontro_por_data, atualizar_usuario, salvar_formacao, 
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
-    registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, atualizar_reuniao_pais
+    registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
+    atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -1431,12 +1432,9 @@ elif menu == "🏫 Gestão de Turmas":
                             if atualizar_turma(d['id_turma'], lista_up):
                                 # 1. Se mudou o nome da turma, atualiza todas as abas
                                 if en != nome_turma_original:
-                                    from database import sincronizar_renomeacao_turma_geral
                                     sincronizar_renomeacao_turma_geral(nome_turma_original, en)
                                 
-                                # 2. NOVO: Sincroniza Turno e Local com todos os Catequizandos da turma
-                                from database import sincronizar_logistica_turma_nos_catequizandos
-                                # Usamos 'en' (nome atual/novo da turma) para buscar os alunos
+                                # 2. Sincroniza Turno e Local com todos os Catequizandos da turma
                                 sincronizar_logistica_turma_nos_catequizandos(en, et, el)
 
                                 planilha = conectar_google_sheets()
