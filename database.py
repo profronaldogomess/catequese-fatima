@@ -532,3 +532,21 @@ def adicionar_novo_usuario(dados_usuario):
             return True
         except: return False
     return False
+
+def sincronizar_logistica_turma_nos_catequizandos(nome_turma, novo_turno, novo_local):
+    """Atualiza Turno e Local de todos os catequizandos vinculados a uma turma."""
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        aba_cat = planilha.worksheet("catequizandos")
+        # Localiza todos os catequizandos daquela turma (Coluna B - Etapa)
+        celulas = aba_cat.findall(str(nome_turma), in_column=2)
+        
+        for cel in celulas:
+            # Coluna 28 (AB) = Turno | Coluna 29 (AC) = Local
+            aba_cat.update_cell(cel.row, 28, novo_turno)
+            aba_cat.update_cell(cel.row, 29, novo_local)
+            
+        st.cache_data.clear()
+        return True
+    except: return False
