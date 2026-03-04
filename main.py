@@ -1461,9 +1461,11 @@ elif menu == "🏫 Gestão de Turmas":
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
                     st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
-                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key="chk_del_turma")
                     
-                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
+                    # Usamos o id_turma (d['id_turma']) para tornar a chave única
+                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key=f"chk_del_{d['id_turma']}")
+                    
+                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, key=f"btn_del_{d['id_turma']}", use_container_width=True):
                         with st.spinner("Movendo catequizandos e limpando histórico..."):
                             alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
                             if not alunos_da_turma.empty:
