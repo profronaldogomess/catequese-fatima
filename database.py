@@ -312,6 +312,8 @@ def excluir_tema_cronograma(turma, titulo_tema):
         except: pass
     return False
 
+# --- NOVAS FUNÇÕES DE SINCRONIZAÇÃO EM CASCATA ---
+
 def sincronizar_renomeacao_turma_geral(nome_antigo, nome_novo):
     """Varre TODAS as abas e atualiza o nome da turma (Efeito Cascata)."""
     planilha = conectar_google_sheets()
@@ -353,12 +355,28 @@ def sincronizar_renomeacao_turma_geral(nome_antigo, nome_novo):
         st.error(f"Erro na sincronia em cascata: {e}")
         return False
 
+def sincronizar_logistica_turma_nos_catequizandos(nome_turma, novo_turno, novo_local):
+    """Atualiza Turno e Local de todos os catequizandos vinculados a uma turma."""
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        aba_cat = planilha.worksheet("catequizandos")
+        celulas = aba_cat.findall(str(nome_turma), in_column=2)
+        for cel in celulas:
+            aba_cat.update_cell(cel.row, 28, novo_turno) # Coluna 28 (AB)
+            aba_cat.update_cell(cel.row, 29, novo_local)  # Coluna 29 (AC)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na logistica: {e}")
+        return False
+
 def sincronizar_renomeacao_catequista(nome_antigo, nome_novo):
     """Atualiza o nome do catequista nas turmas e históricos."""
     planilha = conectar_google_sheets()
     if not planilha: return False
     try:
-        # 1. Turmas (Coluna E - catequista_responsavel)
+        # Turmas
         aba_t = planilha.worksheet("turmas")
         dados_t = aba_t.get_all_values()
         for i, linha in enumerate(dados_t[1:], start=2):
@@ -366,17 +384,14 @@ def sincronizar_renomeacao_catequista(nome_antigo, nome_novo):
             if nome_antigo in cats:
                 cats = [nome_novo if c == nome_antigo else c for c in cats]
                 aba_t.update_cell(i, 5, ", ".join(cats))
-        
-        # 2. Encontros (Coluna D - catequista)
+        # Encontros
         aba_enc = planilha.worksheet("encontros")
         celulas_enc = aba_enc.findall(str(nome_antigo), in_column=4)
         for cel in celulas_enc: aba_enc.update_cell(cel.row, 4, nome_novo)
-        
-        # 3. Sacramentos Eventos (Coluna E - catequista)
+        # Sacramentos
         aba_sac = planilha.worksheet("sacramentos_eventos")
         celulas_sac = aba_sac.findall(str(nome_antigo), in_column=5)
         for cel in celulas_sac: aba_sac.update_cell(cel.row, 5, nome_novo)
-        
         st.cache_data.clear()
         return True
     except: return False
@@ -386,14 +401,10 @@ def limpar_lixo_turma_excluida(nome_turma):
     planilha = conectar_google_sheets()
     if not planilha: return False
     try:
-        abas_colunas =[
-            ("cronograma", 2), ("encontros", 2), 
-            ("presencas", 4), ("reunioes_pais", 4), ("presenca_reuniao", 4)
-        ]
+        abas_colunas = [("cronograma", 2), ("encontros", 2), ("presencas", 4), ("reunioes_pais", 4), ("presenca_reuniao", 4)]
         for nome_aba, col in abas_colunas:
             aba = planilha.worksheet(nome_aba)
             celulas = aba.findall(str(nome_turma), in_column=col)
-            # Deletar de baixo para cima para não bagunçar os índices
             for cel in sorted(celulas, key=lambda x: x.row, reverse=True):
                 aba.delete_rows(cel.row)
         st.cache_data.clear()
