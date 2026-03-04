@@ -864,9 +864,29 @@ elif menu == "📝 Cadastrar Catequizando":
         faltando =[d for d in docs_obrigatorios if d not in docs_entregues]
         doc_status_k = ", ".join(faltando) if faltando else "COMPLETO"
 
+        # Lógica de Herança de Turma no Cadastro
+        turno_sugerido = "MANHÃ (M)"
+        local_sugerido = ""
+        
+        if etapa_inscricao != "CATEQUIZANDOS SEM TURMA" and not df_turmas.empty:
+            info_t = df_turmas[df_turmas['nome_turma'] == etapa_inscricao]
+            if not info_t.empty:
+                # Mapeia o turno da aba Turmas para o padrão do selectbox
+                t_base = str(info_t.iloc[0].get('turno', 'MANHÃ')).upper()
+                if "TARDE" in t_base: turno_sugerido = "TARDE (T)"
+                elif "NOITE" in t_base: turno_sugerido = "NOITE (N)"
+                else: turno_sugerido = "MANHÃ (M)"
+                
+                local_sugerido = str(info_t.iloc[0].get('local', '')).upper()
+
         c_pref1, c_pref2 = st.columns(2)
-        turno = c_pref1.selectbox("Turno de preferência",["MANHÃ (M)", "TARDE (T)", "NOITE (N)"], key=f"turno_{fk}")
-        local_enc = c_pref2.text_input("Local do Encontro (Sala/Setor)", key=f"local_enc_{fk}").upper()
+        
+        # O selectbox e o text_input agora herdam os valores da turma selecionada automaticamente
+        opcoes_turno = ["MANHÃ (M)", "TARDE (T)", "NOITE (N)"]
+        idx_turno = opcoes_turno.index(turno_sugerido)
+        
+        turno = c_pref1.selectbox("Turno (Herdado da Turma)", opcoes_turno, index=idx_turno, key=f"turno_{fk}")
+        local_enc = c_pref2.text_input("Local (Herdado da Turma)", value=local_sugerido, key=f"local_enc_{fk}").upper()
 
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("💾 FINALIZAR E SALVAR INSCRIÇÃO", use_container_width=True):
@@ -1409,10 +1429,16 @@ elif menu == "🏫 Gestão de Turmas":
                             lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
                             
                             if atualizar_turma(d['id_turma'], lista_up):
+                                # 1. Se mudou o nome da turma, atualiza todas as abas
                                 if en != nome_turma_original:
                                     from database import sincronizar_renomeacao_turma_geral
                                     sincronizar_renomeacao_turma_geral(nome_turma_original, en)
                                 
+                                # 2. NOVO: Sincroniza Turno e Local com todos os Catequizandos da turma
+                                from database import sincronizar_logistica_turma_nos_catequizandos
+                                # Usamos 'en' (nome atual/novo da turma) para buscar os alunos
+                                sincronizar_logistica_turma_nos_catequizandos(en, et, el)
+
                                 planilha = conectar_google_sheets()
                                 aba_u = planilha.worksheet("usuarios")
                                 for _, cat_row in equipe_tecnica.iterrows():
