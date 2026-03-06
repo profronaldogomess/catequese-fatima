@@ -127,6 +127,36 @@ from ai_engine import (
 )
 
 # --- 6. FUNÇÕES AUXILIARES DE INTERFACE ---
+def montar_botoes_whatsapp(dados):
+    """Monta dinamicamente os botões de WhatsApp baseados no perfil."""
+    idade = calcular_idade(dados['data_nascimento'])
+    botoes = []
+    
+    # Função auxiliar para limpar e formatar tel
+    def formatar_wa(tel):
+        if not tel or str(tel).strip() in ["N/A", "", "None"]: return None
+        num = "".join(filter(str.isdigit, str(tel)))
+        if num.startswith("0"): num = num[1:]
+        return f"5573{num}" if len(num) <= 9 else f"55{num}"
+
+    if idade >= 18:
+        # Adulto: Próprio, Emergência
+        if (tel := formatar_wa(dados.get('contato_principal'))): botoes.append(("👤 Próprio", tel))
+        if (tel := formatar_wa(dados.get('obs_pastoral_familia', '').split('TEL: ')[-1] if 'TEL: ' in dados.get('obs_pastoral_familia', '') else None)):
+            botoes.append(("🚨 Emerg.", tel))
+    else:
+        # Criança: Mãe, Pai, Cuidador/Emergência
+        if (tel := formatar_wa(dados.get('tel_mae'))): botoes.append(("👩‍🦱 Mãe", tel))
+        if (tel := formatar_wa(dados.get('tel_pai'))): botoes.append(("👨‍🦱 Pai", tel))
+        # O Emergência/Cuidador está no índice 13 (Coluna N)
+        if (tel := formatar_wa(dados.get('nome_responsavel', '').split('TEL: ')[-1] if 'TEL: ' in dados.get('nome_responsavel', '') else None)):
+             botoes.append(("🛡️ Resp.", tel))
+
+    # Renderização dos botões
+    cols = st.columns(len(botoes) if botoes else 1)
+    for i, (label, tel) in enumerate(botoes):
+        cols[i].markdown(f'''<a href="https://wa.me/{tel}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 {label}</div></a>''', unsafe_allow_html=True)
+
 def mostrar_logo_sidebar():
     if os.path.exists("logo.png"):
         c1, c2, c3 = st.sidebar.columns([1, 3, 1])
@@ -585,9 +615,8 @@ elif menu == "📚 Minha Turma":
         
         st.info(f"📝 **Última Obs. Pastoral:**\n{row.get('obs_pastoral_familia', 'Sem registros.')}")
         
-        num_limpo = "".join(filter(str.isdigit, str(row['contato_principal'])))
-        if num_limpo:
-            st.markdown(f'''<a href="https://wa.me/5573{num_limpo[-9:]}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-weight:bold;">📲 Falar com Responsável</div></a>''', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        montar_botoes_whatsapp(row)
         
         # --- NOVO: EXTRATO DE CAMINHADA ---
         st.markdown("<br>", unsafe_allow_html=True)
@@ -2652,25 +2681,23 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
+                    c_ia1, c_ia2 = st.columns(2)
                     
-                    if c_btn1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}"):
+                    if c_ia1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}", use_container_width=True):
                         nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
                         msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], row['etapa'], nome_alvo, "Responsável")
                         msg_segura = msg.replace("$", "\$") 
                         st.info(f"**Mensagem de Cobrança:**\n\n{msg_segura}")
 
-                    if c_btn2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}"):
+                    if c_ia2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}", use_container_width=True):
                         nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
                         resumo = f"Endereço: {row['endereco_completo']} | Saúde: {row['toma_medicamento_sn']}"
                         msg = gerar_mensagem_atualizacao_cadastral_ia(row['nome_completo'], resumo, nome_alvo)
                         msg_segura = msg.replace("$", "\$")
                         st.info(f"**Mensagem de Atualização:**\n\n{msg_segura}")
                     
-                    tel_limpo = limpar_wa(row['contato_principal'])
-                    if tel_limpo:
-                        c_btn3.markdown(f'''<a href="https://wa.me/{tel_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 Abrir WhatsApp</div></a>''', unsafe_allow_html=True)
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("**Contatos Disponíveis:**")
+                    montar_botoes_whatsapp(row)
 
         with tab_visitas:
             st.subheader("🏠 Acompanhamento Familiar")
