@@ -808,7 +808,11 @@ elif menu == "📝 Cadastrar Catequizando":
         st.subheader("📍 1. Identificação")
         c1, c2, c3 = st.columns([2, 1, 1])
         nome = c1.text_input("Nome Completo", help="Digite em MAIÚSCULAS sem abreviações.", key=f"nome_{fk}").upper()
-        data_nasc = c2.date_input("Data de Nascimento", value=date(2010, 1, 1), format="DD/MM/YYYY", key=f"data_nasc_{fk}")
+        
+        # Ajuste de intervalo: 100 anos para trás a partir de hoje
+        hoje = date.today()
+        data_min = date(hoje.year - 100, 1, 1)
+        data_nasc = c2.date_input("Data de Nascimento", value=date(1980, 1, 1), min_value=data_min, max_value=hoje, format="DD/MM/YYYY", key=f"data_nasc_{fk}")
         
         lista_turmas = ["CATEQUIZANDOS SEM TURMA"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else[])
         etapa_inscricao = c3.selectbox("Turma/Etapa", lista_turmas, help="Selecione a turma onde o catequizando será alocado.", key=f"etapa_{fk}")
@@ -1074,7 +1078,10 @@ elif menu == "👤 Perfil Individual":
                         ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status, help="CONCLUÍDO: Finalizou a Crisma. DESISTENTE: Saiu da catequese.")
 
                         c3, c4, c5 = st.columns([1, 1, 2])
-                        ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), format="DD/MM/YYYY")
+                        # Libera intervalo de 100 anos para edição
+                        hoje = date.today()
+                        data_min = date(hoje.year - 100, 1, 1)
+                        ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), min_value=data_min, max_value=hoje, format="DD/MM/YYYY")
                         ed_batizado = c4.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
                         
                         lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
