@@ -13,6 +13,13 @@ from fpdf import FPDF
 import plotly.express as px
 import extra_streamlit_components as stx
 
+# --- MOTOR DE PERSISTÊNCIA DE FORMULÁRIO ---
+if 'form_data' not in st.session_state:
+    st.session_state.form_data = {}
+
+def sync_field(key):
+    st.session_state.form_data[key] = st.session_state[key]
+
 # --- CONFIGURAÇÃO DE AMBIENTE (MUDE PARA FALSE NA BRANCH MAIN) ---
 IS_HOMOLOGACAO = False 
 
@@ -807,7 +814,11 @@ elif menu == "📝 Cadastrar Catequizando":
 
         st.subheader("📍 1. Identificação")
         c1, c2, c3 = st.columns([2, 1, 1])
-        nome = c1.text_input("Nome Completo", help="Digite em MAIÚSCULAS sem abreviações.", key=f"nome_{fk}").upper()
+        nome = c1.text_input("Nome Completo", 
+                            value=st.session_state.form_data.get('nome', ''), 
+                            key="nome", 
+                            on_change=sync_field, 
+                            help="Digite em MAIÚSCULAS.").upper()
         
         # Ajuste de intervalo: 100 anos para trás a partir de hoje
         hoje = date.today()
