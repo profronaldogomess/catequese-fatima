@@ -7,3 +7,4 @@ plotly
 fpdf
 openpyxl
 extra-streamlit-components
+tenacity
