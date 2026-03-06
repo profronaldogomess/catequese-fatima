@@ -1139,6 +1139,15 @@ elif menu == "👤 Perfil Individual":
                             ed_est_civil_pais = fe2.selectbox("Estado Civil dos Pais", opcoes_ecp, index=idx_ecp)
                             ed_est_civil = "N/A"
 
+                        # --- NOVO: CAMPO EDITÁVEL DE SACRAMENTOS ---
+                        st.markdown("#### 🕊️ Sacramentos Possuídos")
+                        sac_atuais = str(dados.get('sacramentos_ja_feitos', '')).upper()
+                        opcoes_sac = ["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"]
+                        # Transforma a string salva em uma lista para o multiselect
+                        default_sacs = [s.strip() for s in sac_atuais.split(',') if s.strip() in opcoes_sac]
+                        ed_sacramentos = st.multiselect("Marque/Desmarque os sacramentos possuídos:", opcoes_sac, default=default_sacs)
+                        ed_sac_final = ", ".join(ed_sacramentos)
+
                         st.divider()
 
                         st.markdown("#### 🏥 4. Saúde e Documentação")
@@ -1165,8 +1174,8 @@ elif menu == "👤 Perfil Individual":
                                 dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
                                 ed_contato, ed_end, ed_mae, ed_pai, ed_resp, ed_doc_status_k, 
                                 ed_qual_grupo, ed_status, ed_med, ed_tgo_final, ed_est_civil, 
-                                dados.get('sacramentos_ja_feitos', 'N/A'), ed_prof_m, ed_tel_m, 
-                                ed_prof_p, ed_tel_p, ed_est_civil_pais, dados.get('sac_pais', 'N/A'), 
+                                ed_sac_final, ed_prof_m, ed_tel_m, ed_prof_p, ed_tel_p, 
+                                ed_est_civil_pais, dados.get('sac_pais', 'N/A'), 
                                 ed_part_grupo, ed_qual_grupo, dados.get('tem_irmaos', 'NÃO'), 
                                 dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), 
                                 dados.get('local_encontro', 'N/A'), obs_final
