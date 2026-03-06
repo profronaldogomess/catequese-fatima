@@ -10,22 +10,26 @@ import pandas as pd
 import streamlit as st
 import time
 import uuid
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
+@retry(
+    stop=stop_after_attempt(3), 
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((gspread.exceptions.APIError, Exception))
+)
 def conectar_google_sheets():
-    try:
-        if "gcp_service_account" in st.secrets:
-            info_do_cofre = dict(st.secrets["gcp_service_account"])
-            creds = Credentials.from_service_account_info(info_do_cofre, scopes=SCOPE)
-        else:
-            creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
-        client = gspread.authorize(creds)
-        planilha = client.open("BD_Catequese")
-        return planilha
-    except Exception as e:
-        # Silencioso para não quebrar a UI em caso de instabilidade momentânea
-        return None
+    """Conexão com retentativa automática para evitar erro 1ST."""
+    if "gcp_service_account" in st.secrets:
+        info_do_cofre = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(info_do_cofre, scopes=SCOPE)
+    else:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
+    client = gspread.authorize(creds)
+    planilha = client.open("BD_Catequese")
+    return planilha
 
 # --- 1. MOTOR DE LEITURA COM CACHE INTELIGENTE (DEFESA CONTRA ERRO 429) ---
 
