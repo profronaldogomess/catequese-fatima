@@ -2179,15 +2179,8 @@ elif menu == "✅ Fazer Chamada":
         tema_salvo = st.session_state.get(f"tema_input_{turma_sel}", "")
         
         # Filtro normalizado para encontrar temas no cronograma
-        # Garantimos que a coluna 'etapa' seja tratada como string
+        # REMOVEMOS A RESTRIÇÃO DE 'REALIZADO' PARA PERMITIR A CHAMADA
         filtro_cron = df_cron_c[df_cron_c['etapa'].astype(str).str.strip().str.upper() == turma_norm]
-        
-        # Verificamos se a coluna 'status' existe antes de filtrar
-        if 'status' in filtro_cron.columns:
-            filtro_cron = filtro_cron[filtro_cron['status'].astype(str).str.upper() != 'REALIZADO']
-        else:
-            # Se não houver coluna status, assumimos que todos são pendentes
-            pass
         
         if not filtro_cron.empty:
             sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
