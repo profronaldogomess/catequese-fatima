@@ -494,6 +494,10 @@ elif menu == "📚 Minha Turma":
 
     st.title(f"📚 Painel: {turma_ativa}")
 
+    # Carregamento dos dados necessários para esta página
+    df_cron_t = ler_aba("cronograma")
+    df_enc_local = ler_aba("encontros")
+    
     # Filtro rigoroso: Apenas catequizandos ATIVOS são considerados no Painel da Turma
     meus_alunos_todos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
     meus_alunos = meus_alunos_todos[meus_alunos_todos['status'] == 'ATIVO']
