@@ -1075,10 +1075,22 @@ elif menu == "👤 Perfil Individual":
                 if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
                 if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
             else:
-                # Catequista só vê a turma vinculada
+                # Catequista vê turmas vinculadas no cadastro OU onde é responsável na aba turmas
+                nome_usuario = st.session_state.usuario.get('nome', '')
                 turma_vinculada = str(st.session_state.usuario.get('turma_vinculada', ''))
-                turmas_lista = [t.strip() for t in turma_vinculada.split(',')]
+                
+                # Busca turmas onde ele é responsável
+                turmas_responsavel = df_turmas[df_turmas['catequista_responsavel'].str.contains(nome_usuario, na=False)]['nome_turma'].tolist()
+                
+                # Une as listas
+                turmas_lista = [t.strip() for t in turma_vinculada.split(',') if t.strip()] + turmas_responsavel
+                turmas_lista = list(set(turmas_lista)) # Remove duplicatas
+                
                 df_f = df_cat[df_cat['etapa'].isin(turmas_lista)]
+                
+                if df_f.empty:
+                    st.info("⚠️ Nenhuma turma vinculada encontrada para o seu perfil. Verifique com a coordenação.")
+                
                 busca = st.text_input("Pesquisar por nome na minha turma:", key="busca_perfil").upper()
                 if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
             
