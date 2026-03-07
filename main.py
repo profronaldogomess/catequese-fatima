@@ -540,7 +540,20 @@ elif menu == "📚 Minha Turma":
                         card_indiv = gerar_card_aniversario(f"{int(niver['dia'])} | CATEQUIZANDO | {niver['nome']}", tipo="DIA")
                         if card_indiv:
                             st.image(card_indiv, use_container_width=True)
-                            st.download_button(f"📥 Baixar Card de {niver['nome'].split()[0]}", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{i}")
+                            
+                            # Botões de Ação Rápida
+                            c_dl, c_pv, c_gp = st.columns(3)
+                            c_dl.download_button("📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{i}", use_container_width=True)
+                            
+                            # Busca telefone do catequizando para o PV
+                            cat_info = meus_alunos[meus_alunos['nome_completo'] == niver['nome']]
+                            if not cat_info.empty:
+                                tel_pv = "".join(filter(str.isdigit, str(cat_info.iloc[0].get('contato_principal', ''))))
+                                if tel_pv:
+                                    c_pv.markdown(f'''<a href="https://wa.me/5573{tel_pv}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">👤 PV</div></a>''', unsafe_allow_html=True)
+                            
+                            # Link para o Grupo (usando o link de convite do grupo da turma se disponível ou link genérico)
+                            c_gp.markdown(f'''<a href="https://wa.me/" target="_blank" style="text-decoration:none;"><div style="background-color:#417b99; color:white; text-align:center; padding:8px; border-radius:5px; font-size:11px;">👥 Grupo</div></a>''', unsafe_allow_html=True)
                     st.write("")
         else:
             st.write("Nenhum aniversariante este mês nesta turma.")
