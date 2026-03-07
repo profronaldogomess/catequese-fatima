@@ -106,7 +106,7 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
-    marcar_tema_realizado_cronograma,carregar_dados_globais
+    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -776,8 +776,13 @@ elif menu == "📖 Diário de Encontros":
         hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
         for _, row in hist_turma.iterrows():
             with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
-                st.write(f"**Catequista:** {row['catequista']}")
-                st.write(f"**Relato:** {row.get('obs', 'Sem relato')}")
+                with st.form(f"edit_enc_{row['data']}_{turma_focal}"):
+                    ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
+                    ed_relato = st.text_area("Editar Relato:", value=row.get('obs', ''))
+                    
+                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                        if atualizar_encontro_e_cronograma(None, turma_focal, row['data'], ed_tema, ed_relato, row['catequista']):
+                            st.success("Registro atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
     else:
         st.info("Nenhum encontro registrado ainda.")
 
