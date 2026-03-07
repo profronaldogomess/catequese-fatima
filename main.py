@@ -1058,7 +1058,6 @@ elif menu == "👤 Perfil Individual":
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia.")
     else:
-        # Criação condicional das abas para evitar o TypeError
         if eh_gestor:
             tabs = st.tabs(["👤 Consulta e Edição Individual", "🚩 Auditoria de Documentos por Turma", "📄 Gestão de Evasão e Declarações"])
             tab_individual = tabs[0]
