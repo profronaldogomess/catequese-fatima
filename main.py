@@ -750,7 +750,13 @@ elif menu == "📖 Diário de Encontros":
                 st.error(f"⚠️ Já existe um tema registrado para {data_e.strftime('%d/%m/%Y')}.")
                 st.form_submit_button("BLOQUEADO", disabled=True)
             else:
-                tema_manual = st.text_input("Título do Tema Ministrado:").upper()
+                # Busca temas pendentes no cronograma para esta turma
+                temas_pendentes = [""] + df_cron_p[(df_cron_p['etapa'] == turma_focal) & (df_cron_p.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
+                
+                st.caption("Selecione um tema planejado ou digite um novo:")
+                tema_selecionado = st.selectbox("Temas do Cronograma:", temas_pendentes)
+                tema_manual = st.text_input("Título do Tema Ministrado:", value=tema_selecionado).upper()
+                
                 obs_e = st.text_area("Observações Pastorais", height=68)
                 if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
                     if tema_manual:
