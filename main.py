@@ -270,6 +270,16 @@ papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
 turma_do_catequista = st.session_state.usuario.get('turma_vinculada', 'TODAS')
 eh_gestor = papel_usuario in ["COORDENADOR", "ADMIN"]
 
+# Lista de menus para catequistas comuns
+menu_catequista = [
+    "📚 Minha Turma", 
+    "👤 Perfil Individual",  # <--- ADICIONADO AQUI
+    "👨‍👩‍👧‍👦 Gestão Familiar", 
+    "📖 Diário de Encontros", 
+    "✅ Fazer Chamada", 
+    "📝 Cadastrar Catequizando"
+]
+
 if eh_gestor:
     menu = st.sidebar.radio("MENU PRINCIPAL", [
         "🏠 Início / Dashboard", "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
@@ -277,10 +287,7 @@ if eh_gestor:
         "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada"
     ])
 else:
-    menu = st.sidebar.radio("MENU DO CATEQUISTA", [
-        "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", "📖 Diário de Encontros", 
-        "✅ Fazer Chamada", "📝 Cadastrar Catequizando"
-    ])
+    menu = st.sidebar.radio("MENU DO CATEQUISTA", menu_catequista)
 
 # ==============================================================================
 # PÁGINA 1: DASHBOARD DE INTELIGÊNCIA PASTORAL
