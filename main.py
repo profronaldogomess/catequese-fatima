@@ -967,8 +967,60 @@ elif menu == "📝 Cadastrar Catequizando":
                         # O Pulo do Gato: Muda a chave para forçar a limpeza total da tela
                         st.session_state.form_cad_key += 1 
                         st.rerun()
-            else:
-                st.error("⚠️ Por favor, preencha o Nome, WhatsApp e selecione uma Turma.")
+                        # Verificação de Duplicidade
+                        duplicatas = df_cat[df_cat['nome_completo'].str.upper() == nome.upper()]
+                        
+                        if not duplicatas.empty:
+                            st.warning(f"⚠️ **ATENÇÃO:** Já existe um registro com o nome '{nome}'.")
+                            st.write("É a mesma pessoa?")
+                            
+                            col_a, col_b = st.columns(2)
+                            if col_a.button("✅ SIM, ATUALIZAR CADASTRO"):
+                                id_existente = duplicatas.iloc[0]['id_catequizando']
+                                # Prepara a lista com os novos dados
+                                lista_up = registro[0]
+                                lista_up[12] = "ATIVO" # Força status para ATIVO
+                                if atualizar_catequizando(id_existente, lista_up):
+                                    st.success(f"✅ Cadastro de {nome} atualizado com sucesso!")
+                                    time.sleep(1); st.rerun()
+                            
+                            if col_b.button("🆕 NÃO, CADASTRAR COMO NOVO"):
+                                if salvar_lote_catequizandos(registro):
+                                    st.success(f"✅ {nome} CADASTRADO COMO NOVO!")
+                                    time.sleep(1); st.rerun()
+                        else:
+                            # Nenhum nome igual encontrado, salva normalmente
+                            # Verificação de Duplicidade
+                            duplicatas = df_cat[df_cat['nome_completo'].str.upper() == nome.upper()]
+                            
+                            if not duplicatas.empty:
+                                st.warning(f"⚠️ **ATENÇÃO:** Já existe um registro com o nome '{nome}'.")
+                                st.write("É a mesma pessoa?")
+                                
+                                col_a, col_b = st.columns(2)
+                                if col_a.button("✅ SIM, ATUALIZAR CADASTRO"):
+                                    id_existente = duplicatas.iloc[0]['id_catequizando']
+                                    # Prepara a lista com os novos dados
+                                    lista_up = registro[0]
+                                    lista_up[12] = "ATIVO" # Força status para ATIVO
+                                    if atualizar_catequizando(id_existente, lista_up):
+                                        st.success(f"✅ Cadastro de {nome} atualizado com sucesso!")
+                                        time.sleep(1); st.rerun()
+                                
+                                if col_b.button("🆕 NÃO, CADASTRAR COMO NOVO"):
+                                    if salvar_lote_catequizandos(registro):
+                                        st.success(f"✅ {nome} CADASTRADO COMO NOVO!")
+                                        time.sleep(1); st.rerun()
+                            else:
+                                # Nenhum nome igual encontrado, salva normalmente
+                                if salvar_lote_catequizandos(registro):
+                                    st.success(f"✅ {nome} CADASTRADO COM SUCESSO!")
+                                    st.balloons()
+                                    time.sleep(1.5)
+                                    st.session_state.form_cad_key += 1 
+                                    st.rerun()
+                    else:
+                        st.error("⚠️ Por favor, preencha o Nome, WhatsApp e selecione uma Turma.")
 
     with tab_csv:
         st.subheader("📂 Importação em Massa (CSV)")
