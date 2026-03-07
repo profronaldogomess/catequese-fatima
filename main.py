@@ -2167,8 +2167,11 @@ elif menu == "✅ Fazer Chamada":
             if not filtro_cron.empty:
                 sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
                 st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
+                
+                # Botão que preenche o estado e força o rerun para atualizar a UI
                 if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
                     st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
+                    st.rerun()
 
     tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
                              value=tema_salvo if tema_salvo else st.session_state.get(f"tema_input_{turma_sel}", ""), 
