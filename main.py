@@ -2216,6 +2216,25 @@ elif menu == "✅ Fazer Chamada":
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
             for _, r in lista_cat.iterrows():
                 st.session_state[f"p_{r['id_catequizando']}_{data_enc}"] = True
+                                
+                # Chave única
+                key_toggle = f"p_{row['id_catequizando']}_{data_enc}_{i}"
+                
+                # Se o toggle não estiver no session_state, define o valor padrão (banco ou False)
+                if key_toggle not in st.session_state:
+                    # Carrega do banco se existir chamada anterior
+                    default_pres = False
+                    if not df_pres_existente.empty:
+                        aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
+                        if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
+                            default_pres = True
+                    st.session_state[key_toggle] = default_pres
+                
+                # O toggle agora lê diretamente do session_state
+                presente = st.toggle("P", key=key_toggle)
+                
+                if presente: contador_p += 1
+                else: contador_a += 1
             st.rerun() # Adicione este rerun para atualizar os toggles
         
         st.markdown("---")
