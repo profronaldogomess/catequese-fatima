@@ -15,21 +15,20 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-@retry(
-    stop=stop_after_attempt(3), 
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((gspread.exceptions.APIError, Exception))
-)
 def conectar_google_sheets():
-    """Conexão com retentativa automática para evitar erro 1ST."""
-    if "gcp_service_account" in st.secrets:
-        info_do_cofre = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(info_do_cofre, scopes=SCOPE)
-    else:
-        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
-    client = gspread.authorize(creds)
-    planilha = client.open("BD_Catequese")
-    return planilha
+    """Conexão com tratamento de erro explícito para diagnóstico."""
+    try:
+        if "gcp_service_account" in st.secrets:
+            info_do_cofre = dict(st.secrets["gcp_service_account"])
+            creds = Credentials.from_service_account_info(info_do_cofre, scopes=SCOPE)
+        else:
+            creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPE)
+        
+        client = gspread.authorize(creds)
+        return client.open("BD_Catequese")
+    except Exception as e:
+        st.error(f"Erro de Conexão com Google Sheets: {str(e)}")
+        return None
 
 # --- 1. MOTOR DE LEITURA COM CACHE INTELIGENTE (DEFESA CONTRA ERRO 429) ---
 
