@@ -2167,16 +2167,24 @@ elif menu == "✅ Fazer Chamada":
     df_cron_c = ler_aba("cronograma")
     df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
     
-    # Lógica de sugestão de tema
+    # Lógica de sugestão de tema com normalização de nomes
     sugestao_tema = ""
+    # Normaliza o nome da turma para comparação (remove espaços e maiúsculas)
+    turma_norm = turma_sel.strip().upper()
+    
     if not df_pres_existente.empty:
         st.info("📝 **Editando chamada já realizada neste dia.**")
         tema_salvo = df_pres_existente.iloc[0].get('tema_do_dia', '')
     else:
         tema_salvo = st.session_state.get(f"tema_input_{turma_sel}", "")
-        filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
+        
+        # Filtro normalizado para encontrar temas no cronograma
+        filtro_cron = df_cron_c[df_cron_c['etapa'].str.strip().str.upper() == turma_norm]
+        filtro_cron = filtro_cron[filtro_cron.get('status', '').str.upper() != 'REALIZADO']
+        
         if not filtro_cron.empty:
             sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
+            st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
             if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
                 st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
                 st.rerun()
