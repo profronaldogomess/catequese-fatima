@@ -602,8 +602,40 @@ elif menu == "📚 Minha Turma":
 
     # 3. Lista de Catequizandos (Consulta Rápida)
     st.subheader("👥 Lista de Catequizandos")
-    df_lista = meus_alunos[['nome_completo', 'contato_principal']].copy()
-    st.dataframe(df_lista, use_container_width=True, hide_index=True)
+    st.caption("Clique em uma linha para ver detalhes ou editar.")
+    
+    # Tabela interativa que permite seleção
+    event = st.dataframe(
+        meus_alunos[['nome_completo', 'contato_principal']], 
+        use_container_width=True, 
+        hide_index=True,
+        selection_mode="single-row",
+        on_select="rerun"
+    )
+
+    # Se o catequista clicar em alguém na tabela, mostramos o dossiê
+    if len(event.selection.rows) > 0:
+        idx = event.selection.rows[0]
+        row = meus_alunos.iloc[idx]
+        
+        st.divider()
+        st.markdown(f"### 👤 Ficha: {row['nome_completo']}")
+        
+        # Exibição limpa dos dados
+        c_d1, c_d2 = st.columns(2)
+        c_d1.write(f"**Idade:** {calcular_idade(row['data_nascimento'])} anos")
+        c_d1.write(f"**Batizado:** {row['batizado_sn']}")
+        c_d2.write(f"**Docs:** {row.get('doc_em_falta', 'OK')}")
+        c_d2.write(f"**Saúde:** {row.get('toma_medicamento_sn', 'NÃO')}")
+        
+        st.info(f"📝 **Obs. Pastoral:** {row.get('obs_pastoral_familia', 'Sem registros.')}")
+        
+        # Botões de Ação
+        montar_botoes_whatsapp(row)
+        
+        if st.button("✏️ Editar Ficha Completa", key="btn_edit_ficha"):
+            st.session_state.menu = "👤 Perfil Individual"
+            st.rerun()
 
     if nome_sel:
         row = meus_alunos[meus_alunos['nome_completo'] == nome_sel].iloc[0]
