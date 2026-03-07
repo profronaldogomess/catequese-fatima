@@ -2216,7 +2216,9 @@ elif menu == "✅ Fazer Chamada":
                         if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
                             default_pres = True
                             
-                    presente = st.toggle("P", value=default_pres, key=f"p_{row['id_catequizando']}_{data_enc}")
+                    # Adicionamos o índice 'i' na key para garantir unicidade absoluta, 
+                    # mesmo em caso de duplicidade de IDs no banco de dados.
+                    presente = st.toggle("P", value=default_pres, key=f"p_{row['id_catequizando']}_{data_enc}_{i}")
                     if presente: contador_p += 1
                     else: contador_a += 1
 
