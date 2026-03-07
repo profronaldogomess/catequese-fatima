@@ -106,7 +106,7 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
-    marcar_tema_realizado_cronograma
+    marcar_tema_realizado_cronograma,carregar_dados_globais
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -234,12 +234,17 @@ if not st.session_state.logado:
     st.stop()
 
 # --- 8. CARREGAMENTO GLOBAL DE DADOS ---
-df_cat = ler_aba("catequizandos")
-df_turmas = ler_aba("turmas")
-df_pres = ler_aba("presencas")
-df_usuarios = ler_aba("usuarios") 
-df_sac_eventos = ler_aba("sacramentos_eventos")
-df_pres_reuniao = ler_aba("presenca_reuniao") 
+dados_globais = carregar_dados_globais()
+if dados_globais:
+    df_cat = dados_globais["catequizandos"]
+    df_turmas = dados_globais["turmas"]
+    df_pres = dados_globais["presencas"]
+    df_usuarios = dados_globais["usuarios"]
+    df_sac_eventos = dados_globais["sacramentos_eventos"]
+    df_pres_reuniao = dados_globais["presenca_reuniao"]
+else:
+    st.error("Erro ao carregar dados. Tente novamente em alguns minutos.")
+    st.stop()
 
 equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
 
