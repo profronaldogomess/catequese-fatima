@@ -168,17 +168,17 @@ def mostrar_logo_login():
     else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
 
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
-if not st.session_state.logado and not st.session_state.get('logout_em_curso', False):
+# Forçamos a leitura do cookie logo no início para garantir a persistência
+if not st.session_state.get('logado', False):
     auth_cookie = cookie_manager.get("fatima_auth_v4")
-    if auth_cookie:
-        user = verificar_login(auth_cookie['email'], auth_cookie['senha'])
+    if auth_cookie and isinstance(auth_cookie, dict):
+        user = verificar_login(auth_cookie.get('email'), auth_cookie.get('senha'))
         if user:
-            new_sid = str(uuid.uuid4())
-            if atualizar_session_id(user['email'], new_sid):
-                st.session_state.logado = True
-                st.session_state.usuario = user
-                st.session_state.session_id = new_sid
-                st.rerun()
+            # Restaura a sessão sem gerar um novo UUID desnecessariamente
+            st.session_state.logado = True
+            st.session_state.usuario = user
+            st.session_state.session_id = obter_session_id_db(user['email'])
+            st.rerun()
 
 if st.session_state.logado and st.session_state.usuario:
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
