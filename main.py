@@ -567,52 +567,43 @@ elif menu == "📚 Minha Turma":
 
     st.divider()
 
-    c1, c2, c3 = st.columns(3)
-    total_planejado = len(df_cron_t[df_cron_t['etapa'] == turma_ativa]) if not df_cron_t.empty else 0
-    total_feito = len(df_enc_t[df_enc_t['turma'] == turma_ativa]) if not df_enc_t.empty else 0
-    progresso = (total_feito / (total_feito + total_planejado)) if (total_feito + total_planejado) > 0 else 0
-    c1.metric("Caminhada da Fé", f"{total_feito} temas", f"{progresso*100:.0f}% concluído")
-
-    if not minhas_pres.empty:
-        freq = (minhas_pres['status'] == 'PRESENTE').mean() * 100
-        c2.metric("Frequência Média", f"{freq:.1f}%")
-    else:
-        c2.metric("Frequência Média", "0%")
-
-    if not df_reu_t.empty and not meus_alunos.empty:
-        pais_presentes = df_reu_t[df_reu_t.iloc[:, 3] == turma_ativa].iloc[:, 1].nunique()
-        perc_pais = (pais_presentes / len(meus_alunos)) * 100
-        c3.metric("Engajamento Pais", f"{perc_pais:.0f}%")
-    else:
-        c3.metric("Engajamento Pais", "0%")
+    # 1. Botão de Chamada Rápida
+    if st.button("✅ INICIAR CHAMADA DE HOJE", use_container_width=True, type="primary"):
+        st.session_state.menu = "✅ Fazer Chamada"
+        st.rerun()
 
     st.divider()
 
-    st.subheader("🚩 Radar de Atenção")
-    risco_c, atencao_p = processar_alertas_evasao(minhas_pres)
+    # 2. Radar de Atenção (Tabela de Ação Rápida)
+    st.subheader("🚩 Radar de Atenção e Ações")
     
-    if risco_c:
-        with st.expander(f"🔴 {len(risco_c)} em Risco Crítico (3+ faltas)"):
-            for r in risco_c: st.write(f"• {r}")
-    
-    df_pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
-    if not df_pend_doc.empty:
-        with st.expander(f"⚠️ {len(df_pend_doc)} com Documentos Pendentes"):
-            for n in df_pend_doc['nome_completo'].tolist(): st.write(f"• {n}")
-    
-    df_sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
-    if not df_sem_batismo.empty:
-        with st.expander(f"🕊️ {len(df_sem_batismo)} sem registro de Batismo"):
-            for n in df_sem_batismo['nome_completo'].tolist(): st.write(f"• {n}")
+    # Filtra alunos com pendências (Docs ou Batismo)
+    df_pendencias = meus_alunos[
+        (~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])) | 
+        (meus_alunos['batizado_sn'] == 'NÃO')
+    ].copy()
 
-    if not risco_c and df_pend_doc.empty and df_sem_batismo.empty:
-        st.success("✨ Turma em caminhada estável. Nenhum alerta crítico.")
+    if not df_pendencias.empty:
+        st.markdown("#### 📋 Ações Pendentes")
+        for _, row in df_pendencias.iterrows():
+            c_nome, c_acao = st.columns([3, 1])
+            c_nome.write(f"**{row['nome_completo']}**")
+            
+            # Botão WhatsApp Direto
+            tel = "".join(filter(str.isdigit, str(row.get('contato_principal', ''))))
+            if tel:
+                c_acao.markdown(f'''<a href="https://wa.me/5573{tel}" target="_blank">📲 WhatsApp</a>''', unsafe_allow_html=True)
+            else:
+                c_acao.write("Sem Tel")
+    else:
+        st.success("✅ Tudo em dia com os catequizandos!")
 
     st.divider()
 
-    st.subheader("👥 Consulta Individual")
-    lista_nomes = sorted(meus_alunos['nome_completo'].tolist())
-    nome_sel = st.selectbox("🔍 Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t", help="Busque pelo nome para ver o dossiê rápido.")
+    # 3. Lista de Catequizandos (Consulta Rápida)
+    st.subheader("👥 Lista de Catequizandos")
+    df_lista = meus_alunos[['nome_completo', 'contato_principal']].copy()
+    st.dataframe(df_lista, use_container_width=True, hide_index=True)
 
     if nome_sel:
         row = meus_alunos[meus_alunos['nome_completo'] == nome_sel].iloc[0]
