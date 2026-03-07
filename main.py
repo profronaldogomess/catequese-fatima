@@ -1049,11 +1049,37 @@ elif menu == "👤 Perfil Individual":
     st.title("👤 Gestão de Perfis e Documentação")
     
     if df_cat.empty:
-        st.warning("⚠️ Base de dados vazia. Cadastre catequizandos para acessar esta área.")
+        st.warning("⚠️ Base de dados vazia.")
     else:
-        tab_individual, tab_auditoria_geral, tab_evasao_gestao = st.tabs([
-            "👤 Consulta e Edição Individual", "🚩 Auditoria de Documentos por Turma", "📄 Gestão de Evasão e Declarações"
-        ])
+        # Se for gestor, vê tudo. Se for catequista, vê apenas sua turma.
+        if eh_gestor:
+            tabs = st.tabs(["👤 Consulta e Edição Individual", "🚩 Auditoria de Documentos por Turma", "📄 Gestão de Evasão e Declarações"])
+            tab_individual = tabs[0]
+            tab_auditoria_geral = tabs[1]
+            tab_evasao_gestao = tabs[2]
+        else:
+            tab_individual = st.container() # Catequista só tem a aba de edição
+            tab_auditoria_geral = None
+            tab_evasao_gestao = None
+
+        with tab_individual:
+            st.subheader("🔍 Localizar e Visualizar Perfil")
+            
+            # Filtro de turma baseado no papel do usuário
+            if eh_gestor:
+                c1, c2 = st.columns([2, 1])
+                busca = c1.text_input("Pesquisar por nome:", key="busca_perfil").upper()
+                lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+                filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil")
+                df_f = df_cat.copy()
+                if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
+                if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
+            else:
+                # Catequista só vê a turma vinculada
+                turma_vinculada = st.session_state.usuario.get('turma_vinculada', '')
+                df_f = df_cat[df_cat['etapa'].isin([t.strip() for t in turma_vinculada.split(',')])]
+                busca = st.text_input("Pesquisar por nome na minha turma:", key="busca_perfil").upper()
+                if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
 
         with tab_individual:
             st.subheader("🔍 Localizar e Visualizar Perfil")
