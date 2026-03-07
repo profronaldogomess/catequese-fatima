@@ -2184,7 +2184,8 @@ elif menu == "✅ Fazer Chamada":
             </style>
         """, unsafe_allow_html=True)
 
-        for _, row in lista_cat.iterrows():
+        # Adicionamos o enumerate para gerar o índice 'i' necessário para a key do toggle
+        for i, (_, row) in enumerate(lista_cat.iterrows()):
             # Passamos a data do encontro (data_enc) para a função avaliar a semana correta
             status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
             if status_niver: contador_niver += 1
