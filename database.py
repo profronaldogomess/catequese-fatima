@@ -564,3 +564,17 @@ def sincronizar_logistica_turma_nos_catequizandos(nome_turma, novo_turno, novo_l
         st.cache_data.clear()
         return True
     except: return False
+
+@st.cache_data(ttl=300) # Cache de 5 minutos para reduzir drasticamente as leituras
+def carregar_dados_globais():
+    """Carrega todas as abas essenciais de uma única vez."""
+    planilha = conectar_google_sheets()
+    if not planilha: return None
+    return {
+        "catequizandos": ler_aba("catequizandos"),
+        "turmas": ler_aba("turmas"),
+        "presencas": ler_aba("presencas"),
+        "usuarios": ler_aba("usuarios"),
+        "sacramentos_eventos": ler_aba("sacramentos_eventos"),
+        "presenca_reuniao": ler_aba("presenca_reuniao")
+    }
