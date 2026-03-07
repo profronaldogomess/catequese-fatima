@@ -1058,7 +1058,7 @@ elif menu == "👤 Perfil Individual":
             tab_auditoria_geral = tabs[1]
             tab_evasao_gestao = tabs[2]
         else:
-            tab_individual = st.container() # Catequista só tem a aba de edição
+            tab_individual = st.container()
             tab_auditoria_geral = None
             tab_evasao_gestao = None
 
@@ -1076,21 +1076,11 @@ elif menu == "👤 Perfil Individual":
                 if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
             else:
                 # Catequista só vê a turma vinculada
-                turma_vinculada = st.session_state.usuario.get('turma_vinculada', '')
-                df_f = df_cat[df_cat['etapa'].isin([t.strip() for t in turma_vinculada.split(',')])]
+                turma_vinculada = str(st.session_state.usuario.get('turma_vinculada', ''))
+                turmas_lista = [t.strip() for t in turma_vinculada.split(',')]
+                df_f = df_cat[df_cat['etapa'].isin(turmas_lista)]
                 busca = st.text_input("Pesquisar por nome na minha turma:", key="busca_perfil").upper()
                 if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
-
-        with tab_individual:
-            st.subheader("🔍 Localizar e Visualizar Perfil")
-            c1, c2 = st.columns([2, 1])
-            busca = c1.text_input("Pesquisar por nome:", key="busca_perfil").upper()
-            lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
-            filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil")
-
-            df_f = df_cat.copy()
-            if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
-            if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
             
             cols_necessarias = ['nome_completo', 'etapa', 'status']
             st.dataframe(df_f[cols_necessarias], use_container_width=True, hide_index=True)
