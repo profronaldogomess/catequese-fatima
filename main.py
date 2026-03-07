@@ -105,7 +105,8 @@ from database import (
     buscar_encontro_por_data, atualizar_usuario, salvar_formacao, 
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
-    atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral
+    atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
+    marcar_tema_realizado_cronograma
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -2147,12 +2148,9 @@ elif menu == "🕊️ Gestão de Sacramentos":
         else:
             st.info("Nenhum evento registrado no histórico.")
 
-# ==============================================================================
-# PÁGINA: ✅ CHAMADA INTELIGENTE (MOBILE-FIRST)
-# ==============================================================================
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
-    
+
     # --- GUIA DE ORIENTAÇÃO ---
     with st.expander("💡 COMO FAZER A CHAMADA?", expanded=True):
         st.markdown("""
@@ -2177,36 +2175,23 @@ elif menu == "✅ Fazer Chamada":
         data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
     df_cron_c = ler_aba("cronograma")
-    sugestao_tema = ""
-    
-    # NOVO: Verifica se já existe chamada para esta data e turma
     df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
-    # Se for uma data passada, carregamos o tema automaticamente
+    
+    # Lógica de sugestão de tema
+    sugestao_tema = ""
     if not df_pres_existente.empty:
+        st.info("📝 **Editando chamada já realizada neste dia.**")
         tema_salvo = df_pres_existente.iloc[0].get('tema_do_dia', '')
     else:
         tema_salvo = st.session_state.get(f"tema_input_{turma_sel}", "")
-    tema_salvo = ""
-    
-    if not df_pres_existente.empty:
-        st.info("📝 **Editando chamada já realizada neste dia.** Os dados anteriores foram carregados.")
-        tema_salvo = df_pres_existente.iloc[0].get('tema_do_dia', '')
-    else:
-        if not df_cron_c.empty:
-            filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
-            if not filtro_cron.empty:
-                sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
-                st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
-                
-                # Botão que preenche o estado e força o rerun para atualizar a UI
-                if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
-                        st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
-                        st.rerun() # Força a atualização da tela
+        filtro_cron = df_cron_c[(df_cron_c['etapa'] == turma_sel) & (df_cron_c.get('status', '') != 'REALIZADO')]
+        if not filtro_cron.empty:
+            sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
+            if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
+                st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
+                st.rerun()
 
-    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
-                             value=tema_salvo if tema_salvo else st.session_state.get(f"tema_input_{turma_sel}", ""), 
-                             key=f"tema_field_{turma_sel}", help="Digite o tema para liberar o botão de salvar.").upper()
-
+    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", value=tema_salvo, key=f"tema_field_{turma_sel}").upper()
     lista_cat = df_cat[(df_cat['etapa'] == turma_sel) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
     
     if lista_cat.empty:
@@ -2214,81 +2199,35 @@ elif menu == "✅ Fazer Chamada":
     else:
         st.divider()
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
-            for _, r in lista_cat.iterrows():
-                st.session_state[f"p_{r['id_catequizando']}_{data_enc}"] = True
-                                
-                # Chave única
-                key_toggle = f"p_{row['id_catequizando']}_{data_enc}_{i}"
-                
-                # Se o toggle não estiver no session_state, define o valor padrão (banco ou False)
-                if key_toggle not in st.session_state:
-                    # Carrega do banco se existir chamada anterior
-                    default_pres = False
-                    if not df_pres_existente.empty:
-                        aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
-                        if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
-                            default_pres = True
-                    st.session_state[key_toggle] = default_pres
-                
-                # O toggle agora lê diretamente do session_state
-                presente = st.toggle("P", key=key_toggle)
-                
-                if presente: contador_p += 1
-                else: contador_a += 1
-            st.rerun() # Adicione este rerun para atualizar os toggles
+            for i, (_, r) in enumerate(lista_cat.iterrows()):
+                st.session_state[f"p_{r['id_catequizando']}_{data_enc}_{i}"] = True
+            st.rerun()
         
         st.markdown("---")
         
-        registros_presenca =[]
+        registros_presenca = []
         contador_p = 0
         contador_a = 0
-        contador_niver = 0
-
-        st.markdown("""
-            <style>
-            .card-niver { border-left: 8px solid #ffa000 !important; background-color: #fff9e6 !important; }
-            </style>
-        """, unsafe_allow_html=True)
-
-        # Adicionamos o enumerate para gerar o índice 'i' necessário para a key do toggle
+        
         for i, (_, row) in enumerate(lista_cat.iterrows()):
-            # Passamos a data do encontro (data_enc) para a função avaliar a semana correta
-            status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
-            if status_niver: contador_niver += 1
+            key_toggle = f"p_{row['id_catequizando']}_{data_enc}_{i}"
+            
+            # Inicializa estado se não existir
+            if key_toggle not in st.session_state:
+                default_pres = False
+                if not df_pres_existente.empty:
+                    aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
+                    if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
+                        default_pres = True
+                st.session_state[key_toggle] = default_pres
             
             with st.container():
                 col_info, col_check = st.columns([3, 1])
-                with col_info:
-                    if status_niver == "DIA":
-                        niver_tag = "🎂 <b style='color:#e03d11;'>NIVER HOJE!</b> "
-                    elif status_niver == "SEMANA":
-                        niver_tag = "🎈 <b style='color:#ffa000;'>NIVER NA SEMANA!</b> "
-                    else:
-                        niver_tag = ""
-                        
-                    st.markdown(f"{niver_tag}{row['nome_completo']}", unsafe_allow_html=True)
-                    
-                    if status_niver:
-                        if st.button(f"🎨 Card Parabéns", key=f"btn_niver_{row['id_catequizando']}"):
-                            # Pega o dia real do aniversário para o card ficar correto
-                            dia_real = formatar_data_br(row['data_nascimento']).split('/')[0]
-                            card_img = gerar_card_aniversario(f"{dia_real} | CATEQUIZANDO | {row['nome_completo']}", tipo="DIA")
-                            if card_img: st.image(card_img, width=150)
-
-                with col_check:
-                    # Carrega o status anterior se a chamada já existir
-                    default_pres = False
-                    if not df_pres_existente.empty:
-                        # Filtra pelo ID do catequizando na data selecionada
-                        aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
-                        if not aluno_pres.empty:
-                            # Verifica se o status é PRESENTE
-                            if aluno_pres.iloc[0]['status'] == 'PRESENTE':
-                                default_pres = True
-                            
-                    presente = st.toggle("P", value=default_pres, key=f"p_{row['id_catequizando']}_{data_enc}_{i}")
-                    if presente: contador_p += 1
-                    else: contador_a += 1
+                col_info.markdown(f"{row['nome_completo']}")
+                presente = col_check.toggle("P", key=key_toggle)
+                
+                if presente: contador_p += 1
+                else: contador_a += 1
 
                 registros_presenca.append([
                     str(data_enc), row['id_catequizando'], row['nome_completo'], 
@@ -2298,17 +2237,15 @@ elif menu == "✅ Fazer Chamada":
             st.markdown("---")
 
         st.subheader("📊 Resumo da Chamada")
-        c_res1, c_res2, c_res3 = st.columns(3)
+        c_res1, c_res2 = st.columns(2)
         c_res1.metric("✅ Presentes", contador_p)
         c_res2.metric("❌ Ausentes", contador_a)
-        c_res3.metric("🎂 Aniversariantes", contador_niver)
 
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
             if salvar_presencas(registros_presenca):
                 if tema_dia == sugestao_tema:
-                    from database import marcar_tema_realizado_cronograma
                     marcar_tema_realizado_cronograma(turma_sel, tema_dia)
-                st.success(f"✅ Chamada de {turma_sel} salva com sucesso!"); st.balloons()
+                st.success(f"✅ Chamada de {turma_sel} salva!"); st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
         if not tema_dia:
