@@ -777,15 +777,32 @@ def gerar_relatorio_diocesano_pdf(df_turmas, df_cat, df_usuarios):
         pdf.cell(20, 7, "Ativos", border=1, fill=True, align='C'); pdf.ln()
         pdf.set_font("helvetica", "", 8)
         for _, t in df_alvo.iterrows():
-            nome_t = t['nome_turma']
-            alunos = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
-            bat = len(alunos[alunos['batizado_sn'] == 'SIM'])
-            euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False).sum()
-            pdf.cell(70, 6, limpar_texto(nome_t), border=1)
-            pdf.cell(60, 6, limpar_texto(str(t.get('catequista_responsavel', ''))[:35]), border=1)
-            pdf.cell(20, 6, str(bat), border=1, align='C')
-            pdf.cell(20, 6, str(euc), border=1, align='C')
-            pdf.cell(20, 6, str(len(alunos)), border=1, align='C'); pdf.ln()
+                nome_t = t['nome_turma']
+                alunos = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
+                bat = len(alunos[alunos['batizado_sn'] == 'SIM'])
+                euc = alunos['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False).sum()
+                
+                # Lógica de altura dinâmica para catequistas
+                cats_list = [c.strip() for c in str(t.get('catequista_responsavel', '')).split(',') if c.strip()]
+                cats_text = "\n".join(cats_list)
+                num_cats = len(cats_list) if len(cats_list) > 0 else 1
+                altura_linha = max(6, num_cats * 5) # Altura mínima de 6, ou 5 por catequista
+                
+                inicio_y = pdf.get_y()
+                pdf.cell(70, altura_linha, "", border=1)
+                pdf.cell(60, altura_linha, "", border=1)
+                pdf.cell(20, altura_linha, str(bat), border=1, align='C')
+                pdf.cell(20, 6, str(euc), border=1, align='C') # Mantém alinhamento
+                pdf.cell(20, 6, str(len(alunos)), border=1, align='C')
+                
+                # Escreve os textos dentro das células
+                pdf.set_xy(10, inicio_y)
+                pdf.multi_cell(70, altura_linha, limpar_texto(nome_t), border=0)
+                pdf.set_xy(80, inicio_y)
+                pdf.multi_cell(60, altura_linha/num_cats if num_cats > 1 else altura_linha, limpar_texto(cats_text), border=0, align='C')
+                
+                pdf.set_xy(10, inicio_y + altura_linha)
+                pdf.ln()
 
     desenhar_tabela_itinerarios("1. ITINERÁRIOS INFANTIL / JUVENIL", t_infantil)
     pdf.ln(4)
