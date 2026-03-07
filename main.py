@@ -719,12 +719,17 @@ elif menu == "📖 Diário de Encontros":
 
     turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
 
-    # --- BARRA DE PROGRESSO ---
+    # --- BARRA DE PROGRESSO (NORMALIZADA) ---
     if not df_cron_p.empty:
-        cron_turma = df_cron_p[df_cron_p['etapa'] == turma_focal]
+        # Normaliza nomes para comparação (remove espaços e coloca em maiúsculas)
+        cron_turma = df_cron_p[df_cron_p['etapa'].str.strip().str.upper() == turma_focal.strip().upper()]
+        
         if not cron_turma.empty:
             total_temas = len(cron_turma)
-            realizados = len(df_enc_local[df_enc_local['turma'] == turma_focal]) if not df_enc_local.empty else 0
+            # Filtra encontros normalizando o nome da turma
+            encontros_turma = df_enc_local[df_enc_local['turma'].str.strip().str.upper() == turma_focal.strip().upper()] if not df_enc_local.empty else pd.DataFrame()
+            realizados = len(encontros_turma)
+            
             progresso = realizados / total_temas if total_temas > 0 else 0
             st.markdown(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
             st.progress(progresso)
@@ -773,7 +778,8 @@ elif menu == "📖 Diário de Encontros":
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     if not df_enc_local.empty:
-        hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
+        # Filtro normalizado
+        hist_turma = df_enc_local[df_enc_local['turma'].str.strip().str.upper() == turma_focal.strip().upper()].sort_values(by='data', ascending=False)
         for _, row in hist_turma.iterrows():
             with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
                 with st.form(f"edit_enc_{row['data']}_{turma_focal}"):
