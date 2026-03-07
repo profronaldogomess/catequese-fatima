@@ -683,22 +683,25 @@ elif menu == "📚 Minha Turma":
             if not proximo.empty: st.write(proximo.iloc[0]['titulo_tema'])
             else: st.write("Cronograma em dia!")
 
-# ==============================================================================
+
+#==============================================================================
 # PÁGINA: 📖 DIÁRIO DE ENCONTROS
-# ==============================================================================  
-    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
+#==============================================================================
 elif menu == "📖 Diário de Encontros":
     st.title("📖 Central de Itinerário e Encontros")
     
     # --- GUIA EXPLICATIVO ---
-    with st.expander("💡 COMO FUNCIONA O DIÁRIO?", expanded=True):
+    with st.expander("💡 COMO FUNCIONA O DIÁRIO?", expanded=False):
         st.markdown("""
-        Para manter o histórico da sua turma organizado, siga este fluxo simples:
-        1. **PLANEJAR (Opcional):** Adicione os temas que você pretende dar no **Cronograma**. Isso ajuda a visualizar o progresso.
-        2. **REGISTRAR (Obrigatório):** Sempre que houver um encontro, use o formulário **"Registrar Encontro de Hoje"**.
-        3. **CHAMADA:** O sistema só libera a chamada após o registro do tema. **Não registre o mesmo tema duas vezes para a mesma data!**
+        1. **PLANEJAR:** Adicione temas no Cronograma para visualizar o progresso.
+        2. **REGISTRAR:** Use o formulário ao lado para registrar o encontro realizado.
+        3. **CHAMADA:** O sistema bloqueia registros duplicados na mesma data.
         """)
 
+    # --- CARREGAMENTO DE DADOS ---
+    df_cron_p = ler_aba("cronograma")
+    df_enc_local = ler_aba("encontros")
+    
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
@@ -709,21 +712,24 @@ elif menu == "📖 Diário de Encontros":
         st.error("⚠️ Nenhuma turma vinculada."); st.stop()
 
     turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
-    # Carregamento necessário para o cálculo de progresso e sugestões
-    df_cron_p = ler_aba("cronograma")
-    df_pres_local = ler_aba("presencas")
-    df_enc_local = ler_aba("encontros")
 
-    # --- VERIFICAÇÃO DE DUPLICIDADE ---
-    df_enc_local = ler_aba("encontros")
-    
-    # --- COLUNAS DE AÇÃO ---
-    col_plan, col_reg = st.columns([1, 1])
+    # --- BARRA DE PROGRESSO ---
+    if not df_cron_p.empty:
+        cron_turma = df_cron_p[df_cron_p['etapa'] == turma_focal]
+        if not cron_turma.empty:
+            total_temas = len(cron_turma)
+            realizados = len(df_enc_local[df_enc_local['turma'] == turma_focal]) if not df_enc_local.empty else 0
+            progresso = realizados / total_temas if total_temas > 0 else 0
+            st.markdown(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
+            st.progress(progresso)
+
+    # --- COLUNAS DE AÇÃO (FORMULÁRIOS SEPARADOS) ---
+    col_plan, col_reg = st.columns(2)
 
     with col_plan:
         st.subheader("📅 1. Planejar Temas")
-        with st.form("form_plan_diario", clear_on_submit=True):
-            novo_tema = st.text_input("Título do Tema", help="Ex: Encontro 01 - Deus nos ama").upper()
+        with st.form(f"form_plan_{turma_focal}", clear_on_submit=True):
+            novo_tema = st.text_input("Título do Tema").upper()
             detalhes_tema = st.text_area("Objetivo (Opcional)", height=100)
             if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
                 if novo_tema:
@@ -732,17 +738,16 @@ elif menu == "📖 Diário de Encontros":
 
     with col_reg:
         st.subheader("✅ 2. Registrar Encontro")
-        with st.form("form_reg_diario", clear_on_submit=True):
+        with st.form(f"form_reg_{turma_focal}", clear_on_submit=True):
             data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
             
-            # Verifica se já existe registro para esta data
             ja_registrado = False
             if not df_enc_local.empty:
                 if not df_enc_local[(df_enc_local['turma'] == turma_focal) & (df_enc_local['data'] == str(data_e))].empty:
                     ja_registrado = True
             
             if ja_registrado:
-                st.error(f"⚠️ Já existe um tema registrado para {data_e.strftime('%d/%m/%Y')}. Não é possível duplicar.")
+                st.error(f"⚠️ Já existe um tema registrado para {data_e.strftime('%d/%m/%Y')}.")
                 st.form_submit_button("BLOQUEADO", disabled=True)
             else:
                 tema_manual = st.text_input("Título do Tema Ministrado:").upper()
@@ -751,77 +756,20 @@ elif menu == "📖 Diário de Encontros":
                     if tema_manual:
                         if salvar_encontro([str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
                             marcar_tema_realizado_cronograma(turma_focal, tema_manual)
-                            st.success("Encontro registrado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     st.divider()
+    st.subheader(f"📜 Linha do Tempo: {turma_focal}")
+    if not df_enc_local.empty:
+        hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
+        for _, row in hist_turma.iterrows():
+            with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
+                st.write(f"**Catequista:** {row['catequista']}")
+                st.write(f"**Relato:** {row.get('obs', 'Sem relato')}")
+    else:
+        st.info("Nenhum encontro registrado ainda.")
 
-    col_plan, col_reg = st.columns([1, 1])
 
-    with col_plan:
-        st.subheader("📅 Planejar Próximos Temas")
-        with st.form("form_plan_diario", clear_on_submit=True):
-            # --- CARREGAMENTO DE DADOS ---
-            df_cron_p = ler_aba("cronograma")
-            df_pres_local = ler_aba("presencas")
-            df_enc_local = ler_aba("encontros")
-
-            # --- BARRA DE PROGRESSO DO ITINERÁRIO ---
-            if not df_cron_p.empty:
-                cron_turma = df_cron_p[df_cron_p['etapa'] == turma_focal]
-                if not cron_turma.empty:
-                    total_temas = len(cron_turma)
-                    realizados = len(df_enc_local[df_enc_local['turma'] == turma_focal]) if not df_enc_local.empty else 0
-                    progresso = realizados / total_temas if total_temas > 0 else 0
-                    st.markdown(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
-                    st.progress(progresso)
-
-            # --- COLUNAS DE AÇÃO ---
-            col_plan, col_reg = st.columns([1, 1])
-
-            with col_plan:
-                st.subheader("📅 1. Planejar Temas")
-                # Chave única para evitar StreamlitAPIException
-                with st.form(f"form_plan_{turma_focal}", clear_on_submit=True):
-                    novo_tema = st.text_input("Título do Tema").upper()
-                    detalhes_tema = st.text_area("Objetivo (Opcional)", height=100)
-                    if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
-                        if novo_tema:
-                            if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_focal, novo_tema, detalhes_tema, "PENDENTE"]):
-                                st.success("Tema planejado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-            with col_reg:
-                st.subheader("✅ 2. Registrar Encontro")
-                # Chave única para evitar StreamlitAPIException
-                with st.form(f"form_reg_{turma_focal}", clear_on_submit=True):
-                    data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
-                    
-                    ja_registrado = False
-                    if not df_enc_local.empty:
-                        if not df_enc_local[(df_enc_local['turma'] == turma_focal) & (df_enc_local['data'] == str(data_e))].empty:
-                            ja_registrado = True
-                    
-                    if ja_registrado:
-                        st.error(f"⚠️ Já existe um tema registrado para {data_e.strftime('%d/%m/%Y')}.")
-                        st.form_submit_button("BLOQUEADO", disabled=True)
-                    else:
-                        tema_manual = st.text_input("Título do Tema Ministrado:").upper()
-                        obs_e = st.text_area("Observações Pastorais", height=68)
-                        if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
-                            if tema_manual:
-                                if salvar_encontro([str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
-                                    marcar_tema_realizado_cronograma(turma_focal, tema_manual)
-                                    st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-            st.divider()
-            st.subheader(f"📜 Linha do Tempo: {turma_focal}")
-            if not df_enc_local.empty:
-                hist_turma = df_enc_local[df_enc_local['turma'] == turma_focal].sort_values(by='data', ascending=False)
-                for _, row in hist_turma.iterrows():
-                    with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
-                        st.write(f"**Catequista:** {row['catequista']}")
-                        st.write(f"**Relato:** {row.get('obs', 'Sem relato')}")
-            else:
-                st.info("Nenhum encontro registrado ainda.")
 
 # ==================================================================================
 # PÁGINA: 📝 CADASTRAR CATEQUIZANDO (COM TOOLTIPS E AJUDA)
