@@ -2181,6 +2181,11 @@ elif menu == "✅ Fazer Chamada":
     
     # NOVO: Verifica se já existe chamada para esta data e turma
     df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
+    # Se for uma data passada, carregamos o tema automaticamente
+    if not df_pres_existente.empty:
+        tema_salvo = df_pres_existente.iloc[0].get('tema_do_dia', '')
+    else:
+        tema_salvo = st.session_state.get(f"tema_input_{turma_sel}", "")
     tema_salvo = ""
     
     if not df_pres_existente.empty:
@@ -2195,8 +2200,8 @@ elif menu == "✅ Fazer Chamada":
                 
                 # Botão que preenche o estado e força o rerun para atualizar a UI
                 if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
-                    st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
-                    st.rerun()
+                        st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
+                        st.rerun() # Força a atualização da tela
 
     tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", 
                              value=tema_salvo if tema_salvo else st.session_state.get(f"tema_input_{turma_sel}", ""), 
@@ -2211,6 +2216,7 @@ elif menu == "✅ Fazer Chamada":
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
             for _, r in lista_cat.iterrows():
                 st.session_state[f"p_{r['id_catequizando']}_{data_enc}"] = True
+            st.rerun() # Adicione este rerun para atualizar os toggles
         
         st.markdown("---")
         
