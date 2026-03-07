@@ -1492,9 +1492,31 @@ elif menu == "🏫 Gestão de Turmas":
                 nome_turma_original = str(d['nome_turma'])
                 
                 c1, c2 = st.columns(2)
-                en = c1.text_input("Nome da Turma", value=d['nome_turma'], key="edit_nome_turma").upper()
-                ee = c1.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0, key="edit_etapa_turma")
-                ea = c2.number_input("Ano Letivo", value=int(d['ano']), key="edit_ano_turma")
+                # Forçamos o valor (value) com os dados da turma selecionada
+                en = c1.text_input("Nome da Turma", value=d['nome_turma']).upper()
+                
+                # Tratamento de índice para o selectbox de Etapa
+                idx_etapa = etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0
+                ee = c1.selectbox("Etapa Base", etapas_lista, index=idx_etapa)
+                
+                ea = c2.number_input("Ano Letivo", value=int(d['ano']))
+                
+                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
+                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
+                
+                st.markdown("---")
+                c3, c4 = st.columns(2)
+                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
+                turno_atual = str(d.get('turno', 'MANHÃ')).upper()
+                et = c3.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0)
+                el = c4.text_input("Local / Sala", value=d.get('local', 'SALA')).upper()
+                
+                pe = c1.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''))
+                pc = c2.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''))
+                
+                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
+                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
+                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats])
                 
                 dias_atuais =[x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
                 ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes], key="edit_dias_turma")
