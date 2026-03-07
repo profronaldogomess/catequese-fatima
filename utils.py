@@ -386,9 +386,13 @@ def _desenhar_corpo_ficha(pdf, dados):
     marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec)
     
     pdf.set_xy(105, y_ec)
+    pdf.set_font("helvetica", "B", 8)
     pdf.cell(40, 5, "Documentos Faltando:", ln=0)
-    pdf.set_font("helvetica", "", 9)
-    pdf.cell(0, 5, limpar_texto(dados.get('doc_em_falta', 'NADA')), ln=1)
+    
+    pdf.set_font("helvetica", "", 8)
+    # Usamos multi_cell para permitir que o texto quebre linha e não seja cortado
+    # A largura 60 é o espaço restante na linha
+    pdf.multi_cell(60, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
 
     # --- SEÇÃO 4: TERMO LGPD ---
     pdf.ln(5)
