@@ -1058,13 +1058,14 @@ elif menu == "👤 Perfil Individual":
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia.")
     else:
-        # Se for gestor, vê tudo. Se for catequista, vê apenas sua turma.
+        # Criação condicional das abas para evitar o TypeError
         if eh_gestor:
             tabs = st.tabs(["👤 Consulta e Edição Individual", "🚩 Auditoria de Documentos por Turma", "📄 Gestão de Evasão e Declarações"])
             tab_individual = tabs[0]
             tab_auditoria_geral = tabs[1]
             tab_evasao_gestao = tabs[2]
         else:
+            # Catequista não tem abas, apenas o container principal
             tab_individual = st.container()
             tab_auditoria_geral = None
             tab_evasao_gestao = None
