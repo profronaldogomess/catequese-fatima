@@ -1566,7 +1566,10 @@ elif menu == "🏫 Gestão de Turmas":
         if not df_turmas.empty:
             t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_turma")
             
-            alunos_t = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
+            # Filtro rigoroso: Apenas catequizandos ATIVOS são considerados no Dashboard Local
+            alunos_t_todos = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
+            alunos_t = alunos_t_todos[alunos_t_todos['status'] == 'ATIVO']
+            
             info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
             pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
             df_cron_local = ler_aba("cronograma")
