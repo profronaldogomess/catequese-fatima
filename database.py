@@ -582,3 +582,28 @@ def carregar_dados_globais():
         "cronograma": ler_aba("cronograma"),
         "encontros": ler_aba("encontros")
     }
+
+def atualizar_encontro_e_cronograma(id_encontro, turma, data, novo_tema, novo_relato, catequista):
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        # 1. Atualiza a aba 'encontros'
+        aba_enc = planilha.worksheet("encontros")
+        # Busca pela linha que tem a data e turma
+        celulas = aba_enc.findall(str(data), in_column=1)
+        for cel in celulas:
+            if aba_enc.cell(cel.row, 2).value == turma:
+                aba_enc.update(f"A{cel.row}:E{cel.row}", [[str(data), turma, novo_tema, catequista, novo_relato]])
+        
+        # 2. Atualiza o status no 'cronograma' (marca o novo tema como REALIZADO)
+        aba_cron = planilha.worksheet("cronograma")
+        cel_cron = aba_cron.findall(novo_tema)
+        for cel in cel_cron:
+            if aba_cron.cell(cel.row, 2).value == turma:
+                aba_cron.update_cell(cel.row, 5, "REALIZADO")
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na sincronia: {e}")
+        return False
