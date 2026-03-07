@@ -1076,11 +1076,22 @@ elif menu == "👤 Perfil Individual":
                 if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
             else:
                 # Catequista vê turmas vinculadas no cadastro OU onde é responsável na aba turmas
-                nome_usuario = st.session_state.usuario.get('nome', '')
+                nome_usuario = st.session_state.usuario.get('nome', '').strip()
                 turma_vinculada = str(st.session_state.usuario.get('turma_vinculada', ''))
                 
-                # Busca turmas onde ele é responsável
-                turmas_responsavel = df_turmas[df_turmas['catequista_responsavel'].str.contains(nome_usuario, na=False)]['nome_turma'].tolist()
+                # DEBUG: Vamos ver o que o sistema está buscando
+                # st.write(f"DEBUG: Buscando turmas para catequista: '{nome_usuario}'")
+                
+                # Busca turmas onde ele é responsável (usando regex para ignorar espaços extras)
+                turmas_responsavel = df_turmas[df_turmas['catequista_responsavel'].str.contains(nome_usuario, na=False, case=False)]['nome_turma'].tolist()
+                
+                # st.write(f"DEBUG: Turmas encontradas como responsável: {turmas_responsavel}")
+                
+                # Une as listas
+                turmas_lista = [t.strip() for t in turma_vinculada.split(',') if t.strip()] + turmas_responsavel
+                turmas_lista = list(set(turmas_lista)) # Remove duplicatas
+                
+                df_f = df_cat[df_cat['etapa'].isin(turmas_lista)]
                 
                 # Une as listas
                 turmas_lista = [t.strip() for t in turma_vinculada.split(',') if t.strip()] + turmas_responsavel
