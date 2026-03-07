@@ -2351,23 +2351,29 @@ elif menu == "👥 Gestão de Catequistas":
                         st.divider()
                         st.markdown("#### ⛪ Itinerário Sacramental (Marque apenas se possuir)")
                         
+                        # Usamos session_state para controlar a habilitação dos campos de data
+                        if f"has_bat_{u['email']}" not in st.session_state: st.session_state[f"has_bat_{u['email']}"] = (val_bat is not None)
+                        if f"has_euc_{u['email']}" not in st.session_state: st.session_state[f"has_euc_{u['email']}"] = (val_euc is not None)
+                        if f"has_cri_{u['email']}" not in st.session_state: st.session_state[f"has_cri_{u['email']}"] = (val_cri is not None)
+                        if f"has_min_{u['email']}" not in st.session_state: st.session_state[f"has_min_{u['email']}"] = (val_min is not None)
+
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             has_ini = st.checkbox("Início na Catequese", value=True)
-                            dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_ini)
+                            dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
                         with col2:
-                            has_bat = st.checkbox("Possui Batismo?", value=(val_bat is not None))
+                            has_bat = st.checkbox("Possui Batismo?", key=f"has_bat_{u['email']}")
                             dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
                         with col3:
-                            has_euc = st.checkbox("Possui 1ª Eucaristia?", value=(val_euc is not None))
+                            has_euc = st.checkbox("Possui 1ª Eucaristia?", key=f"has_euc_{u['email']}")
                             dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
 
                         col4, col5 = st.columns(2)
                         with col4:
-                            has_cri = st.checkbox("Possui Crisma?", value=(val_cri is not None))
+                            has_cri = st.checkbox("Possui Crisma?", key=f"has_cri_{u['email']}")
                             dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
                         with col5:
-                            has_min = st.checkbox("É Ministro de Catequese?", value=(val_min is not None))
+                            has_min = st.checkbox("É Ministro de Catequese?", key=f"has_min_{u['email']}")
                             dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                         if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
