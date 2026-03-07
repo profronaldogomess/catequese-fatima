@@ -2152,6 +2152,15 @@ elif menu == "🕊️ Gestão de Sacramentos":
 # ==============================================================================
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
+    
+    # --- GUIA DE ORIENTAÇÃO ---
+    with st.expander("💡 COMO FAZER A CHAMADA?", expanded=True):
+        st.markdown("""
+        1. **TEMA DO ENCONTRO:** Digite o tema ministrado hoje. **O botão de salvar só aparecerá após você preencher este campo.**
+        2. **PRESENÇA:** Use o botão **'P'** ao lado do nome de cada catequizando para marcar a presença.
+        3. **MARCAR TODOS:** Se a maioria estiver presente, use o botão **'Marcar Todos como Presentes'** e depois desmarque apenas os ausentes.
+        4. **FINALIZAR:** Após conferir, clique em **'FINALIZAR CHAMADA E SALVAR'** no final da página.
+        """)
 
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
