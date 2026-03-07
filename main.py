@@ -784,11 +784,15 @@ elif menu == "📖 Diário de Encontros":
             with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
                 with st.form(f"edit_enc_{row['data']}_{turma_focal}"):
                     ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
-                    ed_relato = st.text_area("Editar Relato:", value=row.get('obs', ''))
+                    
+                    # Corrigido: Buscando a chave correta 'observacoes' conforme o seu CSV
+                    relato_atual = row.get('observacoes', row.get('obs', ''))
+                    ed_relato = st.text_area("Editar Relato:", value=relato_atual)
                     
                     if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                        # Passamos o relato atualizado para a função
                         if atualizar_encontro_e_cronograma(None, turma_focal, row['data'], ed_tema, ed_relato, row['catequista']):
-                            st.success("Registro atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            st.success("Registro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
     else:
         st.info("Nenhum encontro registrado ainda.")
 
