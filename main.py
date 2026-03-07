@@ -2420,26 +2420,34 @@ elif menu == "👥 Gestão de Catequistas":
                                         planilha = conectar_google_sheets()
                                         if planilha:
                                             aba_t = planilha.worksheet("turmas")
+                                            aba_u = planilha.worksheet("usuarios") # Garantir acesso à aba de usuários
                                             nome_cat = ed_nome
-                                            turmas_antigas =[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip()]
                                             
-                                            turmas_afetadas = set(turmas_antigas + ed_turmas)
+                                            # Sincroniza a lista de turmas no cadastro do catequista (aba usuarios)
+                                            cel_u = aba_u.find(u['email'], in_column=2)
+                                            if cel_u:
+                                                aba_u.update_cell(cel_u.row, 5, ", ".join(ed_turmas))
+                                            
+                                            # Sincroniza a lista de catequistas na aba turmas
+                                            turmas_afetadas = set([t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip()] + ed_turmas)
                                             
                                             for t_nome in turmas_afetadas:
                                                 cel_t = aba_t.find(t_nome, in_column=2)
                                                 if cel_t:
-                                                    v_atual = aba_t.cell(cel_t.row, 5).value or ""
-                                                    v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
+                                                    # Leitura segura com tratamento de erro
+                                                    try:
+                                                        v_atual = aba_t.cell(cel_t.row, 5).value or ""
+                                                    except: v_atual = ""
+                                                    
+                                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
                                                     mudou = False
                                                     
                                                     if t_nome in ed_turmas:
                                                         if nome_cat not in v_list:
-                                                            v_list.append(nome_cat)
-                                                            mudou = True
+                                                            v_list.append(nome_cat); mudou = True
                                                     else:
                                                         if nome_cat in v_list:
-                                                            v_list.remove(nome_cat)
-                                                            mudou = True
+                                                            v_list.remove(nome_cat); mudou = True
                                                             
                                                     if mudou:
                                                         aba_t.update_cell(cel_t.row, 5, ", ".join(v_list))
