@@ -370,7 +370,7 @@ if menu == "🏠 Início / Dashboard":
     
     with c_aud3:
         if st.button("📥 Baixar Relatório de Auditoria (PDF)", use_container_width=True):
-            pdf_aud = gerar_pdf_auditoria_chamadas(ultimo_sabado, df_turmas, df_pres)
+            pdf_aud = gerar_pdf_auditoria_chamadas(ultimo_sabado, df_turmas, df_pres, df_cat)
             st.download_button("Clique para baixar", pdf_aud, f"Auditoria_{ultimo_sabado}.pdf", "application/pdf", use_container_width=True)
 
     if turmas_pendentes:
