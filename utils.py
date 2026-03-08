@@ -65,12 +65,20 @@ def calcular_idade(data_nascimento):
     except: return 0
 
 def limpar_texto(texto):
-    """Remove artefatos de Markdown e garante compatibilidade com Latin-1 para PDF."""
+    """Remove artefatos de Markdown e Emojis, garantindo compatibilidade com Latin-1."""
     if not texto: return ""
-    # Remove negritos de IA e outros caracteres especiais
+    
+    # 1. Remove Markdown
     texto_limpo = str(texto).replace("**", "").replace("* ", " - ").replace("*", "")
-    # Substituições comuns para evitar erro de encoding no FPDF
-    return texto_limpo.encode('latin-1', 'replace').decode('latin-1')
+    
+    # 2. Remove Emojis e caracteres especiais não suportados pelo Latin-1
+    # Substitui caracteres que não são ASCII por um espaço ou caractere seguro
+    texto_limpo = texto_limpo.encode('latin-1', 'ignore').decode('latin-1')
+    
+    # 3. Substituições manuais de segurança para símbolos comuns
+    texto_limpo = texto_limpo.replace("✅", "OK").replace("❌", "X").replace("⚠️", "!")
+    
+    return texto_limpo
 
 def finalizar_pdf(pdf):
     """Finaliza a geração do PDF com tratamento de erro detalhado."""
