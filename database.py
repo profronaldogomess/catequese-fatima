@@ -119,6 +119,7 @@ def salvar_lote_catequizandos(lista_de_listas):
     return False
 
 def salvar_presencas(lista_presencas):
+    """Salva presenças e sincroniza em cascata com Diário e Cronograma."""
     planilha = conectar_google_sheets()
     if not planilha: return False
     try:
@@ -126,32 +127,42 @@ def salvar_presencas(lista_presencas):
         aba_enc = planilha.worksheet("encontros")
         
         data_alvo = str(lista_presencas[0][0]).strip()
-        turma_alvo = str(lista_presencas[0][3]).strip()
-        tema_alvo = str(lista_presencas[0][5]).strip()
+        turma_alvo = str(lista_presencas[0][3]).strip().upper()
+        tema_alvo = str(lista_presencas[0][5]).strip().upper()
         catequista = str(lista_presencas[0][6]).strip()
 
-        # 1. Limpa presenças antigas do dia/turma
+        # 1. Limpa presenças antigas do dia/turma (para reescrever as novas)
         dados = aba_pres.get_all_values()
-        linhas_del = [i + 1 for i, linha in enumerate(dados) if len(linha) >= 4 and linha[0] == data_alvo and linha[3] == turma_alvo]
-        for row_idx in sorted(linhas_del, reverse=True): aba_pres.delete_rows(row_idx)
+        linhas_del =[i + 1 for i, linha in enumerate(dados) if len(linha) >= 4 and linha[0] == data_alvo and linha[3].strip().upper() == turma_alvo]
+        for row_idx in sorted(linhas_del, reverse=True): 
+            aba_pres.delete_rows(row_idx)
         
-        # 2. Salva novas presenças
+        # 2. Salva as novas presenças com o tema (novo ou editado)
         aba_pres.append_rows(lista_presencas)
         
-        # 3. Sincroniza com a aba 'encontros' (Garante que o encontro apareça no Diário)
-        # Verifica se já existe esse encontro no diário
+        # 3. Sincronia em Cascata com a aba ENCONTROS (Diário)
         dados_enc = aba_enc.get_all_values()
-        existe_enc = any(linha[0] == data_alvo and linha[1] == turma_alvo for linha in dados_enc)
+        linha_existente = None
+        for i, linha in enumerate(dados_enc):
+            if len(linha) >= 2 and str(linha[0]) == data_alvo and str(linha[1]).strip().upper() == turma_alvo:
+                linha_existente = i + 1
+                break
         
-        if not existe_enc:
+        if linha_existente:
+            # Se o encontro já existe, ATUALIZA o tema (modo edição pela chamada)
+            aba_enc.update_cell(linha_existente, 3, tema_alvo)
+        else:
+            # Se não existe, CRIA um novo (modo criação pela chamada)
             aba_enc.append_row([data_alvo, turma_alvo, tema_alvo, catequista, "Registro automático via Chamada"])
             
-        # 4. Marca no cronograma
+        # 4. Sincronia em Cascata com a aba CRONOGRAMA
         marcar_tema_realizado_cronograma(turma_alvo, tema_alvo)
         
-        st.cache_data.clear(); return True
+        st.cache_data.clear()
+        return True
     except Exception as e: 
-        st.error(f"Erro na sincronia: {e}"); return False
+        st.error(f"Erro na sincronia da chamada: {e}")
+        return False
 
 def salvar_encontro(dados_encontro):
     planilha = conectar_google_sheets()
@@ -650,3 +661,44 @@ def salvar_com_seguranca(funcao_salvar, *args):
     """
     time.sleep(random.uniform(0.5, 2.0)) # Atraso aleatório entre 0.5s e 2s
     return funcao_salvar(*args)
+
+def atualizar_encontro_global(turma, data_alvo, novo_tema, nova_obs):
+    """
+    Atualiza o tema e relato em cascata: Encontros, Presenças e Cronograma.
+    Garante a integridade referencial do banco de dados.
+    """
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    
+    try:
+        turma_norm = turma.strip().upper()
+        tema_norm = novo_tema.strip().upper()
+        data_str = str(data_alvo)
+
+        # 1. Atualizar aba ENCONTROS (Coluna 3 = Tema, Coluna 5 = Observações)
+        aba_enc = planilha.worksheet("encontros")
+        dados_enc = aba_enc.get_all_values()
+        for i, linha in enumerate(dados_enc):
+            if len(linha) >= 2 and str(linha[0]) == data_str and str(linha[1]).strip().upper() == turma_norm:
+                aba_enc.update_cell(i + 1, 3, tema_norm)
+                aba_enc.update_cell(i + 1, 5, nova_obs)
+
+        # 2. Atualizar aba PRESENCAS (Coluna 6 = Tema do Dia)
+        aba_pres = planilha.worksheet("presencas")
+        dados_pres = aba_pres.get_all_values()
+        for i, linha in enumerate(dados_pres):
+            if len(linha) >= 4 and str(linha[0]) == data_str and str(linha[3]).strip().upper() == turma_norm:
+                aba_pres.update_cell(i + 1, 6, tema_norm)
+
+        # 3. Atualizar aba CRONOGRAMA (Se o novo tema existir lá, marca como REALIZADO)
+        aba_cron = planilha.worksheet("cronograma")
+        dados_cron = aba_cron.get_all_values()
+        for i, linha in enumerate(dados_cron):
+            if len(linha) >= 3 and str(linha[1]).strip().upper() == turma_norm and str(linha[2]).strip().upper() == tema_norm:
+                aba_cron.update_cell(i + 1, 5, "REALIZADO") # Coluna E = Status
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na sincronia global: {e}")
+        return False
