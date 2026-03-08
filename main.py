@@ -699,23 +699,22 @@ elif menu == "📚 Minha Turma":
             else: st.write("Cronograma em dia!")
 
 
-#==============================================================================
+# ==============================================================================
 # PÁGINA: 📖 DIÁRIO DE ENCONTROS
-#==============================================================================
+# ==============================================================================
 elif menu == "📖 Diário de Encontros":
     st.title("📖 Central de Itinerário e Encontros")
     
-    # --- GUIA EXPLICATIVO ---
     with st.expander("💡 COMO FUNCIONA O DIÁRIO?", expanded=False):
         st.markdown("""
-        1. **PLANEJAR:** Adicione temas no Cronograma para visualizar o progresso.
+        1. **PLANEJAR:** Adicione temas no Cronograma.
         2. **REGISTRAR:** Use o formulário ao lado para registrar o encontro realizado.
-        3. **CHAMADA:** O sistema bloqueia registros duplicados na mesma data.
+        3. **LINHA DO TEMPO:** Edite temas e relatos diretamente nos registros abaixo.
         """)
 
-    # --- CARREGAMENTO DE DADOS ---
+    # --- CARREGAMENTO NORMALIZADO ---
     df_cron_p = ler_aba("cronograma")
-    df_enc_local = ler_aba("encontros")
+    df_pres_local = ler_aba("presencas")
     
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
@@ -727,23 +726,21 @@ elif menu == "📖 Diário de Encontros":
         st.error("⚠️ Nenhuma turma vinculada."); st.stop()
 
     turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
+    turma_norm = turma_focal.strip().upper()
 
-    # --- BARRA DE PROGRESSO (NORMALIZADA) ---
+    # --- BARRA DE PROGRESSO ---
     if not df_cron_p.empty:
-        # Normaliza nomes para comparação (remove espaços e coloca em maiúsculas)
-        cron_turma = df_cron_p[df_cron_p['etapa'].str.strip().str.upper() == turma_focal.strip().upper()]
-        
+        cron_turma = df_cron_p[df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm]
         if not cron_turma.empty:
             total_temas = len(cron_turma)
-            # Filtra encontros normalizando o nome da turma
-            encontros_turma = df_enc_local[df_enc_local['turma'].str.strip().str.upper() == turma_focal.strip().upper()] if not df_enc_local.empty else pd.DataFrame()
-            realizados = len(encontros_turma)
-            
+            # Busca encontros realizados na aba presencas (fonte única)
+            encontros_realizados = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]['data_encontro'].unique()
+            realizados = len(encontros_realizados)
             progresso = realizados / total_temas if total_temas > 0 else 0
             st.markdown(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
             st.progress(progresso)
 
-    # --- COLUNAS DE AÇÃO (FORMULÁRIOS SEPARADOS) ---
+    # --- COLUNAS DE AÇÃO ---
     col_plan, col_reg = st.columns(2)
 
     with col_plan:
@@ -761,25 +758,24 @@ elif menu == "📖 Diário de Encontros":
         with st.form(f"form_reg_{turma_focal}", clear_on_submit=True):
             data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
             
-            ja_registrado = False
-            if not df_enc_local.empty:
-                if not df_enc_local[(df_enc_local['turma'] == turma_focal) & (df_enc_local['data'] == str(data_e))].empty:
-                    ja_registrado = True
+            # Verifica se já existe registro para esta data na aba presencas
+            ja_registrado = not df_pres_local[
+                (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & 
+                (df_pres_local['data_encontro'].astype(str) == str(data_e))
+            ].empty
             
             if ja_registrado:
-                st.error(f"⚠️ Já existe um tema registrado para {data_e.strftime('%d/%m/%Y')}.")
+                st.error(f"⚠️ Já existe um encontro registrado para {data_e.strftime('%d/%m/%Y')}. Edite abaixo.")
                 st.form_submit_button("BLOQUEADO", disabled=True)
             else:
-                # Busca temas pendentes no cronograma para esta turma
-                temas_pendentes = [""] + df_cron_p[(df_cron_p['etapa'] == turma_focal) & (df_cron_p.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
-                
-                st.caption("Selecione um tema planejado ou digite um novo:")
+                temas_pendentes = [""] + df_cron_p[(df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm) & (df_cron_p.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
                 tema_selecionado = st.selectbox("Temas do Cronograma:", temas_pendentes)
                 tema_manual = st.text_input("Título do Tema Ministrado:", value=tema_selecionado).upper()
-                
                 obs_e = st.text_area("Observações Pastorais", height=68)
+                
                 if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
                     if tema_manual:
+                        # Salva na aba encontros e marca no cronograma
                         if salvar_encontro([str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
                             marcar_tema_realizado_cronograma(turma_focal, tema_manual)
                             st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
@@ -787,39 +783,29 @@ elif menu == "📖 Diário de Encontros":
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
-    # Busca encontros na aba 'presencas' (mais confiável pois os dados estão lá)
-    df_pres_local = ler_aba("presencas")
+    # Exibe encontros baseados na aba 'presencas' para garantir que tudo apareça
     if not df_pres_local.empty:
-        # Filtra presenças pela turma e extrai datas únicas
-        pres_turma = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_focal.strip().upper()]
-        
+        pres_turma = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]
         if not pres_turma.empty:
             datas_encontros = sorted(pres_turma['data_encontro'].unique(), reverse=True)
-            
             for data_d in datas_encontros:
-                # Pega o tema registrado na primeira linha dessa data
                 exemplo = pres_turma[pres_turma['data_encontro'] == data_d].iloc[0]
                 tema_d = exemplo.get('tema_do_dia', 'Tema não registrado')
                 cat_d = exemplo.get('catequista', 'Administrador')
                 
                 with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
-                    st.write(f"**Catequista:** {cat_d}")
-                    # Formulário de edição que atualiza a aba 'presencas' e 'encontros'
                     with st.form(f"edit_enc_{data_d}_{turma_focal}"):
                         ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
                         if st.form_submit_button("💾 SALVAR TEMA"):
-                            # Atualiza todas as linhas daquela data/turma com o novo tema
                             planilha = conectar_google_sheets()
                             aba_p = planilha.worksheet("presencas")
                             dados = aba_p.get_all_values()
                             for i, linha in enumerate(dados):
-                                if linha[0] == data_d and linha[3] == turma_focal:
+                                if linha[0] == data_d and linha[3].strip().upper() == turma_norm:
                                     aba_p.update_cell(i + 1, 6, ed_tema)
                             st.success("Tema atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
         else:
             st.info("Nenhum encontro registrado para esta turma.")
-    else:
-        st.info("Nenhum registro de presença encontrado.")
 
 
 
