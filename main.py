@@ -796,14 +796,19 @@ elif menu == "📖 Diário de Encontros":
                 with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
                     with st.form(f"edit_enc_{data_d}_{turma_focal}"):
                         ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
-                        if st.form_submit_button("💾 SALVAR TEMA"):
+                        # Adicionado campo de edição para observações
+                        ed_obs = st.text_area("Editar Observações:", value=exemplo.get('observacoes', ''))
+                        
+                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                             planilha = conectar_google_sheets()
                             aba_p = planilha.worksheet("presencas")
                             dados = aba_p.get_all_values()
+                            # Atualiza Tema (coluna 6) e Observações (coluna 5)
                             for i, linha in enumerate(dados):
                                 if linha[0] == data_d and linha[3].strip().upper() == turma_norm:
                                     aba_p.update_cell(i + 1, 6, ed_tema)
-                            st.success("Tema atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                    aba_p.update_cell(i + 1, 5, ed_obs)
+                            st.success("Dados atualizados!"); st.cache_data.clear(); time.sleep(1); st.rerun()
         else:
             st.info("Nenhum encontro registrado para esta turma.")
 
