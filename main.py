@@ -2252,7 +2252,18 @@ elif menu == "✅ Fazer Chamada":
         # O botão de salvar fica habilitado se o tema estiver preenchido (seja novo ou editado)
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
             if salvar_presencas(registros_presenca):
-                st.success(f"✅ Chamada de {turma_sel} salva!"); st.balloons()
+                # --- INTEGRAÇÃO COM CRONOGRAMA ---
+                # Normaliza para garantir que o tema seja encontrado mesmo com variações
+                tema_norm = tema_dia.strip().upper()
+                
+                # Verifica se o tema existe no cronograma da turma e marca como REALIZADO
+                # Usamos a função que já temos no database.py
+                if marcar_tema_realizado_cronograma(turma_sel, tema_norm):
+                    st.success(f"✅ Chamada salva e tema '{tema_dia}' marcado como realizado!")
+                else:
+                    st.success(f"✅ Chamada salva! (Tema '{tema_dia}' não encontrado no cronograma para baixa automática).")
+                
+                st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
         if not tema_dia:
