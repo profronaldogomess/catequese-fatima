@@ -1386,3 +1386,15 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     for i, fam in enumerate(lista_familias, 1):
         pdf.cell(10, 9, str(i), border=1, align='C'); pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1); pdf.cell(100, 9, "", border=1); pdf.ln()
     return finalizar_pdf(pdf)
+
+def gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, data_referencia):
+    """Identifica turmas que não registraram chamada na data informada."""
+    turmas_sem_chamada = []
+    for _, t in df_turmas.iterrows():
+        nome_t = t['nome_turma']
+        # Verifica se existe chamada para esta turma na data
+        chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
+                          (df_pres['data_encontro'].astype(str) == str(data_referencia))]
+        if chamada.empty:
+            turmas_sem_chamada.append(nome_t)
+    return turmas_sem_chamada
