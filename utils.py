@@ -1419,7 +1419,7 @@ def obter_data_ultimo_sabado():
     dias_atras = (hoje.weekday() - 5) % 7
     return hoje - timedelta(days=dias_atras)
 
-def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres):
+def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, f"AUDITORIA DE CHAMADAS - {formatar_data_br(data_ref)}")
@@ -1427,29 +1427,50 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres):
     pdf.set_font("helvetica", "B", 10)
     pdf.cell(0, 10, f"Resumo: {len(df_turmas)} turmas totais.", ln=True)
     
-    # Tabela
-    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
-    pdf.cell(80, 7, "Turma", 1, 0, 'C', True)
-    pdf.cell(40, 7, "Status", 1, 0, 'C', True)
-    pdf.cell(40, 7, "Faltosos", 1, 1, 'C', True)
-    
-    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
     for _, t in df_turmas.iterrows():
         nome_t = t['nome_turma']
         chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
                           (df_pres['data_encontro'].astype(str) == str(data_ref))]
         
-        # Removemos os emojis daqui e deixamos a função limpar_texto tratar a string
-        status_raw = "FEITA" if not chamada.empty else "PENDENTE"
-        faltosos = len(chamada[chamada['status'] == 'AUSENTE']) if not chamada.empty else 0
+        # Cabeçalho da Turma
+        pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+        pdf.cell(190, 7, limpar_texto(f"TURMA: {nome_t} - {'FEITA' if not chamada.empty else 'PENDENTE'}"), 1, 1, 'L', True)
         
-        pdf.cell(80, 7, limpar_texto(nome_t), 1)
-        pdf.cell(40, 7, limpar_texto(status_raw), 1, 0, 'C')
-        pdf.cell(40, 7, str(faltosos), 1, 1, 'C')
-
-    # ADICIONE ESTA VERIFICAÇÃO ANTES DO RETURN
-    if pdf.page_no() == 0:
-        st.warning("Nenhum dado para gerar o PDF.")
-        return b""
+        if not chamada.empty:
+            faltosos = chamada[chamada['status'] == 'AUSENTE']
+            if not faltosos.empty:
+                pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0)
+                pdf.set_font("helvetica", "B", 8)
+                pdf.cell(90, 6, "Catequizando Faltoso", 1)
+                pdf.cell(50, 6, "Responsável/Vínculo", 1)
+                pdf.cell(50, 6, "Telefone", 1, 1)
+                
+                pdf.set_font("helvetica", "", 8)
+                for _, f in faltosos.iterrows():
+                    # Busca dados do catequizando para pegar contatos
+                    cat_info = df_cat[df_cat['id_catequizando'] == f['id_catequizando']]
+                    nome_resp, tel = "N/A", "N/A"
+                    
+                    if not cat_info.empty:
+                        c = cat_info.iloc[0]
+                        idade = calcular_idade(c['data_nascimento'])
+                        if idade >= 18:
+                            nome_resp, tel = "Próprio", c['contato_principal']
+                        else:
+                            # Prioridade: Mãe, Pai, Responsável
+                            if str(c['tel_mae']) not in ["N/A", ""]: nome_resp, tel = "Mãe", c['tel_mae']
+                            elif str(c['tel_pai']) not in ["N/A", ""]: nome_resp, tel = "Pai", c['tel_pai']
+                            else: nome_resp, tel = "Resp.", c.get('contato_principal', 'N/A')
+                    
+                    pdf.cell(90, 6, limpar_texto(f['nome_catequizando']), 1)
+                    pdf.cell(50, 6, limpar_texto(nome_resp), 1)
+                    pdf.cell(50, 6, str(tel), 1, 1)
+            else:
+                pdf.set_font("helvetica", "I", 8)
+                pdf.cell(190, 6, "Nenhum faltoso nesta turma.", 1, 1)
+        else:
+            pdf.set_font("helvetica", "I", 8)
+            pdf.cell(190, 6, "Chamada não realizada.", 1, 1)
+        pdf.ln(2)
         
     return finalizar_pdf(pdf)
