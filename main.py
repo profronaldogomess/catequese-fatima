@@ -106,7 +106,7 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
-    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma, sincronizar_edicao_catequizando
+    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma, sincronizar_edicao_catequizando, salvar_com_seguranca
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -2183,27 +2183,42 @@ elif menu == "✅ Fazer Chamada":
         contador_p = 0
         contador_a = 0
         
-        for i, (_, row) in enumerate(lista_cat.iterrows()):
-            key_toggle = f"p_{row['id_catequizando']}_{data_enc}_{i}"
-            
-            if key_toggle not in st.session_state:
+        # --- INICIALIZAÇÃO DO BUFFER DE CHAMADA ---
+        if f"chamada_buffer_{turma_sel}_{data_enc}" not in st.session_state:
+            # Carrega do banco se já existir, senão inicia tudo como False
+            buffer = {}
+            for _, row in lista_cat.iterrows():
                 default_pres = False
                 if not df_pres_existente.empty:
                     aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
                     if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
                         default_pres = True
-                st.session_state[key_toggle] = default_pres
+                buffer[row['id_catequizando']] = default_pres
+            st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"] = buffer
+
+        # --- LOOP DE RENDERIZAÇÃO ---
+        registros_presenca = []
+        contador_p = 0
+        contador_a = 0
+        
+        for _, row in lista_cat.iterrows():
+            id_cat = row['id_catequizando']
             
             with st.container():
                 col_info, col_check = st.columns([3, 1])
                 col_info.markdown(f"{row['nome_completo']}")
-                presente = col_check.toggle("P", key=key_toggle)
+                
+                # O toggle agora lê e escreve no nosso buffer persistente
+                presente = col_check.toggle("P", value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat])
+                
+                # Atualiza o buffer em tempo real
+                st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
                 
                 if presente: contador_p += 1
                 else: contador_a += 1
 
                 registros_presenca.append([
-                    str(data_enc), row['id_catequizando'], row['nome_completo'], 
+                    str(data_enc), id_cat, row['nome_completo'], 
                     turma_sel, "PRESENTE" if presente else "AUSENTE", 
                     tema_dia, st.session_state.usuario['nome']
                 ])
@@ -2216,7 +2231,7 @@ elif menu == "✅ Fazer Chamada":
 
         # O botão de salvar fica habilitado se o tema estiver preenchido (seja novo ou editado)
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
-            if salvar_presencas(registros_presenca):
+            if salvar_com_seguranca(salvar_presencas, registros_presenca):
                 # --- INTEGRAÇÃO COM CRONOGRAMA ---
                 # Normaliza para garantir que o tema seja encontrado mesmo com variações
                 tema_norm = tema_dia.strip().upper()
