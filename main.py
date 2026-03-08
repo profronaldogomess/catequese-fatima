@@ -2215,8 +2215,15 @@ elif menu == "✅ Fazer Chamada":
                 col_info, col_check = st.columns([3, 1])
                 col_info.markdown(f"{row['nome_completo']}")
                 
-                # Toggle vinculado ao buffer
-                presente = col_check.toggle("P", value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat])
+                # O toggle agora lê e escreve no nosso buffer persistente
+                # Adicionamos a key=f"toggle_{id_cat}" para garantir unicidade absoluta
+                presente = col_check.toggle(
+                    "P", 
+                    value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat],
+                    key=f"toggle_{id_cat}"
+                )
+                
+                # Atualiza o buffer em tempo real
                 st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
                 
                 if presente: contador_p += 1
