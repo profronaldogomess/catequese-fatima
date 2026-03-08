@@ -786,24 +786,30 @@ elif menu == "📖 Diário de Encontros":
 
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
+    
+    # Normaliza a turma focal para comparação
+    turma_focal_norm = turma_focal.strip().upper()
+    
     if not df_enc_local.empty:
-        # Filtro normalizado
-        hist_turma = df_enc_local[df_enc_local['turma'].str.strip().str.upper() == turma_focal.strip().upper()].sort_values(by='data', ascending=False)
-        for _, row in hist_turma.iterrows():
-            with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
-                with st.form(f"edit_enc_{row['data']}_{turma_focal}"):
-                    ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
-                    
-                    # Corrigido: Buscando a chave correta 'observacoes' conforme o seu CSV
-                    relato_atual = row.get('observacoes', row.get('obs', ''))
-                    ed_relato = st.text_area("Editar Relato:", value=relato_atual)
-                    
-                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                        # Passamos o relato atualizado para a função
-                        if atualizar_encontro_e_cronograma(None, turma_focal, row['data'], ed_tema, ed_relato, row['catequista']):
-                            st.success("Registro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        # Filtro robusto: normaliza a coluna 'turma' do CSV para comparar com a turma selecionada
+        df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
+        hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal_norm].sort_values(by='data', ascending=False)
+        
+        if not hist_turma.empty:
+            for _, row in hist_turma.iterrows():
+                with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
+                    with st.form(f"edit_enc_{row['data']}_{row['tema']}"):
+                        ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
+                        relato_atual = row.get('observacoes', row.get('obs', ''))
+                        ed_relato = st.text_area("Editar Relato:", value=relato_atual)
+                        
+                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                            if atualizar_encontro_e_cronograma(None, turma_focal, row['data'], ed_tema, ed_relato, row['catequista']):
+                                st.success("Registro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        else:
+            st.info("Nenhum encontro registrado para esta turma.")
     else:
-        st.info("Nenhum encontro registrado ainda.")
+        st.info("Nenhum encontro registrado no sistema.")
 
 
 
