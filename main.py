@@ -106,7 +106,7 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
-    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma, sincronizar_edicao_catequizando, salvar_com_seguranca
+    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma, sincronizar_edicao_catequizando, salvar_com_seguranca, atualizar_encontro_global
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -747,32 +747,32 @@ elif menu == "📖 Diário de Encontros":
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
-    # Lê a aba de encontros que agora está sempre sincronizada
-    df_enc_local = ler_aba("encontros")
-    
     if not df_enc_local.empty:
-        # Filtro normalizado
+        # Filtro robusto e normalizado
         df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
-        hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data', ascending=False)
+        # Ordena corretamente pelas datas
+        df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
+        hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data_sort', ascending=False)
         
-        for _, row in hist_turma.iterrows():
-            with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
-                with st.form(f"edit_enc_{row['data']}_{row['tema']}"):
-                    ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
-                    ed_obs = st.text_area("Editar Observações:", value=row.get('observacoes', ''))
-                    
-                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                        # Atualiza a aba encontros
-                        planilha = conectar_google_sheets()
-                        aba_enc = planilha.worksheet("encontros")
-                        dados = aba_enc.get_all_values()
-                        for i, linha in enumerate(dados):
-                            if linha[0] == row['data'] and linha[1].strip().upper() == turma_focal.strip().upper():
-                                aba_enc.update_cell(i + 1, 3, ed_tema)
-                                aba_enc.update_cell(i + 1, 5, ed_obs)
-                        st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        if not hist_turma.empty:
+            for _, row in hist_turma.iterrows():
+                data_d = str(row['data'])
+                tema_d = row.get('tema', 'Tema não registrado')
+                obs_d = row.get('observacoes', '')
+                
+                with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
+                    with st.form(f"edit_enc_{data_d}_{turma_focal}"):
+                        ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
+                        ed_obs = st.text_area("Editar Observações:", value=obs_d)
+                        
+                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES (SINCRONIZAR TUDO)"):
+                            with st.spinner("Sincronizando Diário, Presenças e Cronograma..."):
+                                if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
+                                    st.success("✅ Tudo atualizado com sucesso!"); time.sleep(1); st.rerun()
+        else:
+            st.info("Nenhum encontro registrado na aba 'encontros' para esta turma.")
     else:
-        st.info("Nenhum encontro registrado.")
+        st.info("O sistema ainda não possui registros de encontros.")
 
 
 
