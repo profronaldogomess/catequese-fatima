@@ -678,6 +678,7 @@ elif menu == "📖 Diário de Encontros":
     # --- CARREGAMENTO NORMALIZADO ---
     df_cron_p = ler_aba("cronograma")
     df_pres_local = ler_aba("presencas")
+    df_enc_local = ler_aba("encontros") # <--- ESTA LINHA FALTAVA E CAUSOU O ERRO
     
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
     if eh_gestor or vinculo_raw == "TODAS":
