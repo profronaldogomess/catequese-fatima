@@ -1441,30 +1441,37 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
             if not faltosos.empty:
                 pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0)
                 pdf.set_font("helvetica", "B", 8)
-                pdf.cell(90, 6, "Catequizando Faltoso", 1)
-                pdf.cell(50, 6, "Responsável/Vínculo", 1)
-                pdf.cell(50, 6, "Telefone", 1, 1)
+                pdf.cell(80, 6, "Catequizando Faltoso", 1)
+                pdf.cell(50, 6, "Vínculo", 1)
+                pdf.cell(60, 6, "Telefone", 1, 1)
                 
                 pdf.set_font("helvetica", "", 8)
                 for _, f in faltosos.iterrows():
-                    # Busca dados do catequizando para pegar contatos
                     cat_info = df_cat[df_cat['id_catequizando'] == f['id_catequizando']]
                     nome_resp, tel = "N/A", "N/A"
                     
                     if not cat_info.empty:
                         c = cat_info.iloc[0]
                         idade = calcular_idade(c['data_nascimento'])
+                        
                         if idade >= 18:
-                            nome_resp, tel = "Próprio", c['contato_principal']
+                            nome_resp, tel = "Próprio", c.get('contato_principal', 'N/A')
                         else:
-                            # Prioridade: Mãe, Pai, Responsável
-                            if str(c['tel_mae']) not in ["N/A", ""]: nome_resp, tel = "Mãe", c['tel_mae']
-                            elif str(c['tel_pai']) not in ["N/A", ""]: nome_resp, tel = "Pai", c['tel_pai']
-                            else: nome_resp, tel = "Resp.", c.get('contato_principal', 'N/A')
+                            # Lógica de prioridade: Mãe -> Pai -> Responsável Legal
+                            tel_mae = str(c.get('tel_mae', '')).strip()
+                            tel_pai = str(c.get('tel_pai', '')).strip()
+                            tel_resp = str(c.get('contato_principal', '')).strip()
+                            
+                            if tel_mae and tel_mae not in ["N/A", "None", ""]:
+                                nome_resp, tel = "Mãe", tel_mae
+                            elif tel_pai and tel_pai not in ["N/A", "None", ""]:
+                                nome_resp, tel = "Pai", tel_pai
+                            else:
+                                nome_resp, tel = "Resp. Legal", tel_resp
                     
-                    pdf.cell(90, 6, limpar_texto(f['nome_catequizando']), 1)
+                    pdf.cell(80, 6, limpar_texto(f['nome_catequizando']), 1)
                     pdf.cell(50, 6, limpar_texto(nome_resp), 1)
-                    pdf.cell(50, 6, str(tel), 1, 1)
+                    pdf.cell(60, 6, str(tel), 1, 1)
             else:
                 pdf.set_font("helvetica", "I", 8)
                 pdf.cell(190, 6, "Nenhum faltoso nesta turma.", 1, 1)
