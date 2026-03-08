@@ -611,3 +611,33 @@ def atualizar_encontro_e_cronograma(id_encontro, turma, data, novo_tema, novo_re
     except Exception as e:
         st.error(f"Erro na sincronia: {e}")
         return False
+    
+def sincronizar_edicao_catequizando(id_cat, novo_nome, nova_turma):
+    """
+    Sincroniza alterações de nome e turma em todas as abas dependentes.
+    Isso garante que o histórico de presenças não seja perdido.
+    """
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        # 1. Atualiza nome na aba 'presencas'
+        aba_pres = planilha.worksheet("presencas")
+        dados_pres = aba_pres.get_all_values()
+        for i, linha in enumerate(dados_pres):
+            if len(linha) >= 2 and linha[1] == id_cat:
+                # Atualiza nome (coluna 3) e turma (coluna 4)
+                aba_pres.update_cell(i + 1, 3, novo_nome)
+                aba_pres.update_cell(i + 1, 4, nova_turma)
+        
+        # 2. Atualiza nome na aba 'sacramentos_recebidos'
+        aba_sac = planilha.worksheet("sacramentos_recebidos")
+        dados_sac = aba_sac.get_all_values()
+        for i, linha in enumerate(dados_sac):
+            if len(linha) >= 2 and linha[1] == id_cat:
+                aba_sac.update_cell(i + 1, 3, novo_nome)
+                
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na sincronia em cascata: {e}")
+        return False
