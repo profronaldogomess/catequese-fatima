@@ -2172,15 +2172,26 @@ elif menu == "✅ Fazer Chamada":
         
         st.markdown("---")
         
-        # Buffer de Chamada
-        if f"chamada_buffer_{turma_sel}_{data_enc}" not in st.session_state:
-            buffer = {row['id_catequizando']: False for _, row in lista_cat.iterrows()}
-            # Se já existe chamada, carrega do banco
+    # --- BUFFER DE CHAMADA (REATIVO) ---
+        # Criamos uma chave única que inclui a data para forçar a recarga ao mudar o date_input
+        buffer_key = f"chamada_buffer_{turma_sel}_{data_enc}"
+        
+        if buffer_key not in st.session_state:
+            buffer = {}
+            # Carrega do banco se já existir
             df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_encontro'].astype(str) == str(data_enc))]
-            for id_cat in buffer:
-                if not df_pres_existente.empty and not df_pres_existente[df_pres_existente['id_catequizando'] == id_cat].empty:
-                    buffer[id_cat] = df_pres_existente[df_pres_existente['id_catequizando'] == id_cat].iloc[0]['status'] == 'PRESENTE'
-            st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"] = buffer
+            
+            for _, row in lista_cat.iterrows():
+                id_cat = row['id_catequizando']
+                # Verifica se o aluno estava presente no banco
+                foi_presente = False
+                if not df_pres_existente.empty:
+                    aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == id_cat]
+                    if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
+                        foi_presente = True
+                buffer[id_cat] = foi_presente
+            
+            st.session_state[buffer_key] = buffer
 
         registros_presenca = []
         contador_p = 0
