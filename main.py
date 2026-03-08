@@ -500,7 +500,7 @@ elif menu == "📚 Minha Turma":
     
     # Filtro rigoroso: Apenas catequizandos ATIVOS são considerados no Painel da Turma
     meus_alunos_todos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
-    meus_alunos = meus_alunos_todos[meus_alunos_todos['status'] == 'ATIVO']
+    meus_alunos = df_cat[df_cat['etapa'].str.strip().str.upper() == turma_ativa.strip().upper()]
     
     minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
     df_cron_t = ler_aba("cronograma")
