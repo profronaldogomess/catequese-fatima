@@ -1398,3 +1398,9 @@ def gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, data_referencia):
         if chamada.empty:
             turmas_sem_chamada.append(nome_t)
     return turmas_sem_chamada
+
+def obter_data_ultimo_sabado():
+    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
+    # 5 é sábado (0=segunda, 6=domingo)
+    dias_atras = (hoje.weekday() - 5) % 7
+    return hoje - timedelta(days=dias_atras)
