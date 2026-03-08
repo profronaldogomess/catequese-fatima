@@ -1439,11 +1439,12 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres):
         chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
                           (df_pres['data_encontro'].astype(str) == str(data_ref))]
         
-        status = "✅ FEITA" if not chamada.empty else "❌ PENDENTE"
+        # Removemos os emojis daqui e deixamos a função limpar_texto tratar a string
+        status_raw = "FEITA" if not chamada.empty else "PENDENTE"
         faltosos = len(chamada[chamada['status'] == 'AUSENTE']) if not chamada.empty else 0
         
         pdf.cell(80, 7, limpar_texto(nome_t), 1)
-        pdf.cell(40, 7, status, 1, 0, 'C')
+        pdf.cell(40, 7, limpar_texto(status_raw), 1, 0, 'C')
         pdf.cell(40, 7, str(faltosos), 1, 1, 'C')
 
     # ADICIONE ESTA VERIFICAÇÃO ANTES DO RETURN
