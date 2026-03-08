@@ -1404,3 +1404,32 @@ def obter_data_ultimo_sabado():
     # 5 é sábado (0=segunda, 6=domingo)
     dias_atras = (hoje.weekday() - 5) % 7
     return hoje - timedelta(days=dias_atras)
+
+def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres):
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA DE CHAMADAS - {formatar_data_br(data_ref)}")
+    
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(0, 10, f"Resumo: {len(df_turmas)} turmas totais.", ln=True)
+    
+    # Tabela
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
+    pdf.cell(80, 7, "Turma", 1, 0, 'C', True)
+    pdf.cell(40, 7, "Status", 1, 0, 'C', True)
+    pdf.cell(40, 7, "Faltosos", 1, 1, 'C', True)
+    
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
+    for _, t in df_turmas.iterrows():
+        nome_t = t['nome_turma']
+        chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
+                          (df_pres['data_encontro'].astype(str) == str(data_ref))]
+        
+        status = "✅ FEITA" if not chamada.empty else "❌ PENDENTE"
+        faltosos = len(chamada[chamada['status'] == 'AUSENTE']) if not chamada.empty else 0
+        
+        pdf.cell(80, 7, limpar_texto(nome_t), 1)
+        pdf.cell(40, 7, status, 1, 0, 'C')
+        pdf.cell(40, 7, str(faltosos), 1, 1, 'C')
+        
+    return finalizar_pdf(pdf)
