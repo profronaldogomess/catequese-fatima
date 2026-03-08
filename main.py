@@ -500,7 +500,7 @@ elif menu == "📚 Minha Turma":
     
     # Filtro rigoroso: Apenas catequizandos ATIVOS são considerados no Painel da Turma
     meus_alunos_todos = df_cat[df_cat['etapa'] == turma_ativa] if not df_cat.empty else pd.DataFrame()
-    meus_alunos = df_cat[df_cat['etapa'].str.strip().str.upper() == turma_ativa.strip().upper()]
+    meus_alunos = meus_alunos_todos[meus_alunos_todos['status'] == 'ATIVO']
     
     minhas_pres = df_pres[df_pres['id_turma'] == turma_ativa] if not df_pres.empty else pd.DataFrame()
     df_cron_t = ler_aba("cronograma")
@@ -2147,16 +2147,21 @@ elif menu == "🕊️ Gestão de Sacramentos":
         else:
             st.info("Nenhum evento registrado no histórico.")
 
+
+
+# ==============================================================================
+# PÁGINA: ✅ CHAMADA INTELIGENTE (MOBILE-FIRST)
+# ==============================================================================
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
 
     # --- GUIA DE ORIENTAÇÃO ---
     with st.expander("💡 COMO FAZER A CHAMADA?", expanded=True):
         st.markdown("""
-        1. **TEMA DO ENCONTRO:** Digite o tema ministrado hoje. **O botão de salvar só aparecerá após você preencher este campo.**
-        2. **PRESENÇA:** Use o botão **'P'** ao lado do nome de cada catequizando para marcar a presença.
-        3. **MARCAR TODOS:** Se a maioria estiver presente, use o botão **'Marcar Todos como Presentes'** e depois desmarque apenas os ausentes.
-        4. **FINALIZAR:** Após conferir, clique em **'FINALIZAR CHAMADA E SALVAR'** no final da página.
+        1. **TEMA DO ENCONTRO:** Digite o tema ministrado. **O botão de salvar só aparecerá após preencher este campo.**
+        2. **PRESENÇA:** Use o botão 'P' ao lado do nome para marcar a presença.
+        3. **MARCAR TODOS:** Use o botão 'Marcar Todos' e desmarque apenas os ausentes.
+        4. **FINALIZAR:** Clique em 'FINALIZAR CHAMADA E SALVAR'.
         """)
 
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
@@ -2173,33 +2178,15 @@ elif menu == "✅ Fazer Chamada":
         turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
         data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    df_cron_c = ler_aba("cronograma")
+    # --- CARREGAMENTO E SINCRONIA ---
     df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
-    
-    # Lógica de sugestão de tema com normalização de nomes
-    sugestao_tema = ""
-    # Normaliza o nome da turma para comparação (remove espaços e maiúsculas)
-    turma_norm = turma_sel.strip().upper()
-    
-    if not df_pres_existente.empty:
-        st.info("📝 **Editando chamada já realizada neste dia.**")
-        tema_salvo = df_pres_existente.iloc[0].get('tema_do_dia', '')
-    else:
-        tema_salvo = st.session_state.get(f"tema_input_{turma_sel}", "")
-        
-        # Filtro normalizado para encontrar temas no cronograma
-        # REMOVEMOS A RESTRIÇÃO DE 'REALIZADO' PARA PERMITIR A CHAMADA
-        filtro_cron = df_cron_c[df_cron_c['etapa'].astype(str).str.strip().str.upper() == turma_norm]
-        
-        if not filtro_cron.empty:
-            sugestao_tema = filtro_cron.iloc[0]['titulo_tema']
-            st.info(f"💡 **Sugestão do Cronograma:** {sugestao_tema}")
-            if st.button(f"📌 Usar: {sugestao_tema}", use_container_width=True):
-                st.session_state[f"tema_input_{turma_sel}"] = sugestao_tema
-                st.rerun()
+    encontro_do_dia = df_enc_local[(df_enc_local['turma'].str.strip().str.upper() == turma_sel.strip().upper()) & (df_enc_local['data'] == str(data_enc))]
 
-    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", value=tema_salvo, key=f"tema_field_{turma_sel}").upper()
-    lista_cat = df_cat[(df_cat['etapa'] == turma_sel) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
+    # Define o tema: Prioridade 1 (Diário), Prioridade 2 (Input manual)
+    tema_inicial = encontro_do_dia.iloc[0]['tema'] if not encontro_do_dia.empty else ""
+    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", value=tema_inicial, key=f"tema_field_{turma_sel}").upper()
+
+    lista_cat = df_cat[(df_cat['etapa'].str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
     
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
@@ -2250,13 +2237,12 @@ elif menu == "✅ Fazer Chamada":
 
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
             if salvar_presencas(registros_presenca):
-                if tema_dia == sugestao_tema:
-                    marcar_tema_realizado_cronograma(turma_sel, tema_dia)
                 st.success(f"✅ Chamada de {turma_sel} salva!"); st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
         if not tema_dia:
             st.warning("⚠️ O botão de salvar será liberado após preencher o Tema do Encontro.")
+
 
 # ==============================================================================
 # PÁGINA: 👥 GESTÃO DE CATEQUISTAS
