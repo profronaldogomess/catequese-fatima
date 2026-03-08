@@ -2129,61 +2129,34 @@ elif menu == "✅ Fazer Chamada":
 
     # 1. DEFINIÇÃO DE PERMISSÕES
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    if eh_gestor or vinculo_raw == "TODAS":
-        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-    else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
+    turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if (eh_gestor or vinculo_raw == "TODAS") else [t.strip() for t in vinculo_raw.split(',') if t.strip()]
+    if not turmas_permitidas: st.error("❌ Nenhuma turma vinculada."); st.stop()
 
-    if not turmas_permitidas:
-        st.error("❌ Você não possui turmas vinculadas."); st.stop()
+    # 2. INTERFACE DE TURMA E DATA
+    c1, c2 = st.columns([1, 1])
+    turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
+    data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    # 2. GUIA DE ORIENTAÇÃO
-    with st.expander("💡 COMO FAZER A CHAMADA?", expanded=False):
-        st.markdown("""
-        1. **TEMA:** Digite o tema ministrado. **O botão de salvar só aparecerá após preencher este campo.**
-        2. **PRESENÇA:** Use o botão 'P' ao lado do nome.
-        3. **MARCAR TODOS:** Use o botão 'Marcar Todos' e desmarque os ausentes.
-        4. **FINALIZAR:** Clique em 'FINALIZAR CHAMADA E SALVAR'.
-        """)
-
-    # 3. INTERFACE DE TURMA E DATA
-    with st.container():
-        c1, c2 = st.columns([1, 1])
-        turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
-        data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
-
-    # --- MURAL DE ANIVERSARIANTES NA CHAMADA ---
-    lista_cat = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
-    
-    aniversariantes_hoje = []
-    aniversariantes_semana = []
-    for _, row in lista_cat.iterrows():
-        status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
-        if status_niver == "DIA": aniversariantes_hoje.append(row['nome_completo'])
-        elif status_niver == "SEMANA": aniversariantes_semana.append(row['nome_completo'])
-    
-    if aniversariantes_hoje or aniversariantes_semana:
-        with st.expander("🎂 Aniversariantes do Encontro", expanded=True):
-            for nome in aniversariantes_hoje: st.success(f"🎂 **HOJE:** {nome}")
-            for nome in aniversariantes_semana: st.info(f"🎈 **SEMANA:** {nome}")
-
-    # --- LÓGICA DE TEMA ---
-    df_pres_local = ler_aba("presencas")
-    df_pres_existente = df_pres_local[
-        (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
-        (df_pres_local['data_encontro'].astype(str) == str(data_enc))
+    # 3. BUSCA DE TEMA (INTEGRAÇÃO COM ABA 'encontros')
+    df_enc_local = ler_aba("encontros")
+    encontro_do_dia = df_enc_local[
+        (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
+        (df_enc_local['data'].astype(str) == str(data_enc))
     ]
 
-    if not df_pres_existente.empty:
-        tema_dia = df_pres_existente.iloc[0]['tema_do_dia']
-        st.success(f"📝 **MODO EDIÇÃO:** Encontro do dia {formatar_data_br(data_enc)} registrado com o tema: **{tema_dia}**")
+    if not encontro_do_dia.empty:
+        tema_dia = encontro_do_dia.iloc[0]['tema']
+        st.success(f"📖 **Tema do Encontro:** {tema_dia}")
     else:
-        tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", key="tema_field_novo").upper()
+        tema_dia = st.text_input("📖 Digite o Tema do Encontro (Obrigatório):").upper()
 
+    # 4. LISTAGEM DE CATEQUIZANDOS
+    lista_cat = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
+    
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
     else:
-        st.divider()
+        # Botão Marcar Todos
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
             for i, (_, r) in enumerate(lista_cat.iterrows()):
                 st.session_state[f"p_{r['id_catequizando']}_{data_enc}_{i}"] = True
@@ -2191,59 +2164,33 @@ elif menu == "✅ Fazer Chamada":
         
         st.markdown("---")
         
-        # --- BUFFER DE CHAMADA ---
+        # Buffer de Chamada
         if f"chamada_buffer_{turma_sel}_{data_enc}" not in st.session_state:
-            buffer = {}
-            for _, row in lista_cat.iterrows():
-                default_pres = False
-                if not df_pres_existente.empty:
-                    aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == row['id_catequizando']]
-                    if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
-                        default_pres = True
-                buffer[row['id_catequizando']] = default_pres
+            buffer = {row['id_catequizando']: False for _, row in lista_cat.iterrows()}
             st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"] = buffer
 
         registros_presenca = []
-        contador_p = 0
-        contador_a = 0
-        
         for i, (_, row) in enumerate(lista_cat.iterrows()):
             id_cat = row['id_catequizando']
             key_toggle = f"p_{id_cat}_{data_enc}_{i}"
             
-            with st.container():
-                col_info, col_check = st.columns([3, 1])
-                col_info.markdown(f"{row['nome_completo']}")
-                
-                # O toggle agora lê e escreve no nosso buffer persistente
-                # Adicionamos a key=f"toggle_{id_cat}" para garantir unicidade absoluta
-                presente = col_check.toggle(
-                    "P", 
-                    value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat],
-                    key=f"toggle_{id_cat}"
-                )
-                
-                # Atualiza o buffer em tempo real
-                st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
-                
-                if presente: contador_p += 1
-                else: contador_a += 1
-
-                registros_presenca.append([
-                    str(data_enc), id_cat, row['nome_completo'], 
-                    turma_sel, "PRESENTE" if presente else "AUSENTE", 
-                    tema_dia, st.session_state.usuario['nome']
-                ])
+            col_info, col_check = st.columns([3, 1])
+            col_info.markdown(f"{row['nome_completo']}")
+            
+            # Toggle vinculado ao buffer
+            presente = col_check.toggle("P", key=key_toggle, value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"].get(id_cat, False))
+            st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
+            
+            registros_presenca.append([
+                str(data_enc), id_cat, row['nome_completo'], 
+                turma_sel, "PRESENTE" if presente else "AUSENTE", 
+                tema_dia, st.session_state.usuario['nome']
+            ])
             st.markdown("---")
 
-        st.subheader("📊 Resumo da Chamada")
-        c_res1, c_res2 = st.columns(2)
-        c_res1.metric("✅ Presentes", contador_p)
-        c_res2.metric("❌ Ausentes", contador_a)
-
+        # 5. FINALIZAR
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
             if salvar_com_seguranca(salvar_presencas, registros_presenca):
-                marcar_tema_realizado_cronograma(turma_sel, tema_dia)
                 st.success(f"✅ Chamada de {turma_sel} salva!"); st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
