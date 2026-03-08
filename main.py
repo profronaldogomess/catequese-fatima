@@ -787,32 +787,39 @@ elif menu == "📖 Diário de Encontros":
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
-    # Normaliza a turma focal para comparação
-    turma_focal_norm = turma_focal.strip().upper()
-    
-    if not df_enc_local.empty:
-        # Normaliza turma e data para garantir o cruzamento
-        df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
-        # Converte a coluna data para string YYYY-MM-DD para garantir a comparação
-        df_enc_local['data_norm'] = pd.to_datetime(df_enc_local['data']).dt.strftime('%Y-%m-%d')
+    # Busca encontros na aba 'presencas' (mais confiável pois os dados estão lá)
+    df_pres_local = ler_aba("presencas")
+    if not df_pres_local.empty:
+        # Filtra presenças pela turma e extrai datas únicas
+        pres_turma = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_focal.strip().upper()]
         
-        hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal_norm].sort_values(by='data_norm', ascending=False)
-        
-        if not hist_turma.empty:
-            for _, row in hist_turma.iterrows():
-                with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
-                    with st.form(f"edit_enc_{row['data']}_{row['tema']}"):
-                        ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
-                        relato_atual = row.get('observacoes', row.get('obs', ''))
-                        ed_relato = st.text_area("Editar Relato:", value=relato_atual)
-                        
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                            if atualizar_encontro_e_cronograma(None, turma_focal, row['data'], ed_tema, ed_relato, row['catequista']):
-                                st.success("Registro atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+        if not pres_turma.empty:
+            datas_encontros = sorted(pres_turma['data_encontro'].unique(), reverse=True)
+            
+            for data_d in datas_encontros:
+                # Pega o tema registrado na primeira linha dessa data
+                exemplo = pres_turma[pres_turma['data_encontro'] == data_d].iloc[0]
+                tema_d = exemplo.get('tema_do_dia', 'Tema não registrado')
+                cat_d = exemplo.get('catequista', 'Administrador')
+                
+                with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
+                    st.write(f"**Catequista:** {cat_d}")
+                    # Formulário de edição que atualiza a aba 'presencas' e 'encontros'
+                    with st.form(f"edit_enc_{data_d}_{turma_focal}"):
+                        ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
+                        if st.form_submit_button("💾 SALVAR TEMA"):
+                            # Atualiza todas as linhas daquela data/turma com o novo tema
+                            planilha = conectar_google_sheets()
+                            aba_p = planilha.worksheet("presencas")
+                            dados = aba_p.get_all_values()
+                            for i, linha in enumerate(dados):
+                                if linha[0] == data_d and linha[3] == turma_focal:
+                                    aba_p.update_cell(i + 1, 6, ed_tema)
+                            st.success("Tema atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
         else:
             st.info("Nenhum encontro registrado para esta turma.")
     else:
-        st.info("Nenhum encontro registrado no sistema.")
+        st.info("Nenhum registro de presença encontrado.")
 
 
 
