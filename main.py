@@ -377,7 +377,9 @@ if menu == "🏠 Início / Dashboard":
 
     st.divider()
     st.subheader("🚩 Radar de Atenção Imediata")
-    r1, r2, r3, r4 = st.columns(4)
+    
+    # Expandimos para 5 colunas para caber o novo alerta
+    r1, r2, r3, r4, r5 = st.columns(5)
 
     df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
     
@@ -391,7 +393,12 @@ if menu == "🏠 Início / Dashboard":
     r3.metric("🕊️ Sem Batismo", sem_batismo, delta="Regularizar", delta_color="inverse")
 
     fam_reg = len(df_cat[df_cat['est_civil_pais'].isin(['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)'])])
-    r4.metric("🏠 Famílias Irregulares", fam_reg, delta="Pastoral Familiar", delta_color="inverse")
+    r4.metric("🏠 Famílias Irreg.", fam_reg, delta="Pastoral Familiar", delta_color="inverse")
+
+    # NOVO: ALERTA DE CATEQUIZANDOS SEM TURMA (FILA DE ESPERA)
+    turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+    sem_turma = len(df_ativos[(df_ativos['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_ativos['etapa'].isin(turmas_reais))])
+    r5.metric("⏳ Sem Turma", sem_turma, delta="Fila de Espera", delta_color="inverse")
 
     st.divider()
 
