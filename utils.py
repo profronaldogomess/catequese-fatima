@@ -1432,7 +1432,6 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
         chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
                           (df_pres['data_encontro'].astype(str) == str(data_ref))]
         
-        # Cabeçalho da Turma
         pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
         pdf.cell(190, 7, limpar_texto(f"TURMA: {nome_t} - {'FEITA' if not chamada.empty else 'PENDENTE'}"), 1, 1, 'L', True)
         
@@ -1441,37 +1440,29 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
             if not faltosos.empty:
                 pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0)
                 pdf.set_font("helvetica", "B", 8)
-                pdf.cell(80, 6, "Catequizando Faltoso", 1)
-                pdf.cell(50, 6, "Vínculo", 1)
-                pdf.cell(60, 6, "Telefone", 1, 1)
+                pdf.cell(70, 6, "Catequizando Faltoso", 1)
+                pdf.cell(120, 6, "Contatos (Mãe / Pai / Resp.)", 1, 1)
                 
-                pdf.set_font("helvetica", "", 8)
+                pdf.set_font("helvetica", "", 7)
                 for _, f in faltosos.iterrows():
                     cat_info = df_cat[df_cat['id_catequizando'] == f['id_catequizando']]
-                    nome_resp, tel = "N/A", "N/A"
+                    contatos_str = "N/A"
                     
                     if not cat_info.empty:
                         c = cat_info.iloc[0]
-                        idade = calcular_idade(c['data_nascimento'])
+                        lista_contatos = []
+                        # Coleta todos os telefones disponíveis
+                        if str(c.get('tel_mae', '')).strip() not in ["N/A", "", "None"]: 
+                            lista_contatos.append(f"Mãe: {c['tel_mae']}")
+                        if str(c.get('tel_pai', '')).strip() not in ["N/A", "", "None"]: 
+                            lista_contatos.append(f"Pai: {c['tel_pai']}")
+                        if str(c.get('contato_principal', '')).strip() not in ["N/A", "", "None"]: 
+                            lista_contatos.append(f"Resp: {c['contato_principal']}")
                         
-                        if idade >= 18:
-                            nome_resp, tel = "Próprio", c.get('contato_principal', 'N/A')
-                        else:
-                            # Lógica de prioridade: Mãe -> Pai -> Responsável Legal
-                            tel_mae = str(c.get('tel_mae', '')).strip()
-                            tel_pai = str(c.get('tel_pai', '')).strip()
-                            tel_resp = str(c.get('contato_principal', '')).strip()
-                            
-                            if tel_mae and tel_mae not in ["N/A", "None", ""]:
-                                nome_resp, tel = "Mãe", tel_mae
-                            elif tel_pai and tel_pai not in ["N/A", "None", ""]:
-                                nome_resp, tel = "Pai", tel_pai
-                            else:
-                                nome_resp, tel = "Resp. Legal", tel_resp
+                        contatos_str = " | ".join(lista_contatos) if lista_contatos else "Sem contato"
                     
-                    pdf.cell(80, 6, limpar_texto(f['nome_catequizando']), 1)
-                    pdf.cell(50, 6, limpar_texto(nome_resp), 1)
-                    pdf.cell(60, 6, str(tel), 1, 1)
+                    pdf.cell(70, 6, limpar_texto(f['nome_catequizando']), 1)
+                    pdf.cell(120, 6, limpar_texto(contatos_str), 1, 1)
             else:
                 pdf.set_font("helvetica", "I", 8)
                 pdf.cell(190, 6, "Nenhum faltoso nesta turma.", 1, 1)
