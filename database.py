@@ -107,14 +107,13 @@ def salvar_lote_catequizandos(lista_de_listas):
     if planilha:
         try:
             aba = planilha.worksheet("catequizandos")
-            # Garante que todas as linhas tenham exatamente 30 colunas antes de inserir
-            lista_blindada = []
-            for linha in lista_de_listas:
-                linha_segura = linha + ["N/A"] * (30 - len(linha)) if len(linha) < 30 else linha[:30]
-                lista_blindada.append(linha_segura)
+            ids_existentes = aba.col_values(1) # Coluna A
+            lista_filtrada = [linha for linha in lista_de_listas if linha[0] not in ids_existentes]
             
-            aba.append_rows(lista_blindada)
-            st.cache_data.clear(); return True
+            if lista_filtrada:
+                aba.append_rows(lista_filtrada)
+                st.cache_data.clear()
+            return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
 
