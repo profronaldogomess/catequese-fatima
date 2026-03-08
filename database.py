@@ -12,6 +12,7 @@ import time
 import uuid
 import time
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import random
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
@@ -641,3 +642,11 @@ def sincronizar_edicao_catequizando(id_cat, novo_nome, nova_turma):
     except Exception as e:
         st.error(f"Erro na sincronia em cascata: {e}")
         return False
+    
+def salvar_com_seguranca(funcao_salvar, *args):
+    """
+    Adiciona um pequeno atraso aleatório para evitar colisões de escrita 
+    quando múltiplos catequistas salvam ao mesmo tempo.
+    """
+    time.sleep(random.uniform(0.5, 2.0)) # Atraso aleatório entre 0.5s e 2s
+    return funcao_salvar(*args)
