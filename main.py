@@ -2179,8 +2179,19 @@ elif menu == "✅ Fazer Chamada":
         data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
     # --- CARREGAMENTO E SINCRONIA ---
+    # Carregamos os dados necessários aqui para evitar o NameError
+    df_enc_local = ler_aba("encontros")
+    
     df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
-    encontro_do_dia = df_enc_local[(df_enc_local['turma'].str.strip().str.upper() == turma_sel.strip().upper()) & (df_enc_local['data'] == str(data_enc))]
+    
+    # Filtro seguro: verifica se o DataFrame não está vazio antes de filtrar
+    if not df_enc_local.empty:
+        encontro_do_dia = df_enc_local[
+            (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
+            (df_enc_local['data'].astype(str) == str(data_enc))
+        ]
+    else:
+        encontro_do_dia = pd.DataFrame()
 
     # Define o tema: Prioridade 1 (Diário), Prioridade 2 (Input manual)
     tema_inicial = encontro_do_dia.iloc[0]['tema'] if not encontro_do_dia.empty else ""
