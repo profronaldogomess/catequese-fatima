@@ -783,40 +783,32 @@ elif menu == "📖 Diário de Encontros":
     st.divider()
     st.subheader(f"📜 Linha do Tempo: {turma_focal}")
     
-    # Carrega a aba de encontros (onde o tema e relato residem)
+    # Lê a aba de encontros que agora está sempre sincronizada
     df_enc_local = ler_aba("encontros")
     
     if not df_enc_local.empty:
-        # Normaliza a turma para comparação
+        # Filtro normalizado
         df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
         hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data', ascending=False)
         
-        if not hist_turma.empty:
-            for _, row in hist_turma.iterrows():
-                data_d = str(row['data'])
-                tema_d = row.get('tema', 'Tema não registrado')
-                obs_d = row.get('observacoes', '')
-                
-                with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
-                    with st.form(f"edit_enc_{data_d}_{turma_focal}"):
-                        ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
-                        ed_obs = st.text_area("Editar Observações:", value=obs_d)
-                        
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                            planilha = conectar_google_sheets()
-                            aba_enc = planilha.worksheet("encontros")
-                            dados = aba_enc.get_all_values()
-                            # Atualiza Tema (coluna 3) e Observações (coluna 5)
-                            for i, linha in enumerate(dados):
-                                # Compara data e turma (coluna 1 e 2)
-                                if str(linha[0]) == data_d and str(linha[1]).strip().upper() == turma_focal.strip().upper():
-                                    aba_enc.update_cell(i + 1, 3, ed_tema)
-                                    aba_enc.update_cell(i + 1, 5, ed_obs)
-                            st.success("Dados atualizados!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-        else:
-            st.info("Nenhum encontro registrado na aba 'encontros' para esta turma.")
+        for _, row in hist_turma.iterrows():
+            with st.expander(f"📅 {formatar_data_br(row['data'])} - {row['tema']}"):
+                with st.form(f"edit_enc_{row['data']}_{row['tema']}"):
+                    ed_tema = st.text_input("Editar Tema:", value=row['tema']).upper()
+                    ed_obs = st.text_area("Editar Observações:", value=row.get('observacoes', ''))
+                    
+                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                        # Atualiza a aba encontros
+                        planilha = conectar_google_sheets()
+                        aba_enc = planilha.worksheet("encontros")
+                        dados = aba_enc.get_all_values()
+                        for i, linha in enumerate(dados):
+                            if linha[0] == row['data'] and linha[1].strip().upper() == turma_focal.strip().upper():
+                                aba_enc.update_cell(i + 1, 3, ed_tema)
+                                aba_enc.update_cell(i + 1, 5, ed_obs)
+                        st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
     else:
-        st.info("A aba 'encontros' está vazia.")
+        st.info("Nenhum encontro registrado.")
 
 
 
