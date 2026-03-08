@@ -25,12 +25,8 @@ st.set_page_config(
 )
 
 # --- 2. INICIALIZAÇÃO DE COMPONENTES DE SEGURANÇA ---
-@st.cache_resource
-def get_cookie_manager():
-    # O cache_resource impede que o Streamlit recrie o componente a cada clique
-    return stx.CookieManager(key="catequese_fatima_cookies_v4")
-
-cookie_manager = get_cookie_manager()
+# Inicialização direta sem cache para evitar o CachedWidgetWarning (tarja amarela)
+cookie_manager = stx.CookieManager(key="catequese_fatima_cookies_v4")
 
 if 'logado' not in st.session_state:
     st.session_state.logado = False
