@@ -2157,10 +2157,26 @@ elif menu == "🕊️ Gestão de Sacramentos":
 elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
 
-    # --- GUIA DE ORIENTAÇÃO ---
-    with st.expander("💡 COMO FAZER A CHAMADA?", expanded=False):
-        st.markdown("1. Selecione a turma e data. 2. Se o tema já existir, você está em **Modo Edição**. 3. Marque as presenças e clique em Salvar.")
+    # 1. DEFINIÇÃO DE PERMISSÕES (DEVE VIR ANTES DE QUALQUER SELECTBOX)
+    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
+    if eh_gestor or vinculo_raw == "TODAS":
+        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
+    else:
+        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
+    if not turmas_permitidas:
+        st.error("❌ Você não possui turmas vinculadas."); st.stop()
+
+    # 2. GUIA DE ORIENTAÇÃO
+    with st.expander("💡 COMO FAZER A CHAMADA?", expanded=False):
+        st.markdown("""
+        1. **TEMA DO ENCONTRO:** Digite o tema ministrado. **O botão de salvar só aparecerá após preencher este campo.**
+        2. **PRESENÇA:** Use o botão 'P' ao lado do nome para marcar a presença.
+        3. **MARCAR TODOS:** Use o botão 'Marcar Todos' e desmarque apenas os ausentes.
+        4. **FINALIZAR:** Clique em 'FINALIZAR CHAMADA E SALVAR'.
+        """)
+
+    # 3. INTERFACE
     with st.container():
         c1, c2 = st.columns([1, 1])
         turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
