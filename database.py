@@ -118,34 +118,39 @@ def salvar_lote_catequizandos(lista_de_listas):
     return False
 
 def salvar_presencas(lista_presencas):
-    """Salva presenças com inteligência: se já existir chamada para a turma no dia, substitui para não duplicar."""
     planilha = conectar_google_sheets()
-    if planilha and lista_presencas:
-        try:
-            aba = planilha.worksheet("presencas")
+    if not planilha: return False
+    try:
+        aba_pres = planilha.worksheet("presencas")
+        aba_enc = planilha.worksheet("encontros")
+        
+        data_alvo = str(lista_presencas[0][0]).strip()
+        turma_alvo = str(lista_presencas[0][3]).strip()
+        tema_alvo = str(lista_presencas[0][5]).strip()
+        catequista = str(lista_presencas[0][6]).strip()
+
+        # 1. Limpa presenças antigas do dia/turma
+        dados = aba_pres.get_all_values()
+        linhas_del = [i + 1 for i, linha in enumerate(dados) if len(linha) >= 4 and linha[0] == data_alvo and linha[3] == turma_alvo]
+        for row_idx in sorted(linhas_del, reverse=True): aba_pres.delete_rows(row_idx)
+        
+        # 2. Salva novas presenças
+        aba_pres.append_rows(lista_presencas)
+        
+        # 3. Sincroniza com a aba 'encontros' (Garante que o encontro apareça no Diário)
+        # Verifica se já existe esse encontro no diário
+        dados_enc = aba_enc.get_all_values()
+        existe_enc = any(linha[0] == data_alvo and linha[1] == turma_alvo for linha in dados_enc)
+        
+        if not existe_enc:
+            aba_enc.append_row([data_alvo, turma_alvo, tema_alvo, catequista, "Registro automático via Chamada"])
             
-            # Identifica a data e a turma do lote que está sendo salvo
-            data_alvo = str(lista_presencas[0][0]).strip()
-            turma_alvo = str(lista_presencas[0][3]).strip()
-            
-            # Puxa todos os dados para encontrar se já existe chamada neste dia
-            dados = aba.get_all_values()
-            linhas_para_deletar =[]
-            
-            for i, linha in enumerate(dados):
-                # Coluna A (0) = data, Coluna D (3) = turma
-                if len(linha) >= 4 and str(linha[0]).strip() == data_alvo and str(linha[3]).strip() == turma_alvo:
-                    linhas_para_deletar.append(i + 1) # +1 porque o Google Sheets começa na linha 1
-            
-            # Deleta as linhas antigas de baixo para cima (para não bagunçar os índices)
-            for row_idx in sorted(linhas_para_deletar, reverse=True):
-                aba.delete_rows(row_idx)
-                
-            # Salva a nova chamada limpa
-            aba.append_rows(lista_presencas)
-            st.cache_data.clear(); return True
-        except Exception as e: st.error(f"Erro ao salvar presenças: {e}")
-    return False
+        # 4. Marca no cronograma
+        marcar_tema_realizado_cronograma(turma_alvo, tema_alvo)
+        
+        st.cache_data.clear(); return True
+    except Exception as e: 
+        st.error(f"Erro na sincronia: {e}"); return False
 
 def salvar_encontro(dados_encontro):
     planilha = conectar_google_sheets()
