@@ -25,7 +25,9 @@ st.set_page_config(
 )
 
 # --- 2. INICIALIZAÇÃO DE COMPONENTES DE SEGURANÇA ---
+@st.cache_resource
 def get_cookie_manager():
+    # O cache_resource impede que o Streamlit recrie o componente a cada clique
     return stx.CookieManager(key="catequese_fatima_cookies_v4")
 
 cookie_manager = get_cookie_manager()
@@ -106,7 +108,8 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
-    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma, sincronizar_edicao_catequizando, salvar_com_seguranca, atualizar_encontro_global
+    marcar_tema_realizado_cronograma, carregar_dados_globais, sincronizar_edicao_catequizando, 
+    salvar_com_seguranca, atualizar_encontro_global
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
