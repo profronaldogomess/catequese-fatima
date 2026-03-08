@@ -2158,54 +2158,29 @@ elif menu == "✅ Fazer Chamada":
     st.title("✅ Chamada Inteligente")
 
     # --- GUIA DE ORIENTAÇÃO ---
-    with st.expander("💡 COMO FAZER A CHAMADA?", expanded=True):
-        st.markdown("""
-        1. **TEMA DO ENCONTRO:** Digite o tema ministrado. **O botão de salvar só aparecerá após preencher este campo.**
-        2. **PRESENÇA:** Use o botão 'P' ao lado do nome para marcar a presença.
-        3. **MARCAR TODOS:** Use o botão 'Marcar Todos' e desmarque apenas os ausentes.
-        4. **FINALIZAR:** Clique em 'FINALIZAR CHAMADA E SALVAR'.
-        """)
-
-    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    if eh_gestor or vinculo_raw == "TODAS":
-        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-    else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
-
-    if not turmas_permitidas:
-        st.error("❌ Você não possui turmas vinculadas."); st.stop()
+    with st.expander("💡 COMO FAZER A CHAMADA?", expanded=False):
+        st.markdown("1. Selecione a turma e data. 2. Se o tema já existir, você está em **Modo Edição**. 3. Marque as presenças e clique em Salvar.")
 
     with st.container():
         c1, c2 = st.columns([1, 1])
         turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
         data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    # --- CARREGAMENTO E SINCRONIA ---
-    df_enc_local = ler_aba("encontros")
-    
-    # Normaliza a data selecionada para string YYYY-MM-DD
-    data_str = data_enc.strftime('%Y-%m-%d')
-    
-    # Filtro robusto para presença
-    df_pres_existente = df_pres[
-        (df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
-        (df_pres['data_encontro'].astype(str).str.strip() == data_str)
+    # Busca registro existente na aba 'presencas'
+    df_pres_local = ler_aba("presencas")
+    df_pres_existente = df_pres_local[
+        (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
+        (df_pres_local['data_encontro'].astype(str) == str(data_enc))
     ]
-    
-    # Filtro seguro: verifica se o DataFrame não está vazio antes de filtrar
-    if not df_enc_local.empty:
-        encontro_do_dia = df_enc_local[
-            (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
-            (df_enc_local['data'].astype(str) == str(data_enc))
-        ]
+
+    # --- LÓGICA DE TEMA (MODO EDIÇÃO OU NOVO) ---
+    if not df_pres_existente.empty:
+        tema_dia = df_pres_existente.iloc[0]['tema_do_dia']
+        st.success(f"📝 **MODO EDIÇÃO:** Encontro do dia {formatar_data_br(data_enc)} já registrado com o tema: **{tema_dia}**")
     else:
-        encontro_do_dia = pd.DataFrame()
+        tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", key="tema_field_novo").upper()
 
-    # Define o tema: Prioridade 1 (Diário), Prioridade 2 (Input manual)
-    tema_inicial = encontro_do_dia.iloc[0]['tema'] if not encontro_do_dia.empty else ""
-    tema_dia = st.text_input("📖 Tema do Encontro (Obrigatório):", value=tema_inicial, key=f"tema_field_{turma_sel}").upper()
-
-    lista_cat = df_cat[(df_cat['etapa'].str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
+    lista_cat = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
     
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
@@ -2225,7 +2200,6 @@ elif menu == "✅ Fazer Chamada":
         for i, (_, row) in enumerate(lista_cat.iterrows()):
             key_toggle = f"p_{row['id_catequizando']}_{data_enc}_{i}"
             
-            # Inicializa estado se não existir
             if key_toggle not in st.session_state:
                 default_pres = False
                 if not df_pres_existente.empty:
@@ -2254,13 +2228,14 @@ elif menu == "✅ Fazer Chamada":
         c_res1.metric("✅ Presentes", contador_p)
         c_res2.metric("❌ Ausentes", contador_a)
 
+        # O botão de salvar fica habilitado se o tema estiver preenchido (seja novo ou editado)
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
             if salvar_presencas(registros_presenca):
                 st.success(f"✅ Chamada de {turma_sel} salva!"); st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
         if not tema_dia:
-            st.warning("⚠️ O botão de salvar será liberado após preencher o Tema do Encontro.")
+            st.warning("⚠️ Preencha o Tema do Encontro para salvar.")
 
 
 # ==============================================================================
