@@ -106,7 +106,7 @@ from database import (
     salvar_presenca_formacao, mover_catequizandos_em_massa, excluir_turma,
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
-    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma
+    marcar_tema_realizado_cronograma, carregar_dados_globais, atualizar_encontro_e_cronograma, sincronizar_edicao_catequizando
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -1267,7 +1267,10 @@ elif menu == "👤 Perfil Individual":
                             dados.get('local_encontro', 'N/A'), obs_final
                         ]
                         if atualizar_catequizando(dados['id_catequizando'], lista_up):
-                            st.success(f"✅ Cadastro de {ed_nome} atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            # Adicione esta linha logo após o sucesso da atualização:
+                            sincronizar_edicao_catequizando(dados['id_catequizando'], ed_nome, ed_etapa)
+                            
+                            st.success(f"✅ Cadastro de {ed_nome} atualizado e histórico sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
                 with sub_tab_doc:
                     st.subheader("📄 Documentação Cadastral e Oficial")
