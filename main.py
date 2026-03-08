@@ -578,15 +578,23 @@ elif menu == "📚 Minha Turma":
     st.divider()
 
     c1, c2, c3 = st.columns(3)
+    
+    # --- BARRA DE PROGRESSO E ITINERÁRIO ---
     # Filtra temas do cronograma para a turma ativa
-    cron_turma = df_cron_t[df_cron_t['etapa'].str.strip().str.upper() == turma_ativa.strip().upper()]
+    cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
     total_temas = len(cron_turma)
+    
     # Filtra encontros realizados para a turma ativa
-    enc_turma = df_enc_local[df_enc_local['turma'].str.strip().str.upper() == turma_ativa.strip().upper()]
+    enc_turma = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
     total_feito = len(enc_turma)
-    # O progresso deve ser baseado no total de temas planejados
-    progresso = (total_feito / total_temas) if total_temas > 0 else 0
-    c1.metric("Caminhada da Fé", f"{total_feito} de {total_temas} temas", f"{progresso*100:.0f}% concluído")
+    
+    # Cálculo de progresso seguro
+    if total_temas > 0:
+        progresso = (total_feito / total_temas)
+        c1.metric("Caminhada da Fé", f"{total_feito} de {total_temas} temas", f"{progresso*100:.0f}% concluído")
+    else:
+        # Caso não haja cronograma, apenas mostra o que foi feito
+        c1.metric("Caminhada da Fé", f"{total_feito} temas realizados", "Cronograma não definido")
 
     if not minhas_pres.empty:
         freq = (minhas_pres['status'] == 'PRESENTE').mean() * 100
