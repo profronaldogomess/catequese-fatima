@@ -119,7 +119,7 @@ from utils import (
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
     gerar_lista_assinatura_reuniao_pdf, gerar_relatorio_diocesano_pdf, 
     gerar_relatorio_pastoral_pdf, gerar_relatorio_local_turma_pdf,
-    gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes
+    gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes,obter_data_ultimo_sabado
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -322,7 +322,7 @@ if menu == "🏠 Início / Dashboard":
                     st.image(card_img, use_container_width=True)
                     st.download_button("📥 Baixar Card", card_img, f"Parabens_Hoje_{nome_completo}.png", "image/png")
     
-    with st.expander("📅 Ver todos os aniversariantes do mês (Paróquia)", expanded=not aniversariantes_agora):
+    with st.expander("📅 Mural de Aniversariantes do Mês", expanded=False):
         if not df_niver_mes_geral.empty:
             if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (GERAL)", use_container_width=True):
                 lista_para_card = [f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_mes_geral.iterrows()]
@@ -357,25 +357,28 @@ if menu == "🏠 Início / Dashboard":
 
     st.divider()
     st.subheader("🚩 Auditoria de Chamadas (Hoje)")
+
+    # Calcula o último sábado
+    ultimo_sabado = obter_data_ultimo_sabado()
+    st.subheader(f"🚩 Auditoria de Chamadas (Último Encontro: {formatar_data_br(ultimo_sabado)})")
     
-    # 1. Turmas sem chamada
-    turmas_pendentes = gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, date.today())
+    turmas_pendentes = gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, ultimo_sabado)
     
     if turmas_pendentes:
-        st.error(f"⚠️ **Atenção:** As seguintes turmas ainda não registraram a chamada de hoje: {', '.join(turmas_pendentes)}")
+        st.error(f"⚠️ **Atenção:** Turmas sem chamada no último sábado: {', '.join(turmas_pendentes)}")
     else:
-        st.success("✅ Todas as turmas registraram a chamada de hoje!")
+        st.success("✅ Todas as turmas registraram a chamada do último sábado!")
 
-    # 2. Detalhamento de faltosos (Gestores)
     if eh_gestor:
-        with st.expander("📋 Detalhes de Faltosos e Catequistas"):
-            df_hoje = df_pres[df_pres['data_encontro'] == str(date.today())]
-            if not df_hoje.empty:
-                faltosos = df_hoje[df_hoje['status'] == 'AUSENTE']
-                st.write(f"**Total de faltosos hoje:** {len(faltosos)}")
-                st.dataframe(faltosos[['id_turma', 'nome_catequizando', 'tema_do_dia', 'catequista']], use_container_width=True)
+        with st.expander("📋 Detalhes de Faltosos e Catequistas", expanded=False):
+            df_sabado = df_pres[df_pres['data_encontro'] == str(ultimo_sabado)]
+            if not df_sabado.empty:
+                faltosos = df_sabado[df_sabado['status'] == 'AUSENTE']
+                # Visual moderno com dataframe
+                st.dataframe(faltosos[['id_turma', 'nome_catequizando', 'tema_do_dia', 'catequista']], 
+                             use_container_width=True, hide_index=True)
             else:
-                st.info("Nenhuma chamada registrada hoje para detalhar.")
+                st.info("Nenhuma chamada registrada para esta data.")
 
     r1, r2, r3, r4 = st.columns(4)
 
