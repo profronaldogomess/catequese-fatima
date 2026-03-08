@@ -648,18 +648,42 @@ elif menu == "📚 Minha Turma":
 
     st.subheader("🎯 Itinerário")
     col_p1, col_p2 = st.columns(2)
+    
     with col_p1:
         st.info("**Último Tema Dado:**")
         if not df_enc_t.empty:
-            ultimo = df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()].sort_values('data', ascending=False)
-            if not ultimo.empty: st.write(ultimo.iloc[0]['tema'])
-            else: st.write("Nenhum registro.")
+            ultimo = df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()].copy()
+            if not ultimo.empty:
+                # Converte para data real e filtra apenas encontros que já aconteceram (<= hoje)
+                ultimo['data_sort'] = pd.to_datetime(ultimo['data'], errors='coerce')
+                hoje_str = pd.to_datetime(date.today())
+                ultimo_passado = ultimo[ultimo['data_sort'] <= hoje_str].sort_values('data_sort', ascending=False)
+                
+                if not ultimo_passado.empty: 
+                    st.write(ultimo_passado.iloc[0]['tema'])
+                else: 
+                    st.write("Nenhum encontro anterior a hoje.")
+            else: 
+                st.write("Nenhum registro.")
+        else: 
+            st.write("Nenhum registro.")
+            
     with col_p2:
         st.success("**Próximo Tema Planejado:**")
         if not df_cron_t.empty:
-            proximo = df_cron_t[(df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_cron_t.get('status', '') != 'REALIZADO')]
-            if not proximo.empty: st.write(proximo.iloc[0]['titulo_tema'])
-            else: st.write("Cronograma em dia!")
+            # Blindagem: O Google Sheets pode deixar o cabeçalho vazio, o Pandas chama de 'col_4'
+            col_status = 'status' if 'status' in df_cron_t.columns else ('col_4' if 'col_4' in df_cron_t.columns else None)
+            
+            proximo = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+            
+            # Filtra os temas que não estão marcados como REALIZADO
+            if col_status:
+                proximo = proximo[proximo[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+                
+            if not proximo.empty: 
+                st.write(proximo.iloc[0]['titulo_tema'])
+            else: 
+                st.write("Cronograma em dia!")
 
 
 # ==============================================================================
