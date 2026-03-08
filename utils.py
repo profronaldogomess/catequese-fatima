@@ -73,11 +73,17 @@ def limpar_texto(texto):
     return texto_limpo.encode('latin-1', 'replace').decode('latin-1')
 
 def finalizar_pdf(pdf):
-    """Finaliza a geração do PDF e retorna o buffer de bytes."""
+    """Finaliza a geração do PDF com tratamento de erro detalhado."""
     try:
-        return pdf.output(dest='S').encode('latin-1')
+        # O FPDF precisa que o buffer seja retornado como bytes
+        # Se o PDF estiver vazio, o output pode falhar
+        pdf_bytes = pdf.output(dest='S')
+        if not pdf_bytes:
+            st.error("Erro: O PDF gerado está vazio.")
+            return b""
+        return pdf_bytes.encode('latin-1')
     except Exception as e:
-        print(f"Erro crítico ao finalizar PDF: {e}")
+        st.error(f"Erro crítico ao finalizar PDF: {e}")
         return b""
 
 def desenhar_campo_box(pdf, label, valor, x, y, w, h=8):
@@ -1431,5 +1437,10 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres):
         pdf.cell(80, 7, limpar_texto(nome_t), 1)
         pdf.cell(40, 7, status, 1, 0, 'C')
         pdf.cell(40, 7, str(faltosos), 1, 1, 'C')
+
+    # ADICIONE ESTA VERIFICAÇÃO ANTES DO RETURN
+    if pdf.page_no() == 0:
+        st.warning("Nenhum dado para gerar o PDF.")
+        return b""
         
     return finalizar_pdf(pdf)
