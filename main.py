@@ -791,9 +791,12 @@ elif menu == "📖 Diário de Encontros":
     turma_focal_norm = turma_focal.strip().upper()
     
     if not df_enc_local.empty:
-        # Filtro robusto: normaliza a coluna 'turma' do CSV para comparar com a turma selecionada
+        # Normaliza turma e data para garantir o cruzamento
         df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
-        hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal_norm].sort_values(by='data', ascending=False)
+        # Converte a coluna data para string YYYY-MM-DD para garantir a comparação
+        df_enc_local['data_norm'] = pd.to_datetime(df_enc_local['data']).dt.strftime('%Y-%m-%d')
+        
+        hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal_norm].sort_values(by='data_norm', ascending=False)
         
         if not hist_turma.empty:
             for _, row in hist_turma.iterrows():
@@ -2185,10 +2188,16 @@ elif menu == "✅ Fazer Chamada":
         data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
     # --- CARREGAMENTO E SINCRONIA ---
-    # Carregamos os dados necessários aqui para evitar o NameError
     df_enc_local = ler_aba("encontros")
     
-    df_pres_existente = df_pres[(df_pres['id_turma'] == turma_sel) & (df_pres['data_encontro'] == str(data_enc))]
+    # Normaliza a data selecionada para string YYYY-MM-DD
+    data_str = data_enc.strftime('%Y-%m-%d')
+    
+    # Filtro robusto para presença
+    df_pres_existente = df_pres[
+        (df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
+        (df_pres['data_encontro'].astype(str).str.strip() == data_str)
+    ]
     
     # Filtro seguro: verifica se o DataFrame não está vazio antes de filtrar
     if not df_enc_local.empty:
