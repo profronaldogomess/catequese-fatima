@@ -558,8 +558,32 @@ elif menu == "📚 Minha Turma":
     with st.expander("🎂 Mural de Celebração", expanded=False):
         df_niver_t = obter_aniversariantes_mes(meus_alunos)
         if not df_niver_t.empty:
+            if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (DA TURMA)", use_container_width=True, key=f"btn_card_mes_{turma_ativa}"):
+                lista_para_card =[f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_t.iterrows()]
+                card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
+                if card_coletivo:
+                    st.image(card_coletivo, caption=f"Aniversariantes do Mês - {turma_ativa}")
+                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, f"Aniversariantes_Mes_{turma_ativa}.png", "image/png", key=f"dl_card_mes_{turma_ativa}")
+            
+            st.write("")
+            st.markdown("---")
+            
+            cols_niver = st.columns(4)
             for i, (_, niver) in enumerate(df_niver_t.iterrows()):
-                st.markdown(f"**Dia {int(niver['dia'])}** - {niver['nome']}")
+                with cols_niver[i % 4]:
+                    st.markdown(f"""
+                        <div style='background-color:#f0f2f6; padding:8px; border-radius:10px; border-left:4px solid #417b99; margin-bottom:5px; min-height:80px;'>
+                            <small style='color:#666;'>Dia {int(niver['dia'])}</small><br>
+                            <b style='font-size:13px;'>🎁 {niver['nome'].split()[0]} {niver['nome'].split()[-1] if len(niver['nome'].split()) > 1 else ''}</b>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if st.button(f"🎨 Card", key=f"btn_indiv_t_{turma_ativa}_{i}"):
+                        dados_envio = f"{int(niver['dia'])} | {niver['tipo']} | {niver['nome']}"
+                        card_indiv = gerar_card_aniversario(dados_envio, tipo="DIA")
+                        if card_indiv:
+                            st.image(card_indiv, use_container_width=True)
+                            st.download_button(f"📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{turma_ativa}_{i}")
         else:
             st.write("Nenhum aniversariante este mês.")
 
