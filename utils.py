@@ -1401,41 +1401,66 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
         pdf.cell(10, 9, str(i), border=1, align='C'); pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1); pdf.cell(100, 9, "", border=1); pdf.ln()
     return finalizar_pdf(pdf)
 
-def gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, data_referencia):
-    """Identifica turmas que não registraram chamada na data informada."""
-    turmas_sem_chamada = []
+def obter_ultima_chamada_turma(df_pres, nome_turma):
+    """Retorna a data da última chamada registrada para a turma e o DataFrame correspondente."""
+    if df_pres.empty: return None, pd.DataFrame()
+    pres_t = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_turma.strip().upper()].copy()
+    if pres_t.empty: return None, pd.DataFrame()
+    
+    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], errors='coerce')
+    ultima_data = pres_t['data_dt'].max()
+    if pd.isna(ultima_data): return None, pd.DataFrame()
+    
+    data_str = ultima_data.strftime('%Y-%m-%d')
+    chamada_recente = pres_t[pres_t['data_encontro'] == data_str]
+    return ultima_data.date(), chamada_recente
+
+def gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, dias_limite=7):
+    """Identifica turmas que não registraram chamada nos últimos X dias."""
+    turmas_sem_chamada =[]
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+    limite = hoje - dt_module.timedelta(days=dias_limite)
+    
     for _, t in df_turmas.iterrows():
         nome_t = t['nome_turma']
-        # Verifica se existe chamada para esta turma na data
-        chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
-                          (df_pres['data_encontro'].astype(str) == str(data_referencia))]
-        if chamada.empty:
+        ultima_data, _ = obter_ultima_chamada_turma(df_pres, nome_t)
+        
+        if not ultima_data or ultima_data < limite:
             turmas_sem_chamada.append(nome_t)
+            
     return turmas_sem_chamada
 
 def obter_data_ultimo_sabado():
-    hoje = (datetime.now(timezone.utc) + timedelta(hours=-3)).date()
-    # 5 é sábado (0=segunda, 6=domingo)
+    # Mantida apenas por compatibilidade legada se necessário em outro lugar
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     dias_atras = (hoje.weekday() - 5) % 7
-    return hoje - timedelta(days=dias_atras)
+    return hoje - dt_module.timedelta(days=dias_atras)
 
-def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
+def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     pdf = FPDF()
     pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA DE CHAMADAS - {formatar_data_br(data_ref)}")
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA DE CHAMADAS (ÚLTIMOS {dias_limite} DIAS)")
     
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(0, 10, f"Resumo: {len(df_turmas)} turmas totais.", ln=True)
+    pdf.cell(0, 10, f"Resumo: {len(df_turmas)} turmas totais. Data da Auditoria: {formatar_data_br(hoje)}", ln=True)
+    
+    limite = hoje - dt_module.timedelta(days=dias_limite)
     
     for _, t in df_turmas.iterrows():
         nome_t = t['nome_turma']
-        chamada = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t.strip().upper()) & 
-                          (df_pres['data_encontro'].astype(str) == str(data_ref))]
+        ultima_data, chamada = obter_ultima_chamada_turma(df_pres, nome_t)
+        
+        status_texto = "PENDENTE (Sem chamada recente)"
+        if ultima_data and ultima_data >= limite:
+            status_texto = f"FEITA EM {formatar_data_br(ultima_data)}"
+        elif ultima_data:
+            status_texto = f"ATRASADA (Última: {formatar_data_br(ultima_data)})"
         
         pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
-        pdf.cell(190, 7, limpar_texto(f"TURMA: {nome_t} - {'FEITA' if not chamada.empty else 'PENDENTE'}"), 1, 1, 'L', True)
+        pdf.cell(190, 7, limpar_texto(f"TURMA: {nome_t} - {status_texto}"), 1, 1, 'L', True)
         
-        if not chamada.empty:
+        if not chamada.empty and ultima_data and ultima_data >= limite:
             faltosos = chamada[chamada['status'] == 'AUSENTE']
             if not faltosos.empty:
                 pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0)
@@ -1451,10 +1476,9 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
                     if not cat_info.empty:
                         c = cat_info.iloc[0]
                         lista_contatos = []
-                        # Coleta todos os telefones disponíveis
-                        if str(c.get('tel_mae', '')).strip() not in ["N/A", "", "None"]: 
+                        if str(c.get('tel_mae', '')).strip() not in["N/A", "", "None"]: 
                             lista_contatos.append(f"Mãe: {c['tel_mae']}")
-                        if str(c.get('tel_pai', '')).strip() not in ["N/A", "", "None"]: 
+                        if str(c.get('tel_pai', '')).strip() not in["N/A", "", "None"]: 
                             lista_contatos.append(f"Pai: {c['tel_pai']}")
                         if str(c.get('contato_principal', '')).strip() not in ["N/A", "", "None"]: 
                             lista_contatos.append(f"Resp: {c['contato_principal']}")
@@ -1465,10 +1489,10 @@ def gerar_pdf_auditoria_chamadas(data_ref, df_turmas, df_pres, df_cat):
                     pdf.cell(120, 6, limpar_texto(contatos_str), 1, 1)
             else:
                 pdf.set_font("helvetica", "I", 8)
-                pdf.cell(190, 6, "Nenhum faltoso nesta turma.", 1, 1)
+                pdf.cell(190, 6, "Nenhum faltoso no último encontro.", 1, 1)
         else:
             pdf.set_font("helvetica", "I", 8)
-            pdf.cell(190, 6, "Chamada não realizada.", 1, 1)
+            pdf.cell(190, 6, "Sem registros recentes para exibir faltosos.", 1, 1)
         pdf.ln(2)
         
     return finalizar_pdf(pdf)
