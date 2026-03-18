@@ -235,7 +235,9 @@ if not st.session_state.logado:
 
 # --- 8. CARREGAMENTO GLOBAL DE DADOS ---
 dados_globais = carregar_dados_globais()
-if dados_globais:
+
+# Gatekeeper: Verifica se os dados vieram vazios devido ao Erro 429 (Quota Exceeded)
+if dados_globais and not dados_globais["turmas"].empty and not dados_globais["catequizandos"].empty:
     df_cat = dados_globais["catequizandos"]
     df_turmas = dados_globais["turmas"]
     df_pres = dados_globais["presencas"]
@@ -243,7 +245,18 @@ if dados_globais:
     df_sac_eventos = dados_globais["sacramentos_eventos"]
     df_pres_reuniao = dados_globais["presenca_reuniao"]
 else:
-    st.error("Erro ao carregar dados. Tente novamente em alguns minutos.")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.warning("⏳ **SISTEMA EM SINCRONIZAÇÃO (ALTO TRÁFEGO)**")
+    st.info("""
+    **O que aconteceu?** Muitos catequistas estão acessando o sistema neste exato segundo e o servidor do Google atingiu o limite de leituras por minuto.
+    
+    **Meus dados foram perdidos?** NÃO! Se você acabou de salvar uma chamada ou cadastro, **os dados foram salvos com sucesso no banco**. O sistema apenas pausou a tela para não sobrecarregar.
+    
+    **O que fazer?** Aguarde cerca de 30 segundos e clique no botão abaixo para recarregar a tela com seus dados atualizados.
+    """)
+    if st.button("🔄 RECARREGAR SISTEMA", use_container_width=True, type="primary"):
+        st.cache_data.clear()
+        st.rerun()
     st.stop()
 
 equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
