@@ -168,44 +168,60 @@ def mostrar_logo_login():
     if os.path.exists("logo.png"): st.image("logo.png", width=150)
     else: st.markdown("<h1 style='text-align: center; color: #e03d11;'>✝️</h1>", unsafe_allow_html=True)
 
-# --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA ---
-# Forçamos a leitura do cookie logo no início para garantir a persistência
+# --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA (BLINDADA) ---
+
+# 1. Tentativa de Restauração via Cookie (Resiliência a Quedas de Internet)
 if not st.session_state.get('logado', False):
+    # O CookieManager pode demorar milissegundos para carregar. 
+    # Se ele retornar None, mas o navegador tiver o cookie, ele vai forçar um rerun automático.
     auth_cookie = cookie_manager.get("fatima_auth_v4")
     if auth_cookie and isinstance(auth_cookie, dict):
-        user = verificar_login(auth_cookie.get('email'), auth_cookie.get('senha'))
-        if user:
-            # Restaura a sessão sem gerar um novo UUID desnecessariamente
-            st.session_state.logado = True
-            st.session_state.usuario = user
-            st.session_state.session_id = obter_session_id_db(user['email'])
-            st.rerun()
+        with st.spinner("🔄 Restaurando sua conexão segura..."):
+            user = verificar_login(auth_cookie.get('email'), auth_cookie.get('senha'))
+            if user:
+                st.session_state.logado = True
+                st.session_state.usuario = user
+                # Adota o ID atual do banco para não se auto-derrubar
+                sid_atual = obter_session_id_db(user['email'])
+                if not sid_atual:
+                    sid_atual = str(uuid.uuid4())
+                    atualizar_session_id(user['email'], sid_atual)
+                st.session_state.session_id = sid_atual
+                st.rerun()
 
-if st.session_state.logado and st.session_state.usuario:
+# 2. Verificação de Concorrência (Sessão Única)
+if st.session_state.get('logado') and st.session_state.get('usuario'):
     sid_no_db = obter_session_id_db(st.session_state.usuario['email'])
+    # Se o ID no banco for diferente do ID da sessão atual, alguém logou em outro lugar
     if sid_no_db and sid_no_db != st.session_state.session_id:
         st.session_state.sessao_derrubada = True
         st.session_state.logado = False
         try: cookie_manager.delete("fatima_auth_v4")
         except: pass
 
+# 3. Tela Informativa de Desconexão
 if st.session_state.get('sessao_derrubada'):
     st.markdown("<br><br>", unsafe_allow_html=True)
-    st.error("🚨 **ACESSO ENCERRADO: CONEXÃO DUPLICADA**")
+    st.error("🚨 **ACESSO ENCERRADO: NOVA CONEXÃO DETECTADA**")
     st.markdown(f"""
-        <div style='background-color:#fff5f5; padding:20px; border-radius:10px; border:2px solid #e03d11;'>
-            <h3 style='color:#e03d11; margin-top:0;'>Sessão Encerrada</h3>
-            <p style='color:#333;'>Identificamos que sua conta foi conectada em <b>outro dispositivo ou navegador</b>.</p>
-            <p style='color:#333;'>Por segurança, esta conexão foi finalizada.</p>
+        <div style='background-color:#fff5f5; padding:20px; border-radius:10px; border:2px solid #e03d11; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+            <h3 style='color:#e03d11; margin-top:0;'>Sessão Interrompida por Segurança</h3>
+            <p style='color:#333; font-size:16px;'>Identificamos que a conta <b>{st.session_state.usuario.get('email', '') if st.session_state.get('usuario') else 'sua conta'}</b> acabou de ser conectada em <b>outro dispositivo ou navegador</b>.</p>
+            <p style='color:#333; font-size:15px;'>O sistema Catequese Fátima permite apenas <b>um acesso ativo por usuário</b>. Isso garante a integridade do banco de dados e evita que duas pessoas editem a mesma chamada ou cadastro ao mesmo tempo.</p>
+            <hr style='border-color:#fbd5d5;'>
+            <p style='color:#666; font-size:13px;'><i>💡 <b>Dica:</b> Se a sua internet caiu e voltou, o sistema pode ter gerado uma nova conexão. Basta fazer o login novamente. Se não foi você quem acessou, avise a coordenação.</i></p>
         </div>
     """, unsafe_allow_html=True)
-    if st.button("VOLTAR PARA A TELA DE LOGIN", use_container_width=True):
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 FAZER LOGIN NOVAMENTE", use_container_width=True, type="primary"):
         st.session_state.sessao_derrubada = False
         st.session_state.usuario = None
         st.session_state.session_id = None
         st.rerun()
     st.stop()
 
+# 4. Tela de Login
 if not st.session_state.logado:
     if st.session_state.get('logout_em_curso'):
         st.session_state.logout_em_curso = False
@@ -215,9 +231,15 @@ if not st.session_state.logado:
         st.markdown("<br>", unsafe_allow_html=True)
         mostrar_logo_login()
         st.markdown(f"<h2 style='text-align: center; color: {cor_sidebar};'>Acesso Restrito</h2>", unsafe_allow_html=True)
+        
+        # Verifica se o cookie manager ainda está inicializando (dicionário vazio no primeiro milissegundo)
+        if cookie_manager.get_all() == {}:
+            st.info("⏳ Verificando credenciais salvas...")
+            
         email_login = st.text_input("E-mail")
         senha_login = st.text_input("Senha", type="password")
-        lembrar = st.checkbox("Manter conectado por 30 dias")
+        lembrar = st.checkbox("Manter conectado (Reconecta automático se a internet cair)", value=True)
+        
         if st.button("ENTRAR NO SISTEMA", use_container_width=True):
             user = verificar_login(email_login, senha_login)
             if user:
@@ -229,8 +251,8 @@ if not st.session_state.logado:
                     if lembrar:
                         cookie_manager.set("fatima_auth_v4", {"email": email_login, "senha": senha_login}, expires_at=dt_module.datetime.now() + timedelta(days=30))
                     st.rerun()
-                else: st.error("Erro ao validar sessão única.")
-            else: st.error("🚫 Acesso negado.")
+                else: st.error("Erro ao validar sessão única. Tente novamente.")
+            else: st.error("🚫 E-mail ou senha incorretos.")
     st.stop()
 
 # --- 8. CARREGAMENTO GLOBAL DE DADOS ---
