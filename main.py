@@ -548,6 +548,74 @@ elif menu == "📚 Minha Turma":
     meus_alunos = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_cat['status'] == 'ATIVO')]
     minhas_pres = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
 
+    # --- 💌 CORREIO PASTORAL (POP-UP INTELIGENTE) ---
+    @st.dialog("💌 Correio Pastoral - Assistente da Turma")
+    def exibir_assistente_pastoral(turma, aniversariantes, status_chamada, faltosos, proximo_tema):
+        st.markdown(f"### Olá, Catequista! 👋")
+        st.write(f"Aqui está o seu resumo pastoral de hoje para a turma **{turma}**:")
+        
+        # 1. Aniversariantes
+        if aniversariantes:
+            st.info(f"🎂 **Aniversariantes da Semana:**\n" + "\n".join([f"• {n}" for n in aniversariantes]))
+        
+        # 2. Chamada e Faltas
+        if status_chamada == "PENDENTE":
+            st.error("⚠️ **Atenção:** A chamada dos últimos 7 dias não foi registrada. Por favor, atualize o Diário!")
+        elif faltosos > 0:
+            st.warning(f"🚩 **Cuidado Pastoral:** Tivemos **{faltosos} faltas** no último encontro. Já mandou uma mensagem no WhatsApp ou ligou para os pais para saber se está tudo bem?")
+        else:
+            st.success("✅ **Frequência:** Que bênção! Todos estiveram presentes no último encontro.")
+            
+        # 3. Planejamento
+        if proximo_tema:
+            st.success(f"📖 **Próximo Encontro:** O tema planejado é **'{proximo_tema}'**. Já preparou a dinâmica e a Palavra?")
+        else:
+            st.warning("📅 **Planejamento:** O cronograma está sem próximos temas. Que tal planejar os próximos encontros no Diário?")
+            
+        # 4. Dica Aleatória
+        import random
+        dicas =[
+            "💡 **Dica:** Mantenha o grupo do WhatsApp da turma sempre animado com mensagens de bom dia e lembretes da Missa!",
+            "💡 **Dica:** Lembre os catequizandos e suas famílias da importância de participarem da Santa Missa dominical.",
+            "💡 **Dica:** Um catequista que reza por sua turma colhe frutos eternos. Já rezou por seus catequizandos hoje?",
+            "💡 **Dica:** Envie um áudio curto no grupo da turma resumindo o que aprenderam no último encontro!",
+            "💡 **Dica:** Fique atento à programação da Paróquia e convide as famílias para os eventos comunitários."
+        ]
+        st.info(random.choice(dicas))
+        
+        if st.button("✅ Ciente! Vamos à missão", use_container_width=True):
+            st.session_state[f"assistente_visto_{turma}_{date.today()}"] = True
+            st.rerun()
+
+    hoje_str = str(date.today())
+    key_assistente = f"assistente_visto_{turma_ativa}_{hoje_str}"
+    
+    if key_assistente not in st.session_state:
+        # 1. Aniversariantes
+        aniversariantes_semana =[]
+        for _, row in meus_alunos.iterrows():
+            if eh_aniversariante_da_semana(row['data_nascimento'], date.today()):
+                aniversariantes_semana.append(row['nome_completo'])
+        
+        # 2. Chamada
+        ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
+        limite_t = date.today() - timedelta(days=7)
+        status_chamada = "PENDENTE" if (not ultima_data_chamada or ultima_data_chamada < limite_t) else "OK"
+        faltosos_qtd = len(chamada_recente[chamada_recente['status'] == 'AUSENTE']) if not chamada_recente.empty else 0
+        
+        # 3. Próximo Tema
+        proximo_tema_str = None
+        if not df_cron_t.empty:
+            col_status = 'status' if 'status' in df_cron_t.columns else ('col_4' if 'col_4' in df_cron_t.columns else None)
+            proximo = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+            if col_status:
+                proximo = proximo[proximo[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+            if not proximo.empty:
+                proximo_tema_str = proximo.iloc[0]['titulo_tema']
+        
+        # Dispara o Pop-up
+        exibir_assistente_pastoral(turma_ativa, aniversariantes_semana, status_chamada, faltosos_qtd, proximo_tema_str)
+
     # --- ALERTAS DE GESTÃO ---
     ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
     
