@@ -171,11 +171,12 @@ def mostrar_logo_login():
 # --- 7. LÓGICA DE PERSISTÊNCIA E SESSÃO ÚNICA (BLINDADA) ---
 
 # 1. Tentativa de Restauração via Cookie (Resiliência a Quedas de Internet)
-if not st.session_state.get('logado', False):
+# Adicionamos a trava "logout_em_curso" para impedir que o sistema puxe o cookie fantasma logo após o clique em Sair
+if not st.session_state.get('logado', False) and not st.session_state.get('logout_em_curso', False):
     # O CookieManager pode demorar milissegundos para carregar. 
     # Se ele retornar None, mas o navegador tiver o cookie, ele vai forçar um rerun automático.
     auth_cookie = cookie_manager.get("fatima_auth_v4")
-    if auth_cookie and isinstance(auth_cookie, dict):
+    if auth_cookie and isinstance(auth_cookie, dict) and auth_cookie.get('email'):
         with st.spinner("🔄 Restaurando sua conexão segura..."):
             user = verificar_login(auth_cookie.get('email'), auth_cookie.get('senha'))
             if user:
@@ -301,10 +302,17 @@ if st.sidebar.button("🔄 Atualizar Dados", key="btn_refresh_global"):
 
 if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_global"):
     st.session_state.logout_em_curso = True
-    cookie_manager.delete("fatima_auth_v4")
+    # Sobrescrevemos o cookie com vazio para matá-lo instantaneamente no navegador
+    cookie_manager.set("fatima_auth_v4", "", expires_at=dt_module.datetime.now())
+    try: cookie_manager.delete("fatima_auth_v4")
+    except: pass
+    
     st.session_state.logado = False
     st.session_state.session_id = None
     st.session_state.usuario = None
+    
+    # Dá meio segundo para o navegador processar a exclusão antes de recarregar
+    time.sleep(0.5) 
     st.rerun()
 
 papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
