@@ -31,23 +31,28 @@ def conectar_google_sheets():
         st.error(f"Erro de Conexão com Google Sheets: {str(e)}")
         return None
 
-# --- 1. MOTOR DE LEITURA COM CACHE INTELIGENTE (DEFESA CONTRA ERRO 429) ---
+# --- 1. MOTOR DE LEITURA COM CACHE INTELIGENTE E RESILIÊNCIA (DEFESA CONTRA ERRO 429) ---
+
+@retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=1.5, min=2, max=10))
+def _fetch_sheet_data(planilha, nome_aba):
+    """Função interna com motor de resiliência (Tenacity) para atuar como Buffer contra o Erro 429."""
+    aba = planilha.worksheet(nome_aba)
+    return aba.get_all_values()
 
 @st.cache_data(ttl=60) 
 def ler_aba(nome_aba):
-    """Lê qualquer aba e retorna um DataFrame. Cache de 60s para evitar excesso de requisições."""
+    """Lê qualquer aba e retorna um DataFrame. Cache de 60s e Retry contra Erro 429."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
-            aba = planilha.worksheet(nome_aba)
-            todos_os_valores = aba.get_all_values()
+            todos_os_valores = _fetch_sheet_data(planilha, nome_aba)
             if not todos_os_valores or len(todos_os_valores) < 1:
                 return pd.DataFrame()
             headers = [str(h).strip().lower() for h in todos_os_valores[0]]
-            headers = [h if h != "" else f"col_{i}" for i, h in enumerate(headers)]
+            headers =[h if h != "" else f"col_{i}" for i, h in enumerate(headers)]
             data = todos_os_valores[1:]
             num_cols = len(headers)
-            data_ajustada = []
+            data_ajustada =[]
             for row in data:
                 row_fixed = list(row)
                 if len(row_fixed) < num_cols:
@@ -55,7 +60,8 @@ def ler_aba(nome_aba):
                 data_ajustada.append(row_fixed[:num_cols])
             df = pd.DataFrame(data_ajustada, columns=headers)
             return df
-        except Exception:
+        except Exception as e:
+            # Se falhar mesmo após as 4 tentativas de buffer, retorna vazio para o Gatekeeper atuar
             return pd.DataFrame()
     return pd.DataFrame()
 
