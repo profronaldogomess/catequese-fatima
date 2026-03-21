@@ -2337,7 +2337,7 @@ elif menu == "✅ Fazer Chamada":
 
     # --- 💌 ASSISTENTE DE CHAMADA (POP-UP INTELIGENTE) ---
     @st.dialog("💡 Guia Rápido da Chamada")
-    def exibir_guia_chamada(turma, data_str, lista_niver, ja_existe):
+    def exibir_guia_chamada(turma, data_str, lista_niver, ja_existe, chave_sessao):
         st.markdown(f"<h3 style='text-align: center; color: #417b99; margin-top: 0;'>Preparando a chamada...</h3>", unsafe_allow_html=True)
         
         if ja_existe:
@@ -2356,14 +2356,16 @@ elif menu == "✅ Fazer Chamada":
         """, unsafe_allow_html=True)
         
         if st.button("✅ Entendido! Iniciar Chamada", use_container_width=True, type="primary"):
-            st.session_state[f"guia_chamada_{turma}_{data_str}"] = True
+            # Agora usamos a chave exata passada de fora
+            st.session_state[chave_sessao] = True
             st.rerun()
 
     # Gatilho do Pop-up (Aparece 1x por Turma + Data)
     key_guia = f"guia_chamada_{turma_sel}_{data_enc.strftime('%Y-%m-%d')}"
     if key_guia not in st.session_state:
         ja_tem_registro = not encontro_do_dia.empty
-        exibir_guia_chamada(turma_sel, data_enc.strftime('%d/%m/%Y'), aniversariantes, ja_tem_registro)
+        # Passamos a key_guia como o 5º argumento para garantir a sincronia perfeita
+        exibir_guia_chamada(turma_sel, data_enc.strftime('%d/%m/%Y'), aniversariantes, ja_tem_registro, key_guia)
 
     if not encontro_do_dia.empty:
         tema_dia = encontro_do_dia.iloc[0]['tema']
