@@ -714,8 +714,13 @@ elif menu == "📚 Minha Turma":
     cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
     total_temas = len(cron_turma)
     total_feito = len(df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()])
-    progresso = (total_feito / total_temas) if total_temas > 0 else 0
-    c1.metric("Caminhada da Fé", f"{total_feito} de {total_temas} temas", f"{progresso*100:.0f}% concluído")
+    
+    # Trava de segurança para não exibir mais de 100%
+    progresso_bruto = (total_feito / total_temas) if total_temas > 0 else 0.0
+    progresso_seguro = min(progresso_bruto, 1.0)
+    
+    texto_metrica = f"{total_feito} de {total_temas} temas" if total_temas > 0 else f"{total_feito} encontros"
+    c1.metric("Caminhada da Fé", texto_metrica, f"{progresso_seguro*100:.0f}% concluído")
     
     freq = (minhas_pres['status'] == 'PRESENTE').mean() * 100 if not minhas_pres.empty else 0
     c2.metric("Frequência Média", f"{freq:.1f}%")
@@ -877,9 +882,13 @@ elif menu == "📖 Diário de Encontros":
             # Busca encontros realizados na aba presencas (fonte única)
             encontros_realizados = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]['data_encontro'].unique()
             realizados = len(encontros_realizados)
-            progresso = realizados / total_temas if total_temas > 0 else 0
-            st.markdown(f"**Progresso do Itinerário: {realizados} de {total_temas} temas concluídos**")
-            st.progress(progresso)
+            
+            # Trava de segurança: impede que o progresso passe de 1.0 (100%) e quebre o Streamlit
+            progresso_bruto = realizados / total_temas if total_temas > 0 else 0.0
+            progresso_seguro = min(progresso_bruto, 1.0)
+            
+            st.markdown(f"**Progresso do Itinerário: {realizados} encontros realizados (de {total_temas} planejados)**")
+            st.progress(progresso_seguro)
 
     # --- COLUNAS DE AÇÃO ---
     col_plan, col_reg = st.columns(2)
