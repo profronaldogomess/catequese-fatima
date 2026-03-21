@@ -2315,9 +2315,9 @@ elif menu == "✅ Fazer Chamada":
     turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
     data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    # 3. MURAL DE ANIVERSARIANTES
+# 3. MURAL DE ANIVERSARIANTES
     lista_cat = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
-    aniversariantes = []
+    aniversariantes =[]
     for _, row in lista_cat.iterrows():
         status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
         if status_niver: aniversariantes.append(f"{status_niver}: {row['nome_completo']}")
@@ -2326,7 +2326,7 @@ elif menu == "✅ Fazer Chamada":
         with st.expander("🎂 Aniversariantes do Encontro", expanded=True):
             for niver in aniversariantes: st.info(niver)
 
-    # 4. LÓGICA DE TEMA (INTEGRADA COM CRONOGRAMA)
+    # 4. LÓGICA DE TEMA E ASSISTENTE DE CHAMADA
     df_enc_local = ler_aba("encontros")
     df_cron_local = ler_aba("cronograma")
     
@@ -2334,6 +2334,36 @@ elif menu == "✅ Fazer Chamada":
         (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
         (df_enc_local['data'].astype(str) == str(data_enc))
     ]
+
+    # --- 💌 ASSISTENTE DE CHAMADA (POP-UP INTELIGENTE) ---
+    @st.dialog("💡 Guia Rápido da Chamada")
+    def exibir_guia_chamada(turma, data_str, lista_niver, ja_existe):
+        st.markdown(f"<h3 style='text-align: center; color: #417b99; margin-top: 0;'>Preparando a chamada...</h3>", unsafe_allow_html=True)
+        
+        if ja_existe:
+            st.error(f"⚠️ **ATENÇÃO:** Já existe uma chamada salva para o dia **{data_str}**. Se você continuar, estará **editando** o registro existente.")
+        
+        if lista_niver:
+            st.info(f"🎂 **Temos aniversariantes!** Não esqueça de parabenizar:\n" + "\n".join([f"• {n}" for n in lista_niver]))
+            
+        st.markdown("""
+        <div style='background-color: #f8f9f0; padding: 15px; border-radius: 10px; border-left: 5px solid #e03d11; margin-bottom: 15px;'>
+            <b style='color: #e03d11;'>📌 3 Passos para uma chamada perfeita:</b><br><br>
+            1️⃣ <b>Tema:</b> Selecione um tema planejado na listinha abaixo ou digite um novo se for um encontro extra.<br>
+            2️⃣ <b>Presenças:</b> Marque quem veio. O sistema salva suas marcações na tela mesmo se a internet oscilar!<br>
+            3️⃣ <b>Diário:</b> Após salvar a chamada, vá na aba <i>Diário de Encontros</i> para escrever como foi a dinâmica nas observações.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("✅ Entendido! Iniciar Chamada", use_container_width=True, type="primary"):
+            st.session_state[f"guia_chamada_{turma}_{data_str}"] = True
+            st.rerun()
+
+    # Gatilho do Pop-up (Aparece 1x por Turma + Data)
+    key_guia = f"guia_chamada_{turma_sel}_{data_enc.strftime('%Y-%m-%d')}"
+    if key_guia not in st.session_state:
+        ja_tem_registro = not encontro_do_dia.empty
+        exibir_guia_chamada(turma_sel, data_enc.strftime('%d/%m/%Y'), aniversariantes, ja_tem_registro)
 
     if not encontro_do_dia.empty:
         tema_dia = encontro_do_dia.iloc[0]['tema']
