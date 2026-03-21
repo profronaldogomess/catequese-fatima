@@ -2326,8 +2326,10 @@ elif menu == "✅ Fazer Chamada":
         with st.expander("🎂 Aniversariantes do Encontro", expanded=True):
             for niver in aniversariantes: st.info(niver)
 
-    # 4. LÓGICA DE TEMA (INTEGRADA)
+    # 4. LÓGICA DE TEMA (INTEGRADA COM CRONOGRAMA)
     df_enc_local = ler_aba("encontros")
+    df_cron_local = ler_aba("cronograma")
+    
     encontro_do_dia = df_enc_local[
         (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
         (df_enc_local['data'].astype(str) == str(data_enc))
@@ -2335,9 +2337,19 @@ elif menu == "✅ Fazer Chamada":
 
     if not encontro_do_dia.empty:
         tema_dia = encontro_do_dia.iloc[0]['tema']
-        st.success(f"📖 **Tema do Encontro:** {tema_dia}")
+        st.success(f"📖 **Tema do Encontro já registrado no Diário:** {tema_dia}")
     else:
-        tema_dia = st.text_input("📖 Digite o Tema do Encontro (Obrigatório):").upper()
+        # Busca temas pendentes no cronograma para facilitar a vida do catequista
+        lista_temas_pendentes = [""]
+        if not df_cron_local.empty:
+            col_status = 'status' if 'status' in df_cron_local.columns else ('col_4' if 'col_4' in df_cron_local.columns else None)
+            temas_turma = df_cron_local[df_cron_local['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
+            if col_status:
+                temas_turma = temas_turma[temas_turma[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+            lista_temas_pendentes += temas_turma['titulo_tema'].tolist()
+            
+        tema_selecionado = st.selectbox("📌 Selecione um Tema Planejado no Cronograma (Opcional):", lista_temas_pendentes, key="sel_tema_chamada", help="Se escolher um tema aqui, ele preencherá o campo abaixo automaticamente.")
+        tema_dia = st.text_input("📖 Digite o Tema do Encontro (Obrigatório):", value=tema_selecionado, key="txt_tema_chamada", help="Você pode digitar um tema livre caso tenha sido um encontro espontâneo.").upper()
 
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
