@@ -437,8 +437,22 @@ if menu == "🏠 Início / Dashboard":
     pend_doc = len(df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
     r1.metric("📄 Doc. Pendente", pend_doc, delta="Ação Necessária", delta_color="inverse")
 
-    risco_c, _ = processar_alertas_evasao(df_pres)
-    r2.metric("🚩 Risco de Evasão", len(risco_c), delta="Visita Urgente", delta_color="inverse")
+    # --- NOVA LÓGICA DE RISCO DE EVASÃO GLOBAL (APENAS ATIVOS) ---
+    df_risco_detalhado = pd.DataFrame()
+    if not df_pres.empty and not df_ativos.empty:
+        df_faltas = df_pres[df_pres['status'] == 'AUSENTE']
+        if not df_faltas.empty:
+            # Conta faltas por ID
+            contagem_faltas = df_faltas.groupby('id_catequizando').size().reset_index(name='qtd_faltas')
+            # Filtra quem tem 3 ou mais faltas
+            contagem_risco = contagem_faltas[contagem_faltas['qtd_faltas'] >= 3]
+            # Cruza com os ATIVOS para pegar Nome e Turma (ignora quem já saiu)
+            df_risco_detalhado = pd.merge(contagem_risco, df_ativos[['id_catequizando', 'nome_completo', 'etapa']], on='id_catequizando', how='inner')
+            # Ordena por quem tem mais faltas
+            df_risco_detalhado = df_risco_detalhado.sort_values(by='qtd_faltas', ascending=False)
+
+    qtd_risco = len(df_risco_detalhado)
+    r2.metric("🚩 Risco de Evasão", qtd_risco, delta="Visita Urgente", delta_color="inverse")
 
     sem_batismo = len(df_ativos[df_ativos['batizado_sn'] == 'NÃO'])
     r3.metric("🕊️ Sem Batismo", sem_batismo, delta="Regularizar", delta_color="inverse")
@@ -450,6 +464,16 @@ if menu == "🏠 Início / Dashboard":
     turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
     sem_turma = len(df_ativos[(df_ativos['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_ativos['etapa'].isin(turmas_reais))])
     r5.metric("⏳ Sem Turma", sem_turma, delta="Fila de Espera", delta_color="inverse")
+
+    # --- EXPANDER DETALHADO DE EVASÃO ---
+    if not df_risco_detalhado.empty:
+        with st.expander(f"🔍 Ver Detalhes: {qtd_risco} Catequizandos em Risco Crítico (3+ Faltas)"):
+            df_exibicao = df_risco_detalhado[['nome_completo', 'etapa', 'qtd_faltas']].rename(columns={
+                'nome_completo': 'Catequizando',
+                'etapa': 'Turma',
+                'qtd_faltas': 'Faltas Acumuladas'
+            })
+            st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
     st.divider()
 
