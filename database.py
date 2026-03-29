@@ -696,7 +696,7 @@ def atualizar_encontro_global(turma, data_alvo, novo_tema, nova_obs):
             if len(linha) >= 4 and str(linha[0]) == data_str and str(linha[3]).strip().upper() == turma_norm:
                 aba_pres.update_cell(i + 1, 6, tema_norm)
 
-        # 3. Atualizar aba CRONOGRAMA (Se o novo tema existir lá, marca como REALIZADO)
+# 3. Atualizar aba CRONOGRAMA (Se o novo tema existir lá, marca como REALIZADO)
         aba_cron = planilha.worksheet("cronograma")
         dados_cron = aba_cron.get_all_values()
         for i, linha in enumerate(dados_cron):
@@ -707,4 +707,43 @@ def atualizar_encontro_global(turma, data_alvo, novo_tema, nova_obs):
         return True
     except Exception as e:
         st.error(f"Erro na sincronia global: {e}")
+        return False
+
+def excluir_encontro_cascata(turma, data_alvo, tema_alvo):
+    """
+    Exclui um encontro e suas presenças, e reverte o tema no cronograma para PENDENTE.
+    """
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    
+    try:
+        turma_norm = turma.strip().upper()
+        tema_norm = tema_alvo.strip().upper()
+        data_str = str(data_alvo)
+
+        # 1. Remover da aba ENCONTROS
+        aba_enc = planilha.worksheet("encontros")
+        dados_enc = aba_enc.get_all_values()
+        linhas_del_enc =[i + 1 for i, linha in enumerate(dados_enc) if len(linha) >= 2 and str(linha[0]) == data_str and str(linha[1]).strip().upper() == turma_norm]
+        for row_idx in sorted(linhas_del_enc, reverse=True):
+            aba_enc.delete_rows(row_idx)
+
+        # 2. Remover da aba PRESENCAS
+        aba_pres = planilha.worksheet("presencas")
+        dados_pres = aba_pres.get_all_values()
+        linhas_del_pres =[i + 1 for i, linha in enumerate(dados_pres) if len(linha) >= 4 and str(linha[0]) == data_str and str(linha[3]).strip().upper() == turma_norm]
+        for row_idx in sorted(linhas_del_pres, reverse=True):
+            aba_pres.delete_rows(row_idx)
+
+        # 3. Reverter status na aba CRONOGRAMA
+        aba_cron = planilha.worksheet("cronograma")
+        dados_cron = aba_cron.get_all_values()
+        for i, linha in enumerate(dados_cron):
+            if len(linha) >= 3 and str(linha[1]).strip().upper() == turma_norm and str(linha[2]).strip().upper() == tema_norm:
+                aba_cron.update_cell(i + 1, 5, "PENDENTE") # Coluna E = Status
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na exclusão em cascata: {e}")
         return False
