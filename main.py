@@ -105,7 +105,7 @@ from database import (
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
     marcar_tema_realizado_cronograma, carregar_dados_globais, sincronizar_edicao_catequizando, 
-    salvar_com_seguranca, atualizar_encontro_global
+    salvar_com_seguranca, atualizar_encontro_global, excluir_encontro_cascata
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -976,10 +976,25 @@ elif menu == "📖 Diário de Encontros":
                         ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
                         ed_obs = st.text_area("Editar Observações:", value=obs_d)
                         
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES (SINCRONIZAR TUDO)"):
+                        c_btn1, c_btn2 = st.columns([3, 1])
+                        btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
+                        btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR ENCONTRO", use_container_width=True)
+                        
+                        st.markdown("---")
+                        confirma_del = st.checkbox("⚠️ Confirmo a exclusão deste encontro e de todas as presenças do dia", key=f"chk_del_{data_d}_{idx}")
+                        
+                        if btn_salvar:
                             with st.spinner("Sincronizando Diário, Presenças e Cronograma..."):
                                 if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
                                     st.success("✅ Tudo atualizado com sucesso!"); time.sleep(1); st.rerun()
+                                    
+                        if btn_excluir:
+                            if confirma_del:
+                                with st.spinner("Excluindo encontro e revertendo cronograma..."):
+                                    if excluir_encontro_cascata(turma_focal, data_d, tema_d):
+                                        st.success("✅ Encontro excluído com sucesso!"); time.sleep(1); st.rerun()
+                            else:
+                                st.error("⚠️ Marque a caixa de confirmação abaixo para excluir o encontro.")
         else:
             st.info("Nenhum encontro registrado na aba 'encontros' para esta turma.")
     else:
