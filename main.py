@@ -424,56 +424,94 @@ if menu == "🏠 Início / Dashboard":
             st.download_button("Clique para baixar", pdf_aud, f"Auditoria_Chamadas_{hoje_aud}.pdf", "application/pdf", use_container_width=True)
 
     if turmas_pendentes:
-        st.error(f"⚠️ **Atenção:** Turmas sem chamada registrada nos últimos 7 dias: {', '.join(turmas_pendentes)}")
+        st.error("⚠️ **Atenção:** As seguintes turmas estão sem chamada registrada nos últimos 7 dias:")
+        import urllib.parse
+        for t_pendente in turmas_pendentes:
+            info_t = df_turmas[df_turmas['nome_turma'] == t_pendente]
+            cat_nome = "Não informado"
+            btn_wa = ""
+            
+            if not info_t.empty:
+                cats_resp =[c.strip() for c in str(info_t.iloc[0].get('catequista_responsavel', '')).split(',') if c.strip()]
+                if cats_resp:
+                    cat_nome = cats_resp[0] # Pega o primeiro responsável
+                    tel_cat = ""
+                    if not equipe_tecnica.empty:
+                        cat_info = equipe_tecnica[equipe_tecnica['nome'].str.upper() == cat_nome.upper()]
+                        if not cat_info.empty:
+                            tel_cat = str(cat_info.iloc[0].get('telefone', ''))
+                    
+                    num_limpo = "".join(filter(str.isdigit, tel_cat))
+                    if num_limpo:
+                        if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
+                        if not num_limpo.startswith("55"):
+                            num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
+                        
+                        msg = f"Paz e Bem, {cat_nome}! Notei que o diário da turma {t_pendente} está pendente de atualização nos últimos 7 dias. Pode verificar, por favor? Deus abençoe!"
+                        link_wa = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg)}"
+                        btn_wa = f"<a href='{link_wa}' target='_blank' style='text-decoration:none; background-color:#25d366; color:white; padding:4px 10px; border-radius:5px; font-size:12px; font-weight:bold; margin-left:10px;'>📲 Cobrar Catequista</a>"
+                    else:
+                        btn_wa = "<span style='color:#999; font-size:12px; margin-left:10px;'>(Sem telefone cadastrado)</span>"
+                        
+            st.markdown(f"<div style='padding:5px 0; border-bottom:1px solid #fbd5d5;'>• <b>{t_pendente}</b> (Resp: {cat_nome}) {btn_wa}</div>", unsafe_allow_html=True)
 
     st.divider()
     st.subheader("🚩 Radar de Atenção Imediata")
     
-    # Expandimos para 5 colunas para caber o novo alerta
     r1, r2, r3, r4, r5 = st.columns(5)
 
     df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
     
-    pend_doc = len(df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
-    r1.metric("📄 Doc. Pendente", pend_doc, delta="Ação Necessária", delta_color="inverse")
+    # 1. Documentos Pendentes
+    df_pend_doc = df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
+    r1.metric("📄 Doc. Pendente", len(df_pend_doc), delta="Ação Necessária", delta_color="inverse")
 
-    # --- NOVA LÓGICA DE RISCO DE EVASÃO GLOBAL (APENAS ATIVOS) ---
+    # 2. Risco de Evasão
     df_risco_detalhado = pd.DataFrame()
     if not df_pres.empty and not df_ativos.empty:
         df_faltas = df_pres[df_pres['status'] == 'AUSENTE']
         if not df_faltas.empty:
-            # Conta faltas por ID
             contagem_faltas = df_faltas.groupby('id_catequizando').size().reset_index(name='qtd_faltas')
-            # Filtra quem tem 3 ou mais faltas
             contagem_risco = contagem_faltas[contagem_faltas['qtd_faltas'] >= 3]
-            # Cruza com os ATIVOS para pegar Nome e Turma (ignora quem já saiu)
             df_risco_detalhado = pd.merge(contagem_risco, df_ativos[['id_catequizando', 'nome_completo', 'etapa']], on='id_catequizando', how='inner')
-            # Ordena por quem tem mais faltas
             df_risco_detalhado = df_risco_detalhado.sort_values(by='qtd_faltas', ascending=False)
+    r2.metric("🚩 Risco de Evasão", len(df_risco_detalhado), delta="Visita Urgente", delta_color="inverse")
 
-    qtd_risco = len(df_risco_detalhado)
-    r2.metric("🚩 Risco de Evasão", qtd_risco, delta="Visita Urgente", delta_color="inverse")
+    # 3. Sem Batismo
+    df_sem_batismo = df_ativos[df_ativos['batizado_sn'] == 'NÃO']
+    r3.metric("🕊️ Sem Batismo", len(df_sem_batismo), delta="Regularizar", delta_color="inverse")
 
-    sem_batismo = len(df_ativos[df_ativos['batizado_sn'] == 'NÃO'])
-    r3.metric("🕊️ Sem Batismo", sem_batismo, delta="Regularizar", delta_color="inverse")
+    # 4. Famílias Irregulares
+    df_fam_reg = df_cat[df_cat['est_civil_pais'].isin(['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)'])]
+    r4.metric("🏠 Famílias Irreg.", len(df_fam_reg), delta="Pastoral Familiar", delta_color="inverse")
 
-    fam_reg = len(df_cat[df_cat['est_civil_pais'].isin(['CONVIVEM', 'CASADO(A) CIVIL', 'DIVORCIADO(A)'])])
-    r4.metric("🏠 Famílias Irreg.", fam_reg, delta="Pastoral Familiar", delta_color="inverse")
+    # 5. Fila de Espera
+    turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else[]
+    df_sem_turma = df_ativos[(df_ativos['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_ativos['etapa'].isin(turmas_reais))]
+    r5.metric("⏳ Sem Turma", len(df_sem_turma), delta="Fila de Espera", delta_color="inverse")
 
-    # NOVO: ALERTA DE CATEQUIZANDOS SEM TURMA (FILA DE ESPERA)
-    turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
-    sem_turma = len(df_ativos[(df_ativos['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_ativos['etapa'].isin(turmas_reais))])
-    r5.metric("⏳ Sem Turma", sem_turma, delta="Fila de Espera", delta_color="inverse")
-
-    # --- EXPANDER DETALHADO DE EVASÃO ---
+    # --- EXPANDERS DETALHADOS (INTERATIVIDADE 360º) ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     if not df_risco_detalhado.empty:
-        with st.expander(f"🔍 Ver Detalhes: {qtd_risco} Catequizandos em Risco Crítico (3+ Faltas)"):
-            df_exibicao = df_risco_detalhado[['nome_completo', 'etapa', 'qtd_faltas']].rename(columns={
-                'nome_completo': 'Catequizando',
-                'etapa': 'Turma',
-                'qtd_faltas': 'Faltas Acumuladas'
-            })
-            st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
+        with st.expander(f"🚩 Ver Detalhes: {len(df_risco_detalhado)} Catequizandos em Risco Crítico (3+ Faltas)"):
+            st.dataframe(df_risco_detalhado[['nome_completo', 'etapa', 'qtd_faltas']].rename(columns={'nome_completo': 'Catequizando', 'etapa': 'Turma', 'qtd_faltas': 'Faltas Acumuladas'}), use_container_width=True, hide_index=True)
+
+    if not df_pend_doc.empty:
+        with st.expander(f"📄 Ver Detalhes: {len(df_pend_doc)} com Documentos Pendentes"):
+            st.dataframe(df_pend_doc[['nome_completo', 'etapa', 'doc_em_falta']].rename(columns={'nome_completo': 'Catequizando', 'etapa': 'Turma', 'doc_em_falta': 'Faltando'}), use_container_width=True, hide_index=True)
+
+    if not df_sem_batismo.empty:
+        with st.expander(f"🕊️ Ver Detalhes: {len(df_sem_batismo)} sem registro de Batismo"):
+            st.dataframe(df_sem_batismo[['nome_completo', 'etapa']].rename(columns={'nome_completo': 'Catequizando', 'etapa': 'Turma'}), use_container_width=True, hide_index=True)
+
+    if not df_fam_reg.empty:
+        with st.expander(f"🏠 Ver Detalhes: {len(df_fam_reg)} Famílias Irregulares"):
+            st.dataframe(df_fam_reg[['nome_completo', 'etapa', 'est_civil_pais']].rename(columns={'nome_completo': 'Catequizando', 'etapa': 'Turma', 'est_civil_pais': 'Situação dos Pais'}), use_container_width=True, hide_index=True)
+
+    if not df_sem_turma.empty:
+        with st.expander(f"⏳ Ver Detalhes: {len(df_sem_turma)} na Fila de Espera (Sem Turma)"):
+            st.dataframe(df_sem_turma[['nome_completo', 'contato_principal']].rename(columns={'nome_completo': 'Catequizando', 'contato_principal': 'Contato'}), use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -511,6 +549,22 @@ if menu == "🏠 Início / Dashboard":
             fig_freq = px.bar(freq_turma, x='Turma', y='Freq %', color='Freq %', color_continuous_scale='RdYlGn')
             fig_freq.update_layout(height=300, margin=dict(t=20, b=20))
             st.plotly_chart(fig_freq, use_container_width=True)
+            
+            # --- TERMÔMETRO DE ENGAJAMENTO ---
+            st.markdown("#### 🌡️ Termômetro de Engajamento")
+            if len(freq_turma) >= 3:
+                top_3 = freq_turma.sort_values(by='Freq %', ascending=False).head(3)
+                bottom_3 = freq_turma.sort_values(by='Freq %', ascending=True).head(3)
+                
+                c_top, c_bot = st.columns(2)
+                with c_top:
+                    st.success("🏆 **Top 3 - Mais Engajadas**")
+                    for _, r in top_3.iterrows():
+                        st.markdown(f"**{r['Turma']}** ({r['Freq %']:.1f}%)")
+                with c_bot:
+                    st.error("🚨 **Atenção - Menor Frequência**")
+                    for _, r in bottom_3.iterrows():
+                        st.markdown(f"**{r['Turma']}** ({r['Freq %']:.1f}%)")
 
     with tab_equipe:
         st.markdown("#### 🛡️ Maturidade Ministerial da Equipe")
