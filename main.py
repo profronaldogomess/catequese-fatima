@@ -1010,7 +1010,36 @@ elif menu == "📖 Diário de Encontros":
                             st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     st.divider()
-    st.subheader(f"📜 Linha do Tempo: {turma_focal}")
+    
+    # --- MINI-DASHBOARD DO ITINERÁRIO ---
+    st.subheader(f"📊 Visão Geral do Itinerário: {turma_focal}")
+    
+    qtd_realizados = 0
+    qtd_pendentes = 0
+    freq_media = 0.0
+    
+    if not df_cron_p.empty:
+        cron_t = df_cron_p[df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm]
+        col_status = 'status' if 'status' in cron_t.columns else ('col_4' if 'col_4' in cron_t.columns else None)
+        if col_status:
+            qtd_pendentes = len(cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO'])
+            
+    if not df_enc_local.empty:
+        enc_t = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_norm]
+        qtd_realizados = len(enc_t)
+        
+    pres_t = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]
+    if not pres_t.empty:
+        pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
+        freq_media = pres_t['status_num'].mean() * 100
+
+    c_dash1, c_dash2, c_dash3 = st.columns(3)
+    c_dash1.metric("✅ Encontros Realizados", qtd_realizados)
+    c_dash2.metric("📌 Temas Pendentes", qtd_pendentes)
+    c_dash3.metric("📈 Frequência Média", f"{freq_media:.1f}%")
+
+    st.divider()
+    st.subheader(f"📜 Linha do Tempo e Raio-X dos Encontros")
     
     if not df_enc_local.empty:
         # Filtro robusto e normalizado
@@ -1024,12 +1053,34 @@ elif menu == "📖 Diário de Encontros":
                 data_d = str(row['data'])
                 tema_d = row.get('tema', 'Tema não registrado')
                 obs_d = row.get('observacoes', '')
+                cat_d = row.get('catequista', 'Não informado')
+                
+                # Buscar presenças exatas deste encontro
+                pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
+                qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE'])
+                qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
+                faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
                 
                 with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
+                    # --- RAIO-X DO ENCONTRO ---
+                    st.markdown(f"**👤 Catequista Responsável:** {cat_d}")
+                    
+                    c_met1, c_met2 = st.columns(2)
+                    c_met1.metric("✅ Presentes", qtd_pres)
+                    c_met2.metric("❌ Ausentes", qtd_aus)
+                    
+                    if faltosos:
+                        st.error(f"**Faltosos neste dia:** {', '.join(faltosos)}")
+                    else:
+                        st.success("**Nenhuma falta registrada neste dia!**")
+                        
+                    st.markdown("---")
+                    st.markdown("**✏️ Editar Registro do Encontro**")
+                    
                     # Adicionamos o 'idx' (índice da linha) para garantir unicidade absoluta da key
                     with st.form(f"edit_enc_{data_d}_{turma_focal}_{idx}"):
                         ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
-                        ed_obs = st.text_area("Editar Observações:", value=obs_d)
+                        ed_obs = st.text_area("Observações Pastorais / Relato:", value=obs_d, height=100)
                         
                         c_btn1, c_btn2 = st.columns([3, 1])
                         btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
