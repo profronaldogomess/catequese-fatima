@@ -2094,8 +2094,86 @@ elif menu == "🏫 Gestão de Turmas":
             turmas_esgotadas = df_mapa[df_mapa['Status'] == "🟡 Planejamento Esgotado"]['Turma'].tolist()
             if turmas_esgotadas:
                 st.warning(f"⚠️ **Aviso:** As seguintes turmas já deram todos os temas planejados e precisam cadastrar novos: {', '.join(turmas_esgotadas)}")
+            
+            # ==================================================================
+            # NOVO: RAIO-X E GESTÃO PROFUNDA DA TURMA (VISÃO DO COORDENADOR)
+            # ==================================================================
+            st.divider()
+            st.subheader("🔎 Raio-X e Gestão Profunda da Turma")
+            st.markdown("Selecione uma turma abaixo para planejar novos temas, editar diários e analisar a frequência detalhada de cada encontro.")
+            
+            turma_raiox = st.selectbox("Selecione a Turma para o Raio-X:", df_turmas['nome_turma'].tolist(), key="sel_raiox_turma")
+            
+            if turma_raiox:
+                tab_plan_rx, tab_hist_rx = st.tabs(["📅 Planejar Temas (Cronograma)", "📜 Histórico, Edição e Faltas (Diário)"])
+                
+                with tab_plan_rx:
+                    st.markdown(f"#### Adicionar novo tema para: {turma_raiox}")
+                    with st.form(f"form_plan_rx_{turma_raiox}", clear_on_submit=True):
+                        novo_tema_rx = st.text_input("Título do Tema").upper()
+                        desc_tema_rx = st.text_area("Objetivo / Descrição Base (Opcional)", height=100)
+                        if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
+                            if novo_tema_rx:
+                                if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_raiox, novo_tema_rx, desc_tema_rx, "PENDENTE"]):
+                                    st.success("Tema planejado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    
+                    st.markdown("---")
+                    st.markdown("#### 📋 Temas Pendentes na Fila")
+                    cron_t_rx = df_cron_mapa[(df_cron_mapa['etapa'].astype(str).str.strip().str.upper() == turma_raiox.strip().upper())]
+                    col_status_rx = 'status' if 'status' in cron_t_rx.columns else ('col_4' if 'col_4' in cron_t_rx.columns else None)
+                    if col_status_rx and not cron_t_rx.empty:
+                        pendentes_rx = cron_t_rx[cron_t_rx[col_status_rx].astype(str).str.strip().str.upper() != 'REALIZADO']
+                        if not pendentes_rx.empty:
+                            st.dataframe(pendentes_rx[['titulo_tema', 'descricao_base']], use_container_width=True, hide_index=True)
+                        else:
+                            st.info("Nenhum tema pendente no momento.")
+                    else:
+                        st.info("Nenhum tema cadastrado.")
+
+                with tab_hist_rx:
+                    enc_t_rx = df_enc_mapa[df_enc_mapa['turma'].astype(str).str.strip().str.upper() == turma_raiox.strip().upper()].copy()
+                    if not enc_t_rx.empty:
+                        enc_t_rx['data_dt'] = pd.to_datetime(enc_t_rx['data'], errors='coerce')
+                        enc_t_rx = enc_t_rx.sort_values(by='data_dt', ascending=False)
+                        
+                        for idx, row in enc_t_rx.iterrows():
+                            data_e = str(row['data'])
+                            tema_e = row.get('tema', 'Sem tema')
+                            cat_e = row.get('catequista', 'Não informado')
+                            obs_e = row.get('observacoes', '')
+                            
+                            # Buscar presenças exatas deste encontro
+                            pres_e = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_raiox.strip().upper()) & (df_pres['data_encontro'].astype(str) == data_e)]
+                            qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE'])
+                            qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
+                            faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
+                            
+                            with st.expander(f"📅 {formatar_data_br(data_e)} - {tema_e} | 👤 Resp: {cat_e}"):
+                                c_met1, c_met2 = st.columns(2)
+                                c_met1.metric("✅ Presentes", qtd_pres)
+                                c_met2.metric("❌ Ausentes", qtd_aus)
+                                
+                                if faltosos:
+                                    st.error(f"**Faltosos neste dia:** {', '.join(faltosos)}")
+                                else:
+                                    st.success("**Nenhuma falta registrada neste dia!**")
+                                
+                                st.markdown("---")
+                                st.markdown("**✏️ Editar Registro do Encontro**")
+                                with st.form(f"form_edit_rx_{data_e}_{idx}"):
+                                    ed_tema_rx = st.text_input("Tema Ministrado:", value=tema_e).upper()
+                                    ed_obs_rx = st.text_area("Observações / Relato:", value=obs_e, height=100)
+                                    
+                                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                                        with st.spinner("Atualizando diário..."):
+                                            if atualizar_encontro_global(turma_raiox, data_e, ed_tema_rx, ed_obs_rx):
+                                                st.success("Atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    else:
+                        st.info("Nenhum encontro registrado para esta turma.")
+
         else:
             st.info("Nenhuma turma cadastrada.")
+
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
