@@ -1694,9 +1694,9 @@ elif menu == "👤 Perfil Individual":
 elif menu == "🏫 Gestão de Turmas":
     st.title("🏫 Gestão de Turmas e Fila de Espera")
     
-    t0, t1, t2, t3, t4, t5 = st.tabs([
+    t0, t1, t2, t3, t4, t_mapa, t5 = st.tabs([
         "⏳ Fila de Espera", "📋 Visualizar Turmas", "➕ Criar Nova Turma", 
-        "✏️ Detalhes e Edição", "📊 Dashboard Local", "🚀 Movimentação em Massa"
+        "✏️ Detalhes e Edição", "📊 Dashboard Local", "🗺️ Mapa de Planejamento", "🚀 Movimentação em Massa"
     ])
     
     dias_opcoes =["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
@@ -2026,6 +2026,76 @@ elif menu == "🏫 Gestão de Turmas":
                 st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
             else:
                 st.info("Selecione uma turma com catequizandos ativos.")
+
+    with t_mapa:
+        st.subheader("🗺️ Mapa Global de Planejamento e Itinerários")
+        st.markdown("Visão panorâmica de todas as turmas: saiba quem está planejando os encontros e quem está com o diário atrasado.")
+        
+        df_cron_mapa = ler_aba("cronograma")
+        df_enc_mapa = ler_aba("encontros")
+        
+        if not df_turmas.empty:
+            dados_mapa =[]
+            for _, t in df_turmas.iterrows():
+                nome_t = str(t['nome_turma']).strip().upper()
+                cats = str(t.get('catequista_responsavel', 'Não informado'))
+                
+                # 1. Encontros Realizados
+                enc_t = df_enc_mapa[df_enc_mapa['turma'].astype(str).str.strip().str.upper() == nome_t] if not df_enc_mapa.empty else pd.DataFrame()
+                qtd_realizados = len(enc_t)
+                ultimo_tema = "Nenhum"
+                if not enc_t.empty:
+                    enc_t['data_dt'] = pd.to_datetime(enc_t['data'], errors='coerce')
+                    enc_t = enc_t.sort_values(by='data_dt', ascending=False)
+                    ultimo_tema = enc_t.iloc[0]['tema']
+                
+                # 2. Cronograma Planejado
+                cron_t = df_cron_mapa[df_cron_mapa['etapa'].astype(str).str.strip().str.upper() == nome_t] if not df_cron_mapa.empty else pd.DataFrame()
+                qtd_planejados = len(cron_t)
+                proximo_tema = "Nenhum"
+                status_plan = "🔴 Sem Planejamento"
+                
+                if not cron_t.empty:
+                    col_status = 'status' if 'status' in cron_t.columns else ('col_4' if 'col_4' in cron_t.columns else None)
+                    if col_status:
+                        pendentes = cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+                        if not pendentes.empty:
+                            proximo_tema = pendentes.iloc[0]['titulo_tema']
+                            status_plan = "🟢 Em Dia"
+                        else:
+                            status_plan = "🟡 Planejamento Esgotado"
+                
+                dados_mapa.append({
+                    "Turma": nome_t,
+                    "Catequistas": cats,
+                    "Status": status_plan,
+                    "Realizados": qtd_realizados,
+                    "Planejados": qtd_planejados,
+                    "Último Tema Dado": ultimo_tema,
+                    "Próximo Tema": proximo_tema
+                })
+            
+            df_mapa = pd.DataFrame(dados_mapa)
+            
+            # Filtros rápidos para a Coordenação
+            c1, c2 = st.columns([1, 2])
+            filtro_status = c1.selectbox("🔍 Filtrar por Status:",["TODOS", "🟢 Em Dia", "🟡 Planejamento Esgotado", "🔴 Sem Planejamento"])
+            if filtro_status != "TODOS":
+                df_mapa = df_mapa[df_mapa['Status'] == filtro_status]
+                
+            st.dataframe(df_mapa, use_container_width=True, hide_index=True)
+            
+            # Alertas Automáticos
+            st.markdown("<br>", unsafe_allow_html=True)
+            turmas_sem_plan = df_mapa[df_mapa['Status'] == "🔴 Sem Planejamento"]['Turma'].tolist()
+            if turmas_sem_plan:
+                st.error(f"⚠️ **Atenção Coordenação:** As seguintes turmas não possuem nenhum tema planejado no cronograma: {', '.join(turmas_sem_plan)}")
+                
+            turmas_esgotadas = df_mapa[df_mapa['Status'] == "🟡 Planejamento Esgotado"]['Turma'].tolist()
+            if turmas_esgotadas:
+                st.warning(f"⚠️ **Aviso:** As seguintes turmas já deram todos os temas planejados e precisam cadastrar novos: {', '.join(turmas_esgotadas)}")
+        else:
+            st.info("Nenhuma turma cadastrada.")
 
     with t5:
         st.subheader("🚀 Movimentação em Massa")
