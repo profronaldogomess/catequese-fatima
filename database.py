@@ -156,10 +156,25 @@ def salvar_presencas(lista_presencas):
         
         if linha_existente:
             # Se o encontro já existe, ATUALIZA o tema (modo edição pela chamada)
+            # NÃO tocamos na observação para preservar o que o catequista já digitou
             aba_enc.update_cell(linha_existente, 3, tema_alvo)
         else:
             # Se não existe, CRIA um novo (modo criação pela chamada)
-            aba_enc.append_row([data_alvo, turma_alvo, tema_alvo, catequista, "Registro automático via Chamada"])
+            # --- INTELIGÊNCIA: HERDAR DESCRIÇÃO DO CRONOGRAMA ---
+            obs_padrao = "Registro automático via Chamada"
+            try:
+                aba_cron = planilha.worksheet("cronograma")
+                dados_cron = aba_cron.get_all_values()
+                for linha in dados_cron:
+                    # Procura a turma (col 2) e o tema (col 3)
+                    if len(linha) >= 4 and str(linha[1]).strip().upper() == turma_alvo and str(linha[2]).strip().upper() == tema_alvo:
+                        desc_planejada = str(linha[3]).strip() # Coluna 4 é a descricao_base
+                        if desc_planejada and desc_planejada.upper() not in["", "NAN", "N/A", "NONE"]:
+                            obs_padrao = desc_planejada
+                        break
+            except: pass
+            
+            aba_enc.append_row([data_alvo, turma_alvo, tema_alvo, catequista, obs_padrao])
             
         # 4. Sincronia em Cascata com a aba CRONOGRAMA
         marcar_tema_realizado_cronograma(turma_alvo, tema_alvo)
