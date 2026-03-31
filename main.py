@@ -320,20 +320,21 @@ turma_do_catequista = st.session_state.usuario.get('turma_vinculada', 'TODAS')
 eh_gestor = papel_usuario in ["COORDENADOR", "ADMIN"]
 
 # Lista de menus para catequistas comuns
-menu_catequista = [
+menu_catequista =[
     "📚 Minha Turma", 
-    "👤 Perfil Individual",  # <--- ADICIONADO AQUI
+    "👤 Perfil Individual",
     "👨‍👩‍👧‍👦 Gestão Familiar", 
     "📖 Diário de Encontros", 
     "✅ Fazer Chamada", 
-    "📝 Cadastrar Catequizando"
+    "📝 Cadastrar Catequizando",
+    "⚙️ Meu Cadastro"
 ]
 
 if eh_gestor:
-    menu = st.sidebar.radio("MENU PRINCIPAL", [
+    menu = st.sidebar.radio("MENU PRINCIPAL",[
         "🏠 Início / Dashboard", "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
         "📖 Diário de Encontros", "📝 Cadastrar Catequizando", "👤 Perfil Individual", 
-        "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada"
+        "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada", "⚙️ Meu Cadastro"
     ])
 else:
     menu = st.sidebar.radio("MENU DO CATEQUISTA", menu_catequista)
@@ -3121,3 +3122,113 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                             lista_up[29] = rel
                             atualizar_catequizando(row['id_catequizando'], lista_up)
                             st.success("Salvo!"); st.cache_data.clear(); time.sleep(0.5); st.rerun()
+
+
+
+
+# ==============================================================================
+# PÁGINA: ⚙️ MEU CADASTRO (AUTOATENDIMENTO DO CATEQUISTA)
+# ==============================================================================
+elif menu == "⚙️ Meu Cadastro":
+    st.title("⚙️ Meu Cadastro e Perfil Ministerial")
+    
+    email_logado = st.session_state.usuario.get('email')
+    
+    if not df_usuarios.empty and email_logado:
+        u_data = df_usuarios[df_usuarios['email'] == email_logado]
+        if not u_data.empty:
+            u = u_data.iloc[0]
+            
+            st.info("💡 **Dica:** Mantenha seus dados de contato e histórico sacramental sempre atualizados. Sua senha de acesso também pode ser alterada aqui.")
+            
+            hoje = date.today()
+            d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
+
+            def converter_ou_none(valor):
+                if pd.isna(valor) or str(valor).strip() in["", "N/A", "None"]: return None
+                try: return converter_para_data(valor)
+                except: return None
+
+            val_nasc = converter_ou_none(u.get('data_nascimento', '')) or hoje
+            val_ini = converter_ou_none(u.get('data_inicio_catequese', '')) or hoje
+            val_bat = converter_ou_none(u.get('data_batismo', ''))
+            val_euc = converter_ou_none(u.get('data_eucaristia', ''))
+            val_cri = converter_ou_none(u.get('data_crisma', ''))
+            val_min = converter_ou_none(u.get('data_ministerio', ''))
+            val_emerg = u.iloc[13] if len(u) > 13 else ""
+
+            with st.form("form_meu_cadastro"):
+                st.markdown("#### 📍 Dados Pessoais e Acesso")
+                c1, c2 = st.columns(2)
+                ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+                ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
+                
+                c3, c4 = st.columns(2)
+                ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
+                ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
+                
+                c5, c6 = st.columns(2)
+                ed_nasc = c5.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("#### 🔒 Informações Restritas (Apenas Leitura)")
+                r1, r2 = st.columns(2)
+                r1.text_input("E-mail (Login)", value=u['email'], disabled=True, help="Para mudar o e-mail de login, contate a coordenação.")
+                r2.text_input("Turmas Vinculadas", value=str(u.get('turma_vinculada', '')), disabled=True, help="Apenas a coordenação pode alterar seus vínculos de turma.")
+                
+                st.divider()
+                st.markdown("#### ⛪ Itinerário Sacramental (Marque apenas se possuir)")
+                
+                if "my_has_bat" not in st.session_state: st.session_state["my_has_bat"] = (val_bat is not None)
+                if "my_has_euc" not in st.session_state: st.session_state["my_has_euc"] = (val_euc is not None)
+                if "my_has_cri" not in st.session_state: st.session_state["my_has_cri"] = (val_cri is not None)
+                if "my_has_min" not in st.session_state: st.session_state["my_has_min"] = (val_min is not None)
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    has_ini = st.checkbox("Início na Catequese", value=True)
+                    dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
+                with col2:
+                    has_bat = st.checkbox("Possui Batismo?", key="my_has_bat")
+                    dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
+                with col3:
+                    has_euc = st.checkbox("Possui 1ª Eucaristia?", key="my_has_euc")
+                    dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
+
+                col4, col5 = st.columns(2)
+                with col4:
+                    has_cri = st.checkbox("Possui Crisma?", key="my_has_cri")
+                    dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
+                with col5:
+                    has_min = st.checkbox("É Ministro de Catequese?", key="my_has_min")
+                    dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
+
+                if st.form_submit_button("💾 SALVAR MEUS DADOS", use_container_width=True, type="primary"):
+                    str_ini = str(dt_ini) if has_ini else ""
+                    str_bat = str(dt_bat) if has_bat else ""
+                    str_euc = str(dt_euc) if has_euc else ""
+                    str_cri = str(dt_cri) if has_cri else ""
+                    str_min = str(dt_min) if has_min else ""
+
+                    # Preserva os dados restritos e de sessão
+                    papel_atual = str(u.get('papel', 'CATEQUISTA'))
+                    turmas_atuais = str(u.get('turma_vinculada', ''))
+                    session_id_atual = str(u.iloc[12]) if len(u) > 12 else ""
+
+                    dados_up =[
+                        ed_nome, u['email'], ed_senha, papel_atual, turmas_atuais, 
+                        ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
+                        session_id_atual, ed_emergencia
+                    ]
+                    
+                    nome_cat_original = str(u.get('nome', ''))
+                    
+                    if atualizar_usuario(u['email'], dados_up):
+                        with st.spinner("Atualizando seu perfil e sincronizando histórico..."):
+                            if ed_nome != nome_cat_original:
+                                from database import sincronizar_renomeacao_catequista
+                                sincronizar_renomeacao_catequista(nome_cat_original, ed_nome)
+                                # Atualiza o nome na sessão atual para refletir na barra lateral imediatamente
+                                st.session_state.usuario['nome'] = ed_nome
+                                
+                        st.success("✅ Seus dados foram atualizados com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
