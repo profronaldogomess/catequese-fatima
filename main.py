@@ -593,6 +593,54 @@ if menu == "🏠 Início / Dashboard":
                 if "pdf_equipe" in st.session_state:
                     st.download_button("📥 Baixar Dossiê", st.session_state.pdf_equipe, "Equipe.pdf", use_container_width=True)
 
+
+            # --- NOVO: MONITORAMENTO DE ACESSOS ---
+            st.divider()
+            st.markdown("#### 📡 Monitoramento de Acessos (Último Login)")
+            st.markdown("Acompanhe quais catequistas já estão utilizando o sistema e quem ainda não realizou o primeiro acesso.")
+            
+            lista_acessos =[]
+            hoje_str = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).strftime("%d/%m/%Y")
+            
+            for _, u in df_usuarios.iterrows():
+                if u['papel'] == 'ADMIN': continue # Oculta o admin master da lista
+                
+                nome = u['nome']
+                turmas = u.get('turma_vinculada', 'Sem turma')
+                sid = str(u.get('session_id', ''))
+                
+                if not sid or sid.strip() in["", "N/A", "None"]:
+                    status = "🔴 Nunca acessou"
+                    data_acesso = "Pendente"
+                    ordem = 0
+                elif "|" in sid:
+                    data_acesso = sid.split("|")[1]
+                    if data_acesso.startswith(hoje_str):
+                        status = "🟢 Online Hoje"
+                        ordem = 2
+                    else:
+                        status = "🟡 Já acessou"
+                        ordem = 1
+                else:
+                    status = "🟡 Já acessou"
+                    data_acesso = "Sessão Antiga"
+                    ordem = 1
+                    
+                lista_acessos.append({
+                    "Catequista": nome, 
+                    "Turmas": turmas, 
+                    "Status": status, 
+                    "Último Acesso": data_acesso, 
+                    "ordem": ordem
+                })
+            
+            if lista_acessos:
+                # Ordena: Primeiro quem está online hoje, depois quem já acessou, por último quem nunca acessou
+                df_acessos = pd.DataFrame(lista_acessos).sort_values(by=["ordem", "Catequista"], ascending=[False, True]).drop(columns=["ordem"])
+                st.dataframe(df_acessos, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum catequista encontrado.")
+
     with tab_evasao:
         st.subheader("🚩 Diagnóstico de Interrupção de Itinerário")
         df_fora = df_cat[df_cat['status'].isin(['DESISTENTE', 'TRANSFERIDO', 'INATIVO'])]
