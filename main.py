@@ -3306,21 +3306,81 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     montar_botoes_whatsapp(row)
 
         with tab_visitas:
-            st.subheader("🏠 Acompanhamento Familiar")
-            busca_v = st.text_input("Localizar Família para Relato:").upper()
+            st.subheader("🏠 Central de Resgate Pastoral (Visitas)")
+            st.markdown("Identificação automática de famílias que necessitam de acompanhamento urgente devido à infrequência dos catequizandos.")
+            
+            # --- 1. FILA DE VISITAS AUTOMÁTICA (RISCO CRÍTICO) ---
+            df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
+            df_risco_visita = pd.DataFrame()
+            
+            if not df_pres.empty and not df_ativos.empty:
+                df_faltas = df_pres[df_pres['status'] == 'AUSENTE']
+                if not df_faltas.empty:
+                    contagem = df_faltas.groupby('id_catequizando').size().reset_index(name='qtd_faltas')
+                    contagem_risco = contagem[contagem['qtd_faltas'] >= 3]
+                    df_risco_visita = pd.merge(contagem_risco, df_ativos, on='id_catequizando', how='inner')
+                    df_risco_visita = df_risco_visita.sort_values(by='qtd_faltas', ascending=False)
+            
+            if not df_risco_visita.empty:
+                st.error(f"🚨 **Atenção Coordenação:** Temos **{len(df_risco_visita)} catequizandos** em risco crítico de evasão que precisam de visita familiar.")
+                
+                for _, row in df_risco_visita.iterrows():
+                    with st.expander(f"🚩 {row['nome_completo']} ({row['etapa']}) - {row['qtd_faltas']} Faltas Acumuladas"):
+                        c_v1, c_v2 = st.columns([2, 1])
+                        
+                        with c_v1:
+                            st.markdown(f"**👨‍👩‍👧 Pais/Responsáveis:** {row['nome_mae']} e {row['nome_pai']}")
+                            st.markdown(f"**📍 Endereço:** {row['endereco_completo']}")
+                            st.markdown(f"**💍 Situação Matrimonial:** {row['est_civil_pais']}")
+                            st.markdown(f"**📞 Contato Principal:** {row['contato_principal']}")
+                            
+                            # Botões de WhatsApp rápidos
+                            montar_botoes_whatsapp(row)
+                            
+                        with c_v2:
+                            st.markdown("**📄 Encaminhamento**")
+                            if st.button("🖨️ Gerar Ficha para Pastoral Familiar", key=f"btn_pdf_visita_{row['id_catequizando']}", use_container_width=True):
+                                # Prepara dados para o PDF existente de visitação
+                                filhos_lista = [{'nome': row['nome_completo'], 'etapa': row['etapa'], 'status': f"{row['qtd_faltas']} Faltas (Risco de Evasão)"}]
+                                pdf_visita = gerar_relatorio_familia_pdf(row.to_dict(), filhos_lista)
+                                st.session_state[f"pdf_v_{row['id_catequizando']}"] = pdf_visita
+                                
+                            if f"pdf_v_{row['id_catequizando']}" in st.session_state:
+                                st.download_button("📥 Baixar Ficha (PDF)", st.session_state[f"pdf_v_{row['id_catequizando']}"], f"Visita_{row['nome_completo']}.pdf", "application/pdf", use_container_width=True)
+                        
+                        st.markdown("---")
+                        st.markdown("**📝 Registrar Retorno da Visita**")
+                        with st.form(key=f"form_visita_{row['id_catequizando']}"):
+                            novo_relato = st.text_area("Relato da Pastoral Familiar / Catequista:", value=row.get('obs_pastoral_familia', ''), height=100, help="Anote aqui o motivo das faltas e o que foi conversado com a família.")
+                            if st.form_submit_button("💾 SALVAR RELATO NO HISTÓRICO"):
+                                lista_up = row.tolist()
+                                while len(lista_up) < 30: lista_up.append("N/A")
+                                lista_up[29] = novo_relato
+                                if atualizar_catequizando(row['id_catequizando'], lista_up):
+                                    st.success("Relato salvo com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+            else:
+                st.success("✅ Glória a Deus! Nenhuma família em risco crítico de evasão no momento.")
+                
+            # --- 2. BUSCA MANUAL (MANTER FUNCIONALIDADE ANTIGA) ---
+            st.divider()
+            st.subheader("🔍 Busca Manual de Famílias")
+            busca_v = st.text_input("Localizar outra família para relato (Nome da Mãe ou Pai):").upper()
             if busca_v:
                 fam = df_cat[df_cat['nome_mae'].str.contains(busca_v, na=False) | df_cat['nome_pai'].str.contains(busca_v, na=False)]
                 if not fam.empty:
                     dados_f = fam.iloc[0]
-                    st.success(f"✅ Família: {dados_f['nome_mae']} & {dados_f['nome_pai']}")
-                    novo_relato = st.text_area("Relato da Visita:", value=dados_f.get('obs_pastoral_familia', ''), height=150)
-                    if st.button("💾 SALVAR RELATO"):
-                        for _, filho in fam.iterrows():
-                            lista_up = filho.tolist()
-                            while len(lista_up) < 30: lista_up.append("N/A")
-                            lista_up[29] = novo_relato
-                            atualizar_catequizando(filho['id_catequizando'], lista_up)
-                        st.success("Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    st.info(f"✅ Família encontrada: {dados_f['nome_mae']} & {dados_f['nome_pai']}")
+                    with st.form("form_busca_manual_visita"):
+                        novo_relato_m = st.text_area("Relato da Visita:", value=dados_f.get('obs_pastoral_familia', ''), height=150)
+                        if st.form_submit_button("💾 SALVAR RELATO"):
+                            for _, filho in fam.iterrows():
+                                lista_up = filho.tolist()
+                                while len(lista_up) < 30: lista_up.append("N/A")
+                                lista_up[29] = novo_relato_m
+                                atualizar_catequizando(filho['id_catequizando'], lista_up)
+                            st.success("Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                else:
+                    st.warning("Família não encontrada.")
 
         with tab_ia:
             if st.button("🚀 EXECUTAR DIAGNÓSTICO FAMILIAR IA"):
