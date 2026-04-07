@@ -697,13 +697,21 @@ elif menu == "📚 Minha Turma":
     turma_ativa = st.selectbox("🔍 Selecione a Turma:", turmas_permitidas, key="sel_t_minha")
     st.title(f"📚 Painel: {turma_ativa}")
 
-    # --- CARREGAMENTO DE DADOS NORMALIZADOS ---
+# --- CARREGAMENTO DE DADOS NORMALIZADOS ---
     df_cron_t = ler_aba("cronograma")
     df_enc_t = ler_aba("encontros")
     df_reu_t = ler_aba("presenca_reuniao")
     
-    meus_alunos = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_cat['status'] == 'ATIVO')]
-    minhas_pres = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+    # --- BLINDAGEM DE DADOS (DATA SHIELDING) CONTRA KEYERROR ---
+    if not df_cat.empty and 'etapa' in df_cat.columns:
+        meus_alunos = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_cat['status'] == 'ATIVO')]
+    else:
+        meus_alunos = pd.DataFrame()
+        
+    if not df_pres.empty and 'id_turma' in df_pres.columns:
+        minhas_pres = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+    else:
+        minhas_pres = pd.DataFrame()
 
     # --- 💌 CORREIO PASTORAL (POP-UP INTELIGENTE) ---
     @st.dialog("💌 Correio Pastoral - Assistente da Turma")
