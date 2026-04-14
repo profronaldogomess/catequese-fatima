@@ -408,13 +408,13 @@ def _desenhar_corpo_ficha(pdf, dados):
     # A largura 60 é o espaço restante na linha
     pdf.multi_cell(60, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
 
-    # --- SEÇÃO 4: TERMO LGPD ---
+    # --- SEÇÃO 4: TERMO LGPD E ECA DIGITAL ---
     pdf.ln(5)
-    pdf.set_font("helvetica", "B", 10)
+    pdf.set_font("helvetica", "B", 9)
     pdf.set_text_color(224, 61, 17) # Laranja Alerta
-    pdf.cell(0, 6, limpar_texto("Termo de Consentimento LGPD (Lei Geral de Proteção de Dados)"), ln=True)
+    pdf.cell(0, 5, limpar_texto("4. AUTORIZAÇÃO DE USO DE IMAGEM E VOZ (LGPD E ECA DIGITAL)"), ln=True)
     
-    pdf.set_font("helvetica", "", 8.5)
+    pdf.set_font("helvetica", "", 8)
     pdf.set_text_color(0, 0, 0)
     
     nome_cat = dados.get('nome_completo', '________________')
@@ -422,28 +422,44 @@ def _desenhar_corpo_ficha(pdf, dados):
         mae = str(dados.get('nome_mae', '')).strip()
         pai = str(dados.get('nome_pai', '')).strip()
         resp = f"{mae} e {pai}" if mae and pai else (mae or pai or "Responsável Legal")
-        texto_lgpd = (f"Nós/Eu, {resp}, na qualidade de pais ou responsáveis legais pelo(a) catequizando(a) menor de idade, {nome_cat}, "
-                      f"AUTORIZAMOS o uso da publicação da imagem do(a) referido(a) menor nos eventos realizados pela Pastoral da Catequese "
+        texto_lgpd = (f"Eu, {resp}, na qualidade de pai/mãe ou responsável pelo(a) catequizando(a): {nome_cat}, "
+                      f"AUTORIZO o uso da publicação da imagem e voz do(a) meu (minha) filho(a) dos eventos realizados pela Pastoral da Catequese "
                       f"da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral ou da Paróquia, "
-                      f"conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD).")
+                      f"conforme determina o artigo 5º, inciso X da Constituição Federal, da Lei de Proteção de Dados (LGPD) - 13.709/2018 e do "
+                      f"ECA Digital (Lei nº 15.211/2025) em vigor desde 17 de março de 2026, que regula as atividades de tratamento de dados pessoais "
+                      f"colhidos no momento da inscrição para o(s) sacramento(s) da Iniciação à Vida Cristã com Inspiração Catecumenal.")
     else:
-        texto_lgpd = (f"Eu, {nome_cat}, na qualidade de catequizando(a), AUTORIZO o uso da publicação da minha imagem nos eventos realizados "
-                      f"pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social da Pastoral "
-                      f"ou da Paróquia, conforme determina o artigo 5o, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD).")
+        texto_lgpd = (f"Eu, {nome_cat}, na qualidade de catequizando(a) maior de idade, AUTORIZO o uso da publicação da minha imagem e voz "
+                      f"dos eventos realizados pela Pastoral da Catequese da Paróquia Nossa Senhora de Fátima através de fotos ou vídeos na rede social "
+                      f"da Pastoral ou da Paróquia, conforme determina o artigo 5º, inciso X da Constituição Federal e da Lei de Proteção de Dados (LGPD) - 13.709/2018.")
         
-    pdf.multi_cell(0, 4.5, limpar_texto(texto_lgpd), align='J')
+    pdf.multi_cell(0, 4, limpar_texto(texto_lgpd), align='J')
+    
+    # Manifestação de Vontade (Checkboxes físicos)
+    pdf.ln(2)
+    pdf.set_font("helvetica", "B", 8)
+    pdf.cell(0, 4, limpar_texto("MANIFESTAÇÃO DE VONTADE:"), ln=True)
+    pdf.set_font("helvetica", "", 8)
+    pdf.cell(0, 4, limpar_texto("(   ) AUTORIZO o uso de imagem e voz nos canais oficiais da Catequese/Igreja."), ln=True)
+    pdf.cell(0, 4, limpar_texto("(   ) NÃO AUTORIZO o uso de imagem e voz nos canais oficiais da Catequese/Igreja."), ln=True)
+    
+    pdf.ln(1)
+    pdf.set_font("helvetica", "B", 8)
+    pdf.write(4, limpar_texto("Observação: "))
+    pdf.set_font("helvetica", "", 8)
+    pdf.write(4, limpar_texto("A recusa de autorização será integralmente respeitada, sem qualquer prejuízo à participação nas atividades.\n"))
     
     # --- ASSINATURAS ---
-    pdf.ln(12)
+    pdf.ln(8)
     y_ass = pdf.get_y()
     pdf.line(15, y_ass, 95, y_ass)
     pdf.line(115, y_ass, 195, y_ass)
     pdf.set_xy(15, y_ass + 1)
     pdf.set_font("helvetica", "B", 8)
     label_ass = "Assinatura do Responsável Legal" if not is_adulto else "Assinatura do Catequizando"
-    pdf.cell(80, 5, limpar_texto(label_ass), align='C')
+    pdf.cell(80, 4, limpar_texto(label_ass), align='C')
     pdf.set_xy(115, y_ass + 1)
-    pdf.cell(80, 5, limpar_texto("Assinatura do Catequista / Coordenação"), align='C')
+    pdf.cell(80, 4, limpar_texto("Assinatura do Representante da Catequese"), align='C')
 
 def gerar_ficha_cadastral_catequizando(dados):
     pdf = FPDF()
