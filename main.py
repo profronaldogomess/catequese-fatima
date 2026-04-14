@@ -317,7 +317,8 @@ if st.sidebar.button("🚪 Sair / Logoff", key="btn_logout_global"):
 
 papel_usuario = st.session_state.usuario.get('papel', 'CATEQUISTA').upper()
 turma_do_catequista = st.session_state.usuario.get('turma_vinculada', 'TODAS')
-eh_gestor = papel_usuario in ["COORDENADOR", "ADMIN"]
+eh_gestor = papel_usuario in["COORDENADOR", "ADMIN"]
+eh_secretaria = papel_usuario == "SECRETARIA"
 
 # Lista de menus para catequistas comuns
 menu_catequista =[
@@ -326,15 +327,20 @@ menu_catequista =[
     "👨‍👩‍👧‍👦 Gestão Familiar", 
     "📖 Diário de Encontros", 
     "✅ Fazer Chamada", 
-    "📝 Cadastrar Catequizando",
+    "📝 Inscrever Catequizando",
     "⚙️ Meu Cadastro"
 ]
 
 if eh_gestor:
     menu = st.sidebar.radio("MENU PRINCIPAL",[
         "🏠 Início / Dashboard", "📚 Minha Turma", "👨‍👩‍👧‍👦 Gestão Familiar", 
-        "📖 Diário de Encontros", "📝 Cadastrar Catequizando", "👤 Perfil Individual", 
+        "📖 Diário de Encontros", "📝 Inscrever Catequizando", "👤 Perfil Individual", 
         "🏫 Gestão de Turmas", "🕊️ Gestão de Sacramentos", "👥 Gestão de Catequistas", "✅ Fazer Chamada", "⚙️ Meu Cadastro"
+    ])
+elif eh_secretaria:
+    menu = st.sidebar.radio("MENU DA SECRETARIA",[
+        "📊 Painel da Secretaria", "🏫 Visão de Turmas e Equipe", "👤 Perfil Individual", 
+        "📝 Inscrever Catequizando", "🕊️ Acervo de Sacramentos", "📖 Consulta de Encontros", "⚙️ Meu Cadastro"
     ])
 else:
     menu = st.sidebar.radio("MENU DO CATEQUISTA", menu_catequista)
@@ -1127,10 +1133,10 @@ elif menu == "📖 Diário de Encontros":
 
 
 # ==================================================================================
-# PÁGINA: 📝 CADASTRAR CATEQUIZANDO (COM TOOLTIPS E AJUDA)
+# PÁGINA: 📝 INSCREVER CATEQUIZANDO (COM TOOLTIPS E AJUDA)
 # ==================================================================================
-elif menu == "📝 Cadastrar Catequizando":
-    st.title("📝 Cadastro de Catequizandos")
+elif menu == "📝 Inscrever Catequizando":
+    st.title("📝 Inscrição de Catequizandos")
     
     with st.expander("💡 GUIA DE PREENCHIMENTO (LEIA ANTES DE COMEÇAR)", expanded=True):
         st.markdown("""
@@ -1386,7 +1392,8 @@ elif menu == "👤 Perfil Individual":
         st.stop()
 
     # --- ESTRUTURA DE ABAS CONDICIONAL ---
-    if eh_gestor:
+    eh_secretaria_perfil = st.session_state.usuario.get('papel', '').upper() == 'SECRETARIA'
+    if eh_gestor or eh_secretaria_perfil:
         tabs = st.tabs([
             "🪪 Cartão de Identidade (Consulta/Edição)", 
             "📁 Maleta de Documentos (Auditoria)", 
@@ -1595,10 +1602,10 @@ elif menu == "👤 Perfil Individual":
                         if "pdf_catequizando" in st.session_state:
                             st.download_button("📥 BAIXAR FICHA PDF", st.session_state.pdf_catequizando, f"Ficha_{nome_sel}.pdf", "application/pdf", use_container_width=True)
                     with col_doc_b:
-                        if st.button("📜 Gerar Declaração de Matrícula", key="btn_decl_matr_perfil", use_container_width=True):
-                            st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Matrícula")
+                        if st.button("📜 Gerar Declaração de Inscrição", key="btn_decl_matr_perfil", use_container_width=True):
+                            st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Inscrição / Vínculo Pastoral")
                         if "pdf_decl_matr" in st.session_state:
-                            st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Matricula_{nome_sel}.pdf", "application/pdf", use_container_width=True)
+                            st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Inscricao_{nome_sel}.pdf", "application/pdf", use_container_width=True)
 
                 with sub_tab_hist:
                     st.markdown("#### 📜 Extrato de Caminhada (Presenças e Temas)")
@@ -2952,7 +2959,9 @@ elif menu == "👥 Gestão de Catequistas":
                             ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
                             
                             c5, c6 = st.columns(2)
-                            ed_papel = c5.selectbox("Papel",["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
+                            opcoes_papel = ["CATEQUISTA", "COORDENADOR", "ADMIN", "SECRETARIA"]
+                            papel_atual = str(u.get('papel', 'CATEQUISTA')).upper()
+                            ed_papel = c5.selectbox("Papel", opcoes_papel, index=opcoes_papel.index(papel_atual) if papel_atual in opcoes_papel else 0)
                             ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
                             
                             lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
@@ -3053,7 +3062,7 @@ elif menu == "👥 Gestão de Catequistas":
                 n_nasc = c5.date_input("Data de Nascimento", value=date(1990, 1, 1), min_value=date(1930, 1, 1), max_value=date(2011, 12, 31), format="DD/MM/YYYY")
                 
                 c_papel, c_emerg = st.columns(2)
-                n_papel = c_papel.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"])
+                n_papel = c_papel.selectbox("Papel / Nível de Acesso",["CATEQUISTA", "COORDENADOR", "ADMIN", "SECRETARIA"])
                 n_emergencia = c_emerg.text_input("🚨 Contato de Emergência (Nome e Tel)")
                 
                 lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
@@ -3375,6 +3384,162 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                             lista_up[29] = rel
                             atualizar_catequizando(row['id_catequizando'], lista_up)
                             st.success("Salvo!"); st.cache_data.clear(); time.sleep(0.5); st.rerun()
+
+
+
+
+# ==============================================================================
+# PÁGINAS EXCLUSIVAS DA SECRETARIA PAROQUIAL
+# ==============================================================================
+elif menu == "📊 Painel da Secretaria":
+    st.title("📊 Painel da Secretaria Paroquial")
+    st.markdown("Visão administrativa e cartorial da catequese.")
+    
+    df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
+    df_desistentes = df_cat[df_cat['status'].isin(['DESISTENTE', 'TRANSFERIDO', 'INATIVO'])] if not df_cat.empty else pd.DataFrame()
+    df_concluidos = df_cat[df_cat['status'] == 'CONCLUÍDO'] if not df_cat.empty else pd.DataFrame()
+    
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Histórico (Inscritos)", len(df_cat))
+    c2.metric("🟢 Em Caminhada (Ativos)", len(df_ativos))
+    c3.metric("🔴 Evasão / Transferências", len(df_desistentes))
+    c4.metric("🎓 Egressos (Concluídos)", len(df_concluidos))
+    
+    st.divider()
+    st.subheader("🖨️ Estação de Impressão em Lote")
+    col_doc_sec, col_doc_lote = st.columns(2)
+    with col_doc_sec:
+        if st.button("🏛️ Gerar Relatório Diocesano", use_container_width=True):
+            st.session_state.pdf_diocesano = gerar_relatorio_diocesano_pdf(df_turmas, df_cat, df_usuarios)
+        if "pdf_diocesano" in st.session_state:
+            st.download_button("📥 Baixar Relatório Diocesano", st.session_state.pdf_diocesano, "Diocesano.pdf", use_container_width=True)
+    with col_doc_lote:
+        if st.button("🗂️ Imprimir Todas as Fichas (Lote)", use_container_width=True):
+            st.session_state.pdf_lote_f = gerar_fichas_paroquia_total(df_cat)
+        if "pdf_lote_f" in st.session_state:
+            st.download_button("📥 Baixar Fichas em Lote", st.session_state.pdf_lote_f, "Fichas_Lote.pdf", use_container_width=True)
+
+elif menu == "🏫 Visão de Turmas e Equipe":
+    st.title("🏫 Visão de Turmas e Equipe (Mapa da Catequese)")
+    tab_turmas, tab_equipe = st.tabs(["🏫 Turmas e Catequizandos", "👥 Equipe de Catequistas"])
+    
+    with tab_turmas:
+        st.markdown("#### Raio-X Administrativo das Turmas")
+        if not df_turmas.empty:
+            for _, t in df_turmas.iterrows():
+                nome_t = str(t['nome_turma']).strip().upper()
+                cats = str(t.get('catequista_responsavel', 'Não informado'))
+                alunos_t = df_cat[(df_cat['etapa'].str.strip().str.upper() == nome_t) & (df_cat['status'] == 'ATIVO')] if not df_cat.empty else pd.DataFrame()
+                
+                qtd_alunos = len(alunos_t)
+                idades =[calcular_idade(d) for d in alunos_t['data_nascimento'].tolist()] if not alunos_t.empty else[]
+                media_idade = round(sum(idades)/len(idades), 1) if idades else 0
+                
+                with st.expander(f"📚 {nome_t} - {qtd_alunos} inscritos ativos"):
+                    st.markdown(f"**Catequistas:** {cats}")
+                    st.markdown(f"**Média de Idade:** {media_idade} anos")
+                    
+                    if not alunos_t.empty:
+                        st.dataframe(alunos_t[['nome_completo', 'data_nascimento', 'contato_principal']].rename(columns={'nome_completo': 'Catequizando', 'data_nascimento': 'Nascimento', 'contato_principal': 'Contato'}), use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhuma turma cadastrada.")
+            
+    with tab_equipe:
+        st.markdown("#### Acervo de Fichas dos Catequistas")
+        if not equipe_tecnica.empty:
+            busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat_sec").upper()
+            df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
+            
+            for _, u in df_c_filtrado.iterrows():
+                with st.expander(f"👤 {u['nome']}"):
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        st.write(f"**E-mail:** {u['email']} | **Telefone:** {u.get('telefone', 'N/A')}")
+                        st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
+                        st.write(f"**Turmas:** {u.get('turma_vinculada', 'Nenhuma')}")
+                        st.write(f"**Sacramentos:** Batismo ({formatar_data_br(u.get('data_batismo', ''))}), Eucaristia ({formatar_data_br(u.get('data_eucaristia', ''))}), Crisma ({formatar_data_br(u.get('data_crisma', ''))})")
+                    with c2:
+                        if st.button(f"📄 Gerar Ficha PDF", key=f"btn_ficha_sec_{u['email']}", use_container_width=True):
+                            st.session_state[f"pdf_cat_{u['email']}"] = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
+                        if f"pdf_cat_{u['email']}" in st.session_state:
+                            st.download_button("📥 Baixar Ficha", st.session_state[f"pdf_cat_{u['email']}"], f"Ficha_{u['nome']}.pdf", use_container_width=True)
+        else:
+            st.info("Nenhum catequista cadastrado.")
+
+elif menu == "🕊️ Acervo de Sacramentos":
+    st.title("🕊️ Cartório e Acervo Sacramental")
+    st.markdown("Consulte o histórico de sacramentos ou registre lançamentos avulsos (ex: lembranças de outras paróquias).")
+    
+    col_busca, col_hist = st.columns([1, 1])
+    with col_busca:
+        st.markdown("#### 🔍 Lançamento Avulso")
+        nome_busca = st.text_input("Digite o nome do catequizando:").upper()
+        if nome_busca:
+            sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
+            if not sugestoes.empty:
+                escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist())
+                dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
+                st.info(f"**Sacramentos Atuais:** {dados_c.get('sacramentos_ja_feitos', 'Nenhum')}")
+                
+                with st.form("form_sac_individual_sec"):
+                    c1, c2 = st.columns(2)
+                    tipo_s_ind = c1.selectbox("Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
+                    data_s_ind = c2.date_input("Data", date.today(), format="DD/MM/YYYY")
+                    local_ind = st.text_input("Local (Ex: Paróquia São José - Ilhéus)").upper()
+                    
+                    if st.form_submit_button("💾 SALVAR REGISTRO AVULSO", use_container_width=True):
+                        id_ev = f"IND-{int(time.time())}"
+                        local_final = f"Avulso: {local_ind}" if local_ind else "Avulso"
+                        if registrar_evento_sacramento_completo([id_ev, tipo_s_ind, str(data_s_ind), dados_c['etapa'], f"{st.session_state.usuario['nome']} ({local_final})"], [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s_ind, str(data_s_ind)]], tipo_s_ind):
+                            st.success("Registrado no acervo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+            else:
+                st.warning("Catequizando não encontrado.")
+
+    with col_hist:
+        st.markdown("#### 📜 Histórico de Eventos")
+        df_eventos = ler_aba("sacramentos_eventos")
+        if not df_eventos.empty:
+            df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
+            df_eventos = df_eventos.sort_values(by='data_dt', ascending=False)
+            st.dataframe(df_eventos[['tipo', 'data', 'turmas', 'catequista']], use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum evento registrado no histórico.")
+
+elif menu == "📖 Consulta de Encontros":
+    st.title("📖 Consulta de Encontros (Diário)")
+    st.markdown("Consulte a linha do tempo das turmas para informar aos pais sobre os encontros realizados.")
+    
+    df_enc_local = ler_aba("encontros")
+    turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else[]
+    
+    if turmas_permitidas:
+        turma_focal = st.selectbox("🔍 Selecione a Turma para Consultar:", turmas_permitidas)
+        st.divider()
+        st.subheader(f"📜 Linha do Tempo: {turma_focal}")
+        
+        if not df_enc_local.empty:
+            df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
+            df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
+            hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data_sort', ascending=False)
+            
+            if not hist_turma.empty:
+                for idx, row in hist_turma.iterrows():
+                    data_d = str(row['data'])
+                    tema_d = row.get('tema', 'Tema não registrado')
+                    obs_d = row.get('observacoes', '')
+                    cat_d = row.get('catequista', 'Não informado')
+                    
+                    with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d} | 👤 Resp: {cat_d}"):
+                        st.markdown(f"**Observações Pastorais / Relato:**\n{obs_d}")
+            else:
+                st.info("Nenhum encontro registrado para esta turma.")
+        else:
+            st.info("O sistema ainda não possui registros de encontros.")
+    else:
+        st.warning("Nenhuma turma cadastrada.")
+
+
+
 
 
 
