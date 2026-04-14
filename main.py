@@ -1417,10 +1417,10 @@ elif menu == "📝 Cadastrar Catequizando":
 
 
 # ==============================================================================
-# PÁGINA: 👤 PERFIL INDIVIDUAL
+# PÁGINA: 👤 PERFIL INDIVIDUAL (DOSSIÊ DIGITAL 360º)
 # ==============================================================================
 elif menu == "👤 Perfil Individual":
-    st.title("👤 Gestão de Perfis e Documentação")
+    st.title("👤 Dossiê Digital e Secretaria Pastoral")
     
     if df_cat.empty:
         st.warning("⚠️ Base de dados vazia.")
@@ -1429,58 +1429,46 @@ elif menu == "👤 Perfil Individual":
     # --- ESTRUTURA DE ABAS CONDICIONAL ---
     if eh_gestor:
         tabs = st.tabs([
-            "👤 Consulta e Edição Individual", 
-            "🚩 Auditoria de Documentos por Turma", 
-            "📄 Gestão de Evasão e Declarações"
+            "🪪 Cartão de Identidade (Consulta/Edição)", 
+            "📁 Maleta de Documentos (Auditoria)", 
+            "🏛️ Secretaria Pastoral (Egressos/Transferências)"
         ])
         tab_individual = tabs[0]
         tab_auditoria_geral = tabs[1]
         tab_evasao_gestao = tabs[2]
     else:
-        # Catequista não tem abas, apenas o container principal
         tab_individual = st.container()
         tab_auditoria_geral = None
         tab_evasao_gestao = None
 
+    # ==========================================================================
+    # HUB 1: CARTÃO DE IDENTIDADE PASTORAL
+    # ==========================================================================
     with tab_individual:
-        st.subheader("🔍 Localizar e Visualizar Perfil")
+        st.subheader("🔍 Localizar Catequizando")
         
-        # Filtro de turma baseado no papel do usuário
         if eh_gestor:
             c1, c2 = st.columns([2, 1])
             busca = c1.text_input("Pesquisar por nome:", key="busca_perfil").upper()
-            lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+            lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else[])
             filtro_t = c2.selectbox("Filtrar por Turma:", lista_t, key="filtro_turma_perfil")
             df_f = df_cat.copy()
             if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
             if filtro_t != "TODAS": df_f = df_f[df_f['etapa'] == filtro_t]
         else:
-            # Catequista vê turmas vinculadas no cadastro OU onde é responsável na aba turmas
             nome_usuario = st.session_state.usuario.get('nome', '').strip()
             turma_vinculada = str(st.session_state.usuario.get('turma_vinculada', ''))
-            
-            # Busca turmas onde ele é responsável (usando regex para ignorar espaços extras)
-            turmas_responsavel = df_turmas[df_turmas['catequista_responsavel'].str.contains(nome_usuario, na=False, case=False)]['nome_turma'].tolist()
-            
-            # Une as listas
-            turmas_lista = [t.strip() for t in turma_vinculada.split(',') if t.strip()] + turmas_responsavel
-            turmas_lista = list(set(turmas_lista)) # Remove duplicatas
+            turmas_responsavel = df_turmas[df_turmas['catequista_responsavel'].str.contains(nome_usuario, na=False, case=False)]['nome_turma'].tolist() if not df_turmas.empty else []
+            turmas_lista = list(set([t.strip() for t in turma_vinculada.split(',') if t.strip()] + turmas_responsavel))
             
             df_f = df_cat[df_cat['etapa'].isin(turmas_lista)]
-            
-            if df_f.empty:
-                st.info("⚠️ Nenhuma turma vinculada encontrada para o seu perfil. Verifique com a coordenação.")
+            if df_f.empty: st.info("⚠️ Nenhuma turma vinculada encontrada para o seu perfil.")
             
             busca = st.text_input("Pesquisar por nome na minha turma:", key="busca_perfil").upper()
             if busca: df_f = df_f[df_f['nome_completo'].str.contains(busca, na=False)]
         
-        cols_necessarias = ['nome_completo', 'etapa', 'status']
-        st.dataframe(df_f[cols_necessarias], use_container_width=True, hide_index=True)
-        
-        st.divider()
-
         df_f['display_select'] = df_f['nome_completo'] + " | Turma: " + df_f['etapa'] + " | ID: " + df_f['id_catequizando']
-        escolha_display = st.selectbox("Selecione para VER PRÉVIA, EDITAR ou GERAR FICHA:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil")
+        escolha_display = st.selectbox("Selecione o catequizando para abrir o Dossiê:", [""] + df_f['display_select'].tolist(), key="sel_catequizando_perfil")
 
         if escolha_display:
             id_sel = escolha_display.split(" | ID: ")[-1]
@@ -1490,21 +1478,43 @@ elif menu == "👤 Perfil Individual":
                 dados = filtro_dados.iloc[0]
                 nome_sel = dados['nome_completo']
                 status_atual = str(dados['status']).upper()
+                idade_atual = calcular_idade(dados['data_nascimento'])
+                is_adulto = idade_atual >= 18
 
                 obs_p = str(dados.get('obs_pastoral_familia', ''))
                 tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
-                st.warning(f"🚨 **CONTATO DE EMERGÊNCIA:** {dados['nome_responsavel']} | **TEL:** {tel_e}")
                 
-                icone = "🟢" if status_atual == "ATIVO" else "🔴" if status_atual == "DESISTENTE" else "🔵" if status_atual == "TRANSFERIDO" else "⚪"
-                st.markdown(f"### {icone} {dados['nome_completo']} ({status_atual})")
+                bat = "💧 Batizado" if dados['batizado_sn'] == "SIM" else "⚪ Sem Batismo"
+                euc = "🍞 Eucaristia" if "EUCARISTIA" in str(dados['sacramentos_ja_feitos']).upper() else "⚪ Sem Eucaristia"
+                cri = "🔥 Crisma" if "CRISMA" in str(dados['sacramentos_ja_feitos']).upper() else "⚪ Sem Crisma"
+                
+                status_color = "#2e7d32" if status_atual == "ATIVO" else "#e03d11" if status_atual in ["DESISTENTE", "INATIVO"] else "#ffa000"
+                
+                # --- O CARTÃO DE IDENTIDADE VISUAL ---
+                st.markdown(f"""
+                    <div style='background-color:#ffffff; padding:20px; border-radius:15px; border-left:10px solid {status_color}; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; margin-top: 10px;'>
+                        <div style='display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;'>
+                            <div style='flex: 1; min-width: 250px;'>
+                                <h2 style='margin:0; color:#417b99; font-size: 24px;'>👤 {nome_sel}</h2>
+                                <p style='margin:8px 0 0 0; font-size:15px; color:#555;'>
+                                    <b>Turma:</b> {dados['etapa']} &nbsp;|&nbsp; <b>Idade:</b> {idade_atual} anos &nbsp;|&nbsp; 
+                                    <span style='background-color:{status_color}; color:white; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:bold;'>{status_atual}</span>
+                                </p>
+                            </div>
+                            <div style='text-align: right; flex: 1; min-width: 250px; margin-top: 10px;'>
+                                <p style='margin:0; font-size:14px; color:#666;'><b>Selos Sacramentais:</b><br>{bat} &nbsp;|&nbsp; {euc} &nbsp;|&nbsp; {cri}</p>
+                                <div style='margin-top:8px; background-color:#fff5f5; padding:8px; border-radius:8px; display:inline-block; border: 1px solid #fbd5d5;'>
+                                    <span style='color:#e03d11; font-size:13px;'><b>🚨 Emergência:</b> {dados['nome_responsavel']} ({tel_e})</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
                 sub_tab_edit, sub_tab_doc, sub_tab_hist = st.tabs(["✏️ Editar Cadastro", "📄 Gerar Documentos (PDF)", "📜 Extrato de Caminhada"])
                 
                 with sub_tab_edit:
-                    st.subheader("✏️ Atualizar Dados do Catequizando")
-                    idade_atual = calcular_idade(dados['data_nascimento'])
-                    is_adulto = idade_atual >= 18
-
+                    st.markdown("#### ✏️ Atualizar Dados do Catequizando")
                     st.markdown("#### 📍 1. Identificação e Status")
                     ce1, ce2 = st.columns([2, 1])
                     ed_nome = ce1.text_input("Nome Completo", value=dados['nome_completo']).upper()
@@ -1517,7 +1527,7 @@ elif menu == "👤 Perfil Individual":
                     hoje = date.today()
                     data_min = date(hoje.year - 100, 1, 1)
                     ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), min_value=data_min, max_value=hoje, format="DD/MM/YYYY")
-                    ed_batizado = c4.selectbox("Batizado?", ["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
+                    ed_batizado = c4.selectbox("Batizado?",["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
                     
                     lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
                     try: idx_turma_banco = lista_t_nomes.index(dados['etapa'])
@@ -1562,13 +1572,13 @@ elif menu == "👤 Perfil Individual":
                         ed_qual_grupo = fe1.text_input("Qual grupo/pastoral?", value=dados.get('qual_grupo', '') if dados.get('qual_grupo') != "N/A" else "").upper()
 
                     if is_adulto:
-                        opcoes_ec = ["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"]
+                        opcoes_ec =["SOLTEIRO(A)", "CONVIVEM", "CASADO(A) IGREJA", "CASADO(A) CIVIL", "DIVORCIADO(A)", "VIÚVO(A)"]
                         val_ec = str(dados.get('estado_civil_pais_ou_proprio', 'SOLTEIRO(A)')).upper()
                         idx_ec = opcoes_ec.index(val_ec) if val_ec in opcoes_ec else 0
                         ed_est_civil = fe2.selectbox("Estado Civil", opcoes_ec, index=idx_ec)
                         ed_est_civil_pais = "N/A"
                     else:
-                        opcoes_ecp = ["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"]
+                        opcoes_ecp =["CASADOS", "UNIÃO DE FACTO", "SEPARADOS", "SOLTEIROS", "VIÚVO(A)"]
                         val_ecp = str(dados.get('est_civil_pais', 'CASADOS')).upper()
                         idx_ecp = opcoes_ecp.index(val_ecp) if val_ecp in opcoes_ecp else 0
                         ed_est_civil_pais = fe2.selectbox("Estado Civil dos Pais", opcoes_ecp, index=idx_ecp)
@@ -1576,8 +1586,8 @@ elif menu == "👤 Perfil Individual":
 
                     st.markdown("#### 🕊️ Sacramentos Possuídos")
                     sac_atuais = str(dados.get('sacramentos_ja_feitos', '')).upper()
-                    opcoes_sac = ["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"]
-                    default_sacs = [s.strip() for s in sac_atuais.split(',') if s.strip() in opcoes_sac]
+                    opcoes_sac =["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"]
+                    default_sacs =[s.strip() for s in sac_atuais.split(',') if s.strip() in opcoes_sac]
                     ed_sacramentos = st.multiselect("Marque/Desmarque os sacramentos possuídos:", opcoes_sac, default=default_sacs)
                     ed_sac_final = ", ".join(ed_sacramentos)
 
@@ -1586,7 +1596,7 @@ elif menu == "👤 Perfil Individual":
                     st.markdown("#### 🏥 4. Saúde e Documentação")
                     s1, s2 = st.columns(2)
                     med_atual = str(dados.get('toma_medicamento_sn', 'NÃO')).upper()
-                    ed_tem_med = s1.radio("Toma algum medicamento?", ["NÃO", "SIM"], index=0 if med_atual == "NÃO" else 1, horizontal=True)
+                    ed_tem_med = s1.radio("Toma algum medicamento?",["NÃO", "SIM"], index=0 if med_atual == "NÃO" else 1, horizontal=True)
                     ed_med = s1.text_input("Descreva o medicamento:", value=med_atual if med_atual != "NÃO" else "").upper() if ed_tem_med == "SIM" else "NÃO"
                     
                     tgo_atual = str(dados.get('tgo_sn', 'NÃO')).upper()
@@ -1601,7 +1611,7 @@ elif menu == "👤 Perfil Individual":
                     novas_faltas =[d for d in docs_obrigatorios if d not in ed_docs_entregues]
                     ed_doc_status_k = ", ".join(novas_faltas) if novas_faltas else "COMPLETO"
 
-                    if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True):
+                    if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True, type="primary"):
                         obs_final = f"EMERGÊNCIA: {ed_resp} - TEL: {ed_tel_resp}" if is_adulto else dados.get('obs_pastoral_familia', '')
                         lista_up =[
                             dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
@@ -1614,14 +1624,11 @@ elif menu == "👤 Perfil Individual":
                             dados.get('local_encontro', 'N/A'), obs_final
                         ]
                         if atualizar_catequizando(dados['id_catequizando'], lista_up):
-                            # Adicione esta linha logo após o sucesso da atualização:
                             sincronizar_edicao_catequizando(dados['id_catequizando'], ed_nome, ed_etapa)
-                            
                             st.success(f"✅ Cadastro de {ed_nome} atualizado e histórico sincronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
                 with sub_tab_doc:
-                    st.subheader("📄 Documentação Cadastral e Oficial")
-                    st.write(f"Gerar documentos para: **{nome_sel}**")
+                    st.markdown("#### 📄 Documentação Cadastral e Oficial")
                     col_doc_a, col_doc_b = st.columns(2)
                     with col_doc_a:
                         if st.button("📑 Gerar Ficha de Inscrição Completa", key="btn_pdf_perfil", use_container_width=True):
@@ -1635,7 +1642,7 @@ elif menu == "👤 Perfil Individual":
                             st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Matricula_{nome_sel}.pdf", "application/pdf", use_container_width=True)
 
                 with sub_tab_hist:
-                    st.subheader("📜 Histórico de Encontros e Temas")
+                    st.markdown("#### 📜 Extrato de Caminhada (Presenças e Temas)")
                     if not df_pres.empty and 'id_catequizando' in df_pres.columns:
                         pres_aluno = df_pres[df_pres['id_catequizando'] == dados['id_catequizando']].copy()
                     else:
@@ -1650,151 +1657,152 @@ elif menu == "👤 Perfil Individual":
                             cor_p = "#2e7d32" if p.get('status', '') == "PRESENTE" else "#e03d11"
                             data_f = formatar_data_br(p.get('data_encontro', ''))
                             tema_f = p.get('tema_do_dia', 'Tema não registrado')
-                            st.markdown(f"<div style='padding:8px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p.get('status', '')})</i></div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='padding:10px; border-bottom:1px solid #eee; background-color:#f8f9f0; border-radius:5px; margin-bottom:5px;'><span style='color:{cor_p}; font-size:16px;'>{icone_p}</span> <b>{data_f}</b> | {tema_f} <i>({p.get('status', '')})</i></div>", unsafe_allow_html=True)
                     else:
                         st.info("Nenhum registro de presença/falta para este catequizando.")
 
-        # Apenas gestores possuem estas abas, então verificamos antes de usar o 'with'
-        if eh_gestor and tab_auditoria_geral is not None:
-            with tab_auditoria_geral:
-                st.subheader("🚩 Diagnóstico de Pendências por Turma")
-                lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-                turma_auditoria = st.selectbox("🔍 Selecione a Turma para Diagnóstico:", lista_turmas_auditoria, key="sel_auditoria_doc_turma")
+    # ==========================================================================
+    # HUB 2: MALETA DE DOCUMENTOS (AUDITORIA VISUAL)
+    # ==========================================================================
+    if eh_gestor and tab_auditoria_geral is not None:
+        with tab_auditoria_geral:
+            st.subheader("📁 Maleta de Documentos (Auditoria por Turma)")
+            lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else[]
+            turma_auditoria = st.selectbox("🔍 Selecione a Turma para Diagnóstico:", lista_turmas_auditoria, key="sel_auditoria_doc_turma")
 
-                if turma_auditoria:
-                    df_turma_focal = df_cat[df_cat['etapa'] == turma_auditoria]
-                    df_pendentes_turma = df_turma_focal[
-                        (df_turma_focal['doc_em_falta'].str.len() > 2) & 
-                        (~df_turma_focal['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
-                    ]
+            if turma_auditoria:
+                df_turma_focal = df_cat[(df_cat['etapa'] == turma_auditoria) & (df_cat['status'] == 'ATIVO')]
+                df_pendentes_turma = df_turma_focal[
+                    (df_turma_focal['doc_em_falta'].str.len() > 2) & 
+                    (~df_turma_focal['doc_em_falta'].isin(['NADA', 'N/A', 'OK', 'COMPLETO', 'NADA FALTANDO']))
+                ]
 
-                    c_met1, c_met2, c_met3 = st.columns(3)
-                    total_t = len(df_turma_focal)
-                    pendentes_t = len(df_pendentes_turma)
-                    em_dia_t = total_t - pendentes_t
-                    
-                    c_met1.metric("Total na Turma", total_t)
-                    c_met2.metric("Pendentes", pendentes_t, delta=f"{pendentes_t} faltam docs", delta_color="inverse")
-                    c_met3.metric("Em Dia", em_dia_t)
-
-                    st.markdown("---")
-
-                    if df_pendentes_turma.empty:
-                        st.success(f"✅ **Excelente!** Todos os {total_t} catequizandos da turma **{turma_auditoria}** estão com a documentação completa.")
-                    else:
-                        st.markdown(f"#### 📋 Lista de Pendências: {turma_auditoria}")
-                        for _, p in df_pendentes_turma.iterrows():
-                            with st.container():
-                                idade_p = calcular_idade(p['data_nascimento'])
-                                is_adulto_p = idade_p >= 18
-                                
-                                if is_adulto_p:
-                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_completo'], "Próprio", p['contato_principal']
-                                else:
-                                    if str(p['tel_mae']) not in ["N/A", "", "None"]:
-                                        nome_alvo, vinculo_alvo, tel_alvo = p['nome_mae'], "Mãe", p['tel_mae']
-                                    elif str(p['tel_pai']) not in ["N/A", "", "None"]:
-                                        nome_alvo, vinculo_alvo, tel_alvo = p['nome_pai'], "Pai", p['tel_pai']
-                                    else:
-                                        nome_alvo, vinculo_alvo, tel_alvo = p['nome_responsavel'], "Responsável", p['contato_principal']
-
-                                st.markdown(f"""
-                                    <div style='background-color:#fff5f5; padding:15px; border-radius:10px; border-left:8px solid #e03d11; margin-bottom:10px;'>
-                                        <b style='color:#e03d11; font-size:16px;'>{p['nome_completo']}</b><br>
-                                        <span style='font-size:13px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span><br>
-                                        <span style='font-size:12px; color:#666;'>👤 <b>Cobrar de:</b> {nome_alvo} ({vinculo_alvo})</span>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                                
-                                col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
-                                
-                                if col_p1.button(f"✨ IA: Cobrar {vinculo_alvo}", key=f"msg_aud_{p['id_catequizando']}"):
-                                    msg_doc = gerar_mensagem_cobranca_doc_ia(p['nome_completo'], p['doc_em_falta'], p['etapa'], nome_alvo, vinculo_alvo)
-                                    st.info(f"**Mensagem para {nome_alvo}:**\n\n{msg_doc}")
-                                
-                                if col_p2.button("✅ Entregue", key=f"btn_ok_aud_{p['id_catequizando']}", use_container_width=True):
-                                    lista_up = p.tolist()
-                                    while len(lista_up) < 30: lista_up.append("N/A")
-                                    lista_up[10] = "COMPLETO"
-                                    if atualizar_catequizando(p['id_catequizando'], lista_up):
-                                        st.success("Atualizado!"); time.sleep(0.5); st.rerun()
-
-                                num_limpo = "".join(filter(str.isdigit, str(tel_alvo)))
-                                if num_limpo:
-                                    if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
-                                    if not num_limpo.startswith("55"):
-                                        num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
-                                    col_p3.markdown(f'''<a href="https://wa.me/{num_limpo}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:5px; font-weight:bold; font-size:12px;">📲 WhatsApp</div></a>''', unsafe_allow_html=True)
-                                else:
-                                    col_p3.caption("Sem Tel.")
-                                st.markdown("<br>", unsafe_allow_html=True)
-
-            with tab_evasao_gestao:
-                st.subheader("🚩 Gestão de Evasão e Egressos (Concluídos)")
-                df_saidas = df_cat[df_cat['status'] != 'ATIVO']
+                total_t = len(df_turma_focal)
+                pendentes_t = len(df_pendentes_turma)
+                em_dia_t = total_t - pendentes_t
                 
-                c_ev1, c_ev2, c_ev3, c_ev4 = st.columns(4)
-                c_ev1.metric("🎓 Concluídos", len(df_saidas[df_saidas['status'] == 'CONCLUÍDO']))
-                c_ev2.metric("🔴 Desistentes", len(df_saidas[df_saidas['status'] == 'DESISTENTE']))
-                c_ev3.metric("🔵 Transferidos", len(df_saidas[df_saidas['status'] == 'TRANSFERIDO']))
-                c_ev4.metric("⚪ Inativos", len(df_saidas[df_saidas['status'] == 'INATIVO']))
-                
-                st.divider()
-                
-                df_evasao_real = df_saidas[df_saidas['status'] != 'CONCLUÍDO']
-                df_concluidos = df_saidas[df_saidas['status'] == 'CONCLUÍDO']
-                
-                col_lista1, col_lista2 = st.columns(2)
-                
-                with col_lista1:
-                    st.markdown("#### 🎓 Galeria de Egressos (Concluíram)")
-                    if not df_concluidos.empty:
-                        st.dataframe(df_concluidos[['nome_completo', 'etapa']], use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Nenhum catequizando marcado como concluído ainda.")
-                        
-                with col_lista2:
-                    st.markdown("#### 📋 Caminhadas Interrompidas")
-                    if not df_evasao_real.empty:
-                        st.dataframe(df_evasao_real[['nome_completo', 'status', 'obs_pastoral_familia']], use_container_width=True, hide_index=True)
-                    else:
-                        st.success("Glória a Deus! Não há registros de evasão.")
-                    
-                st.divider()
-                
-                if df_saidas.empty:
-                    st.success("Glória a Deus! Não há registros de evasão no momento.")
+                # Barra de Progresso Visual
+                progresso_docs = (em_dia_t / total_t) if total_t > 0 else 1.0
+                st.markdown(f"**Progresso de Entrega da Turma: {em_dia_t} de {total_t} catequizandos estão em dia ({progresso_docs*100:.0f}%)**")
+                st.progress(progresso_docs)
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                if df_pendentes_turma.empty:
+                    st.success(f"✅ **Excelente!** Todos os {total_t} catequizandos da turma **{turma_auditoria}** estão com a documentação completa na pasta.")
                 else:
-                    st.markdown("#### 📋 Lista de Caminhadas Interrompidas")
-                    st.dataframe(df_saidas[['nome_completo', 'etapa', 'status', 'obs_pastoral_familia']], use_container_width=True, hide_index=True)
+                    st.markdown(f"#### 📋 Lista de Pendências: {turma_auditoria}")
+                    import urllib.parse
                     
-                    st.divider()
-                    st.markdown("#### 📄 Gerar Declaração Oficial (Transferência ou Matrícula)")
-                    sel_cat_ev = st.selectbox("Selecione o Catequizando para o Documento:", [""] + df_saidas['nome_completo'].tolist(), key="sel_ev_doc")
-                    
-                    if sel_cat_ev:
-                        dados_ev = df_saidas[df_saidas['nome_completo'] == sel_cat_ev].iloc[0]
-                        col_d1, col_d2 = st.columns(2)
-                        tipo_doc = col_d1.selectbox("Tipo de Documento:", ["Declaração de Transferência", "Declaração de Matrícula"])
-                        paroquia_dest = ""
-                        if "Transferência" in tipo_doc:
-                            paroquia_dest = col_d2.text_input("Transferido para a Paróquia:", placeholder="Ex: Paróquia Santa Rita")
+                    for _, p in df_pendentes_turma.iterrows():
+                        with st.container():
+                            idade_p = calcular_idade(p['data_nascimento'])
+                            is_adulto_p = idade_p >= 18
+                            
+                            if is_adulto_p:
+                                nome_alvo, vinculo_alvo, tel_alvo = p['nome_completo'], "Próprio", p['contato_principal']
+                            else:
+                                if str(p['tel_mae']) not in ["N/A", "", "None"]:
+                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_mae'], "Mãe", p['tel_mae']
+                                elif str(p['tel_pai']) not in ["N/A", "", "None"]:
+                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_pai'], "Pai", p['tel_pai']
+                                else:
+                                    nome_alvo, vinculo_alvo, tel_alvo = p['nome_responsavel'], "Responsável", p['contato_principal']
 
-                        if st.button(f"📥 GERAR {tipo_doc.upper()}", use_container_width=True):
-                            with st.spinner("Renderizando documento oficial..."):
-                                pdf_ev_final = gerar_declaracao_pastoral_pdf(dados_ev.to_dict(), tipo_doc, paroquia_dest)
-                                st.session_state.pdf_declaracao_saida = pdf_ev_final
-                        
-                        if "pdf_declaracao_saida" in st.session_state:
-                            st.download_button("💾 BAIXAR DECLARAÇÃO (PDF)", st.session_state.pdf_declaracao_saida, f"Declaracao_{sel_cat_ev}.pdf", use_container_width=True)
-                        
-                        st.divider()
-                        if st.button(f"🔄 REATIVAR {sel_cat_ev} (Voltou para a Catequese)", type="primary"):
-                            lista_up_v = dados_ev.tolist()
-                            while len(lista_up_v) < 30: lista_up_v.append("N/A")
-                            lista_up_v[12] = "ATIVO"
-                            if atualizar_catequizando(dados_ev['id_catequizando'], lista_up_v):
-                                st.success(f"{sel_cat_ev} reativado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            st.markdown(f"""
+                                <div style='background-color:#fff5f5; padding:15px; border-radius:10px; border-left:8px solid #e03d11; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                                    <b style='color:#e03d11; font-size:16px;'>{p['nome_completo']}</b><br>
+                                    <span style='font-size:14px; color:#333;'>⚠️ <b>FALTANDO:</b> {p['doc_em_falta']}</span><br>
+                                    <span style='font-size:13px; color:#666;'>👤 <b>Cobrar de:</b> {nome_alvo} ({vinculo_alvo})</span>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            col_p1, col_p2 = st.columns([1, 1])
+                            
+                            # Botão de WhatsApp Automático (Sem custo de IA)
+                            num_limpo = "".join(filter(str.isdigit, str(tel_alvo)))
+                            if num_limpo:
+                                if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
+                                if not num_limpo.startswith("55"): num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
+                                
+                                msg_doc = f"Paz e Bem, {nome_alvo}! Aqui é da Secretaria da Catequese. Notamos que ainda falta entregar a cópia do(s) documento(s): {p['doc_em_falta']} do(a) catequizando(a) {p['nome_completo']}. Poderia nos enviar ou levar no próximo encontro? Deus abençoe!"
+                                link_doc = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg_doc)}"
+                                col_p1.markdown(f"<a href='{link_doc}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-size:13px; font-weight:bold;'>📲 Enviar Cobrança no WhatsApp</div></a>", unsafe_allow_html=True)
+                            else:
+                                col_p1.caption("Sem telefone válido.")
+                            
+                            if col_p2.button("✅ Marcar como Entregue", key=f"btn_ok_aud_{p['id_catequizando']}", use_container_width=True):
+                                lista_up = p.tolist()
+                                while len(lista_up) < 30: lista_up.append("N/A")
+                                lista_up[10] = "COMPLETO"
+                                if atualizar_catequizando(p['id_catequizando'], lista_up):
+                                    st.success("Atualizado!"); time.sleep(0.5); st.rerun()
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+
+    # ==========================================================================
+    # HUB 3: SECRETARIA PASTORAL (EGRESSOS E TRANSFERÊNCIAS)
+    # ==========================================================================
+    if eh_gestor and tab_evasao_gestao is not None:
+        with tab_evasao_gestao:
+            st.subheader("🏛️ Secretaria Pastoral (Egressos e Transferências)")
+            df_saidas = df_cat[df_cat['status'] != 'ATIVO']
+            
+            c_ev1, c_ev2, c_ev3, c_ev4 = st.columns(4)
+            c_ev1.metric("🎓 Concluídos (Egressos)", len(df_saidas[df_saidas['status'] == 'CONCLUÍDO']))
+            c_ev2.metric("🔴 Desistentes", len(df_saidas[df_saidas['status'] == 'DESISTENTE']))
+            c_ev3.metric("🔵 Transferidos", len(df_saidas[df_saidas['status'] == 'TRANSFERIDO']))
+            c_ev4.metric("⚪ Inativos", len(df_saidas[df_saidas['status'] == 'INATIVO']))
+            
+            st.divider()
+            
+            df_evasao_real = df_saidas[df_saidas['status'] != 'CONCLUÍDO']
+            df_concluidos = df_saidas[df_saidas['status'] == 'CONCLUÍDO']
+            
+            col_lista1, col_lista2 = st.columns(2)
+            
+            with col_lista1:
+                st.markdown("#### 🎓 Galeria de Egressos (Concluíram)")
+                if not df_concluidos.empty:
+                    st.dataframe(df_concluidos[['nome_completo', 'etapa']], use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhum catequizando marcado como concluído ainda.")
+                    
+            with col_lista2:
+                st.markdown("#### 🔄 Transferências e Desistências")
+                if not df_evasao_real.empty:
+                    st.dataframe(df_evasao_real[['nome_completo', 'status', 'obs_pastoral_familia']], use_container_width=True, hide_index=True)
+                else:
+                    st.success("Glória a Deus! Não há registros de evasão.")
+                
+            st.divider()
+            
+            if not df_saidas.empty:
+                st.markdown("#### 📄 Gerar Declaração Oficial (Transferência ou Matrícula)")
+                sel_cat_ev = st.selectbox("Selecione o Catequizando para o Documento:", [""] + df_saidas['nome_completo'].tolist(), key="sel_ev_doc")
+                
+                if sel_cat_ev:
+                    dados_ev = df_saidas[df_saidas['nome_completo'] == sel_cat_ev].iloc[0]
+                    col_d1, col_d2 = st.columns(2)
+                    tipo_doc = col_d1.selectbox("Tipo de Documento:", ["Declaração de Transferência", "Declaração de Matrícula"])
+                    paroquia_dest = ""
+                    if "Transferência" in tipo_doc:
+                        paroquia_dest = col_d2.text_input("Transferido para a Paróquia:", placeholder="Ex: Paróquia Santa Rita").upper()
+
+                    if st.button(f"📥 GERAR {tipo_doc.upper()}", use_container_width=True, type="primary"):
+                        with st.spinner("Renderizando documento oficial..."):
+                            pdf_ev_final = gerar_declaracao_pastoral_pdf(dados_ev.to_dict(), tipo_doc, paroquia_dest)
+                            st.session_state.pdf_declaracao_saida = pdf_ev_final
+                    
+                    if "pdf_declaracao_saida" in st.session_state:
+                        st.download_button("💾 BAIXAR DECLARAÇÃO (PDF)", st.session_state.pdf_declaracao_saida, f"Declaracao_{sel_cat_ev}.pdf", use_container_width=True)
+                    
+                    st.markdown("---")
+                    if st.button(f"🔄 REATIVAR {sel_cat_ev} (Voltou para a Catequese)"):
+                        lista_up_v = dados_ev.tolist()
+                        while len(lista_up_v) < 30: lista_up_v.append("N/A")
+                        lista_up_v[12] = "ATIVO"
+                        if atualizar_catequizando(dados_ev['id_catequizando'], lista_up_v):
+                            st.success(f"{sel_cat_ev} reativado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
 
 
@@ -3113,7 +3121,7 @@ elif menu == "👥 Gestão de Catequistas":
 
 
 
-                        
+
 
 # ==============================================================================
 # PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR
