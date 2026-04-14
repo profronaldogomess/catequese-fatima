@@ -102,8 +102,12 @@ def obter_session_id_db(email):
         usuario = df_usuarios[df_usuarios['email'] == email]
         if not usuario.empty:
             try:
-                # Busca na 14ª coluna (índice 13)
-                return str(usuario.iloc[0].iloc[13]) 
+                # BLINDAGEM: Busca pelo nome exato da coluna para evitar erros de índice
+                if 'session_id' in usuario.columns:
+                    return str(usuario['session_id'].iloc[0])
+                else:
+                    # Fallback de segurança para o índice 12 (13ª coluna)
+                    return str(usuario.iloc[0].iloc[12]) 
             except: return ""
     return ""
 
