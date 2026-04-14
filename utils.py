@@ -1391,7 +1391,7 @@ def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
     pdf.ln(10); pdf.set_font("helvetica", "", 12)
     texto = f"Declaro que o(a) catequizando(a) {dados['nome_completo']}, nascido(a) em {formatar_data_br(dados['data_nascimento'])}, filho(a) de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
     if "Transferência" in tipo: texto += f"TRANSFERIDO(A) da turma {dados.get('etapa','')} para a {destino.upper()}."
-    else: texto += f"regularmente MATRICULADO(A) na turma {dados.get('etapa','')} da Paróquia de Fátima."
+    else: texto += f"regularmente INSCRITO(A) E EM CAMINHADA na turma {dados.get('etapa','')} da Paróquia de Fátima."
     pdf.multi_cell(0, 9, limpar_texto(texto), align='J')
     pdf.ln(20); y_ass = pdf.get_y()
     pdf.line(20, y_ass, 95, y_ass); pdf.set_xy(20, y_ass + 2); pdf.set_font("helvetica", "B", 10); pdf.cell(75, 5, "Pároco / Vigário", align='C')
