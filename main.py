@@ -2662,25 +2662,27 @@ elif menu == "✅ Fazer Chamada":
             st.warning("⚠️ Preencha o Tema do Encontro para salvar.")
 
 # ==============================================================================
-# PÁGINA: 👥 GESTÃO DE CATEQUISTAS
+# PÁGINA: 👥 GESTÃO DE CATEQUISTAS (RH PASTORAL 3.0)
 # ==============================================================================
 elif menu == "👥 Gestão de Catequistas":
-    st.title("👥 Gestão de Catequistas e Formação")
+    st.title("👥 RH Pastoral e Universidade Catequética")
     
     df_formacoes = ler_aba("formacoes")
     df_pres_form = ler_aba("presenca_formacao")
     
-    tab_dash, tab_lista, tab_novo, tab_formacao = st.tabs([
-        "📊 Dashboard de Equipe", "📋 Lista e Perfil", 
-        "➕ Novo Acesso", "🎓 Registro de Formação"
+    tab_radar, tab_univ, tab_cartorio = st.tabs([
+        "📊 Radar do RH Pastoral", "🎓 Universidade Catequética", "⚙️ Central de Acessos e Perfis"
     ])
 
-    with tab_dash:
+    # ==========================================================================
+    # HUB 1: RADAR DO RH PASTORAL (ENGAJAMENTO E ACESSOS)
+    # ==========================================================================
+    with tab_radar:
         st.subheader("📊 Qualificação da Equipe Catequética")
         if not equipe_tecnica.empty:
             total_e = len(equipe_tecnica)
-            bat_e = equipe_tecnica['data_batismo'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
-            euc_e = equipe_tecnica['data_eucaristia'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
+            bat_e = equipe_tecnica['data_batismo'].apply(lambda x: str(x).strip() not in["", "N/A", "None"]).sum()
+            euc_e = equipe_tecnica['data_eucaristia'].apply(lambda x: str(x).strip() not in["", "N/A", "None"]).sum()
             cri_e = equipe_tecnica['data_crisma'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
             min_e = equipe_tecnica['data_ministerio'].apply(lambda x: str(x).strip() not in ["", "N/A", "None"]).sum()
 
@@ -2692,8 +2694,12 @@ elif menu == "👥 Gestão de Catequistas":
             m5.metric("Ministros", min_e)
 
             st.divider()
-            st.markdown("### 🛡️ Maturidade Ministerial")
-            status_data = []
+            st.markdown("### 🛡️ Trilha Ministerial (Acompanhamento)")
+            st.markdown("Veja o que falta para cada catequista alcançar o Ministério e envie uma mensagem de incentivo.")
+            
+            status_data =[]
+            import urllib.parse
+            
             for _, row in equipe_tecnica.iterrows():
                 status, anos = verificar_status_ministerial(
                     str(row.get('data_inicio_catequese', '')),
@@ -2702,227 +2708,109 @@ elif menu == "👥 Gestão de Catequistas":
                     str(row.get('data_crisma', '')),
                     str(row.get('data_ministerio', ''))
                 )
-                status_data.append({"Nome": row['nome'], "Status": status, "Anos de Missão": anos, "Turmas": row['turma_vinculada']})
+                
+                # Inteligência: Descobrir o que falta
+                pendencias =[]
+                if str(row.get('data_batismo', '')).strip() in ["", "N/A", "None"]: pendencias.append("Batismo")
+                if str(row.get('data_eucaristia', '')).strip() in["", "N/A", "None"]: pendencias.append("Eucaristia")
+                if str(row.get('data_crisma', '')).strip() in ["", "N/A", "None"]: pendencias.append("Crisma")
+                if anos < 5: pendencias.append(f"Tempo ({anos}/5 anos)")
+                
+                motivo = ", ".join(pendencias) if pendencias else "Apto para o Ministério"
+                if status == 'MINISTRO': motivo = "Ministério Concedido"
+                
+                status_data.append({
+                    "Nome": row['nome'], "Status": status, "Anos": anos, 
+                    "Turmas": row.get('turma_vinculada', ''), "Pendência": motivo, "Telefone": row.get('telefone', '')
+                })
             
             df_status = pd.DataFrame(status_data)
             c_apt, c_cam = st.columns(2)
+            
             with c_apt:
                 st.success("**✅ Aptos / Ministros de Catequese**")
-                st.dataframe(df_status[df_status['Status'].isin(['MINISTRO', 'APTO'])], use_container_width=True, hide_index=True)
+                st.dataframe(df_status[df_status['Status'].isin(['MINISTRO', 'APTO'])][['Nome', 'Turmas', 'Status']], use_container_width=True, hide_index=True)
+                
+                if st.button("🗂️ GERAR DOSSIÊ COMPLETO DA EQUIPE (PDF)", use_container_width=True):
+                    st.session_state.pdf_lote_equipe = gerar_fichas_catequistas_lote(equipe_tecnica, df_pres_form, df_formacoes)
+                if "pdf_lote_equipe" in st.session_state:
+                    st.download_button("📥 BAIXAR DOSSIÊ DA EQUIPE", st.session_state.pdf_lote_equipe, "Dossie_Equipe_Catequetica.pdf", use_container_width=True)
+
             with c_cam:
                 st.warning("**⏳ Em Caminhada de Formação**")
-                st.dataframe(df_status[df_status['Status'] == 'EM_CAMINHADA'], use_container_width=True, hide_index=True)
+                df_caminhada = df_status[df_status['Status'] == 'EM_CAMINHADA']
+                for _, c in df_caminhada.iterrows():
+                    st.markdown(f"""
+                        <div style='background-color:#fff8e1; padding:10px; border-radius:8px; border-left:4px solid #ffa000; margin-bottom:8px;'>
+                            <b>{c['Nome']}</b><br>
+                            <small style='color:#666;'>Falta: {c['Pendência']}</small>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    num_limpo = "".join(filter(str.isdigit, str(c['Telefone'])))
+                    if num_limpo:
+                        if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
+                        if not num_limpo.startswith("55"): num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
+                        msg = f"Paz e Bem, {c['Nome'].split()[0]}! Passando para te incentivar na sua caminhada catequética. Vi que falta pouco para você alcançar os requisitos do Ministério (Falta: {c['Pendência']}). Conte com a coordenação! Deus abençoe."
+                        link_wa = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg)}"
+                        st.markdown(f"<a href='{link_wa}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:4px; border-radius:5px; font-size:11px; font-weight:bold; margin-bottom:10px;'>📲 Enviar Incentivo</div></a>", unsafe_allow_html=True)
 
-            if st.button("🗂️ GERAR DOSSIÊ COMPLETO DA EQUIPE (PDF)"):
-                st.session_state.pdf_lote_equipe = gerar_fichas_catequistas_lote(equipe_tecnica, df_pres_form, df_formacoes)
-            if "pdf_lote_equipe" in st.session_state:
-                st.download_button("📥 BAIXAR DOSSIÊ DA EQUIPE", st.session_state.pdf_lote_equipe, "Dossie_Equipe_Catequetica.pdf", use_container_width=True)
+            # --- MONITORAMENTO DE ACESSOS ---
+            st.divider()
+            st.markdown("#### 📡 Monitoramento de Acessos (Último Login)")
+            st.markdown("Acompanhe quais catequistas já estão utilizando o sistema e quem ainda não realizou o primeiro acesso.")
+            
+            lista_acessos =[]
+            hoje_str = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).strftime("%d/%m/%Y")
+            
+            for _, u in df_usuarios.iterrows():
+                if u['papel'] == 'ADMIN': continue
+                
+                nome = u['nome']
+                turmas = u.get('turma_vinculada', 'Sem turma')
+                sid = str(u.get('session_id', ''))
+                
+                if not sid or sid.strip() in["", "N/A", "None"]:
+                    status = "🔴 Nunca acessou"
+                    data_acesso = "Pendente"
+                    ordem = 0
+                elif "|" in sid:
+                    data_acesso = sid.split("|")[1]
+                    if data_acesso.startswith(hoje_str):
+                        status = "🟢 Online Hoje"
+                        ordem = 2
+                    else:
+                        status = "🟡 Já acessou"
+                        ordem = 1
+                else:
+                    status = "🟡 Já acessou"
+                    data_acesso = "Sessão Antiga"
+                    ordem = 1
+                    
+                lista_acessos.append({"Catequista": nome, "Turmas": turmas, "Status": status, "Último Acesso": data_acesso, "ordem": ordem})
+            
+            if lista_acessos:
+                df_acessos = pd.DataFrame(lista_acessos).sort_values(by=["ordem", "Catequista"], ascending=[False, True]).drop(columns=["ordem"])
+                st.dataframe(df_acessos, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum catequista encontrado.")
         else:
             st.info("Nenhum catequista cadastrado.")
 
-    with tab_lista:
-        st.subheader("📋 Relação e Perfil Individual")
-        if not equipe_tecnica.empty:
-            busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat").upper()
-            df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
-            st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
-            
-            st.divider()
-            escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat")
-            
-            if escolha_c:
-                u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
-                col_perfil, col_edit = st.tabs(["👤 Perfil e Ficha", "✏️ Editar Cadastro"])
-                
-                with col_perfil:
-                    c1, c2 = st.columns([2, 1])
-                    with c1:
-                        st.markdown(f"### {u['nome']}")
-                        st.write(f"**E-mail:** {u['email']}")
-                        st.write(f"**Telefone:** {u.get('telefone', 'N/A')}")
-                        st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[13] if len(u) > 13 else 'Não cadastrado'}")
-                        st.write(f"**Nascimento:** {formatar_data_br(u.get('data_nascimento', ''))}")
-                        st.write(f"**Turmas:** {u['turma_vinculada']}")
-                    with c2:
-                        if st.button(f"📄 Gerar Ficha PDF"):
-                            st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
-                        if "pdf_catequista" in st.session_state:
-                            st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf")
-
-                with col_edit:
-                    hoje = date.today()
-                    d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
-
-                    def converter_ou_none(valor):
-                        if pd.isna(valor) or str(valor).strip() in ["", "N/A", "None"]: return None
-                        try: return converter_para_data(valor)
-                        except: return None
-
-                    val_nasc = converter_ou_none(u.get('data_nascimento', '')) or hoje
-                    val_ini = converter_ou_none(u.get('data_inicio_catequese', '')) or hoje
-                    val_bat = converter_ou_none(u.get('data_batismo', ''))
-                    val_euc = converter_ou_none(u.get('data_eucaristia', ''))
-                    val_cri = converter_ou_none(u.get('data_crisma', ''))
-                    val_min = converter_ou_none(u.get('data_ministerio', ''))
-                    val_emerg = u.iloc[13] if len(u) > 13 else ""
-
-                    with st.form(f"form_edit_cat_{u['email']}"):
-                        st.markdown("#### 📍 Dados Cadastrais e Emergência")
-                        c1, c2 = st.columns(2)
-                        ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
-                        ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
-                        
-                        c3, c4 = st.columns(2)
-                        ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
-                        ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
-                        
-                        c5, c6 = st.columns(2)
-                        ed_papel = c5.selectbox("Papel", ["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
-                        ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
-                        
-                        lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
-                        ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
-                        
-                        st.divider()
-                        st.markdown("#### ⛪ Itinerário Sacramental (Marque apenas se possuir)")
-                        
-                        # Usamos session_state para controlar a habilitação dos campos de data
-                        if f"has_bat_{u['email']}" not in st.session_state: st.session_state[f"has_bat_{u['email']}"] = (val_bat is not None)
-                        if f"has_euc_{u['email']}" not in st.session_state: st.session_state[f"has_euc_{u['email']}"] = (val_euc is not None)
-                        if f"has_cri_{u['email']}" not in st.session_state: st.session_state[f"has_cri_{u['email']}"] = (val_cri is not None)
-                        if f"has_min_{u['email']}" not in st.session_state: st.session_state[f"has_min_{u['email']}"] = (val_min is not None)
-
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            has_ini = st.checkbox("Início na Catequese", value=True)
-                            dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
-                        with col2:
-                            has_bat = st.checkbox("Possui Batismo?", key=f"has_bat_{u['email']}")
-                            dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
-                        with col3:
-                            has_euc = st.checkbox("Possui 1ª Eucaristia?", key=f"has_euc_{u['email']}")
-                            dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
-
-                        col4, col5 = st.columns(2)
-                        with col4:
-                            has_cri = st.checkbox("Possui Crisma?", key=f"has_cri_{u['email']}")
-                            dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
-                        with col5:
-                            has_min = st.checkbox("É Ministro de Catequese?", key=f"has_min_{u['email']}")
-                            dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
-
-                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR"):
-                            str_ini = str(dt_ini) if has_ini else ""
-                            str_bat = str(dt_bat) if has_bat else ""
-                            str_euc = str(dt_euc) if has_euc else ""
-                            str_cri = str(dt_cri) if has_cri else ""
-                            str_min = str(dt_min) if has_min else ""
-
-                            dados_up =[
-                                ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
-                                ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
-                                str(u.iloc[13]) if len(u) > 13 else "", ed_emergencia
-                            ]
-                            
-                            nome_cat_original = str(u.get('nome', ''))
-                            
-                            if atualizar_usuario(u['email'], dados_up):
-                                with st.spinner("Sincronizando catequista com as turmas e histórico..."):
-                                    try:
-                                        if ed_nome != nome_cat_original:
-                                            from database import sincronizar_renomeacao_catequista
-                                            sincronizar_renomeacao_catequista(nome_cat_original, ed_nome)
-                                            
-                                        planilha = conectar_google_sheets()
-                                        if planilha:
-                                            aba_t = planilha.worksheet("turmas")
-                                            aba_u = planilha.worksheet("usuarios") # Garantir acesso à aba de usuários
-                                            nome_cat = ed_nome
-                                            
-                                            # Sincroniza a lista de turmas no cadastro do catequista (aba usuarios)
-                                            cel_u = aba_u.find(u['email'], in_column=2)
-                                            if cel_u:
-                                                aba_u.update_cell(cel_u.row, 5, ", ".join(ed_turmas))
-                                            
-                                            # Sincroniza a lista de catequistas na aba turmas
-                                            turmas_afetadas = set([t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip()] + ed_turmas)
-                                            
-                                            for t_nome in turmas_afetadas:
-                                                cel_t = aba_t.find(t_nome, in_column=2)
-                                                if cel_t:
-                                                    # Leitura segura com tratamento de erro
-                                                    try:
-                                                        v_atual = aba_t.cell(cel_t.row, 5).value or ""
-                                                    except: v_atual = ""
-                                                    
-                                                    v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                                    mudou = False
-                                                    
-                                                    if t_nome in ed_turmas:
-                                                        if nome_cat not in v_list:
-                                                            v_list.append(nome_cat); mudou = True
-                                                    else:
-                                                        if nome_cat in v_list:
-                                                            v_list.remove(nome_cat); mudou = True
-                                                            
-                                                    if mudou:
-                                                        aba_t.update_cell(cel_t.row, 5, ", ".join(v_list))
-                                    except Exception as e:
-                                        st.warning(f"Aviso: Erro ao sincronizar com a aba turmas: {e}")
-                                
-                                st.success("✅ Cadastro atualizado e sincronizado com as turmas!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-    with tab_novo:
-        st.subheader("➕ Criar Novo Acesso para Equipe")
-        with st.form("form_novo_cat", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            n_nome = c1.text_input("Nome Completo (EM MAIÚSCULAS)").upper()
-            n_email = c2.text_input("E-mail (Login)")
-            
-            c3, c4, c5 = st.columns(3)
-            n_senha = c3.text_input("Senha Inicial", type="password")
-            n_tel = c4.text_input("Telefone / WhatsApp")
-            n_nasc = c5.date_input("Data de Nascimento", value=date(1990, 1, 1), min_value=date(1930, 1, 1), max_value=date(2011, 12, 31), format="DD/MM/YYYY")
-            
-            c_papel, c_emerg = st.columns(2)
-            n_papel = c_papel.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"])
-            n_emergencia = c_emerg.text_input("🚨 Contato de Emergência (Nome e Tel)")
-            
-            lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
-            n_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes)
-            
-            if st.form_submit_button("🚀 CRIAR ACESSO E DEFINIR PERMISSÕES"):
-                if n_nome and n_email and n_senha:
-                    with st.spinner("Criando novo acesso..."):
-                        novo_user_lista = [
-                            n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
-                            n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia
-                        ]
-                        from database import adicionar_novo_usuario
-                        if adicionar_novo_usuario(novo_user_lista):
-                            try:
-                                planilha = conectar_google_sheets()
-                                if n_turmas:
-                                    aba_t = planilha.worksheet("turmas")
-                                    for t_nome in n_turmas:
-                                        cel_t = aba_t.find(t_nome)
-                                        if cel_t:
-                                            v_atual = aba_t.cell(cel_t.row, 5).value or ""
-                                            nova_v = f"{v_atual}, {n_nome}".strip(", ")
-                                            aba_t.update_cell(cel_t.row, 5, nova_v)
-                            except: pass
-                            st.success(f"✅ {n_nome} cadastrado com sucesso!"); st.balloons(); time.sleep(1); st.rerun()
-                else:
-                    st.warning("⚠️ Nome, E-mail e Senha são obrigatórios.")
-
-    with tab_formacao:
-        st.subheader("🎓 Itinerário de Formação Continuada")
+    # ==========================================================================
+    # HUB 2: UNIVERSIDADE CATEQUÉTICA (FORMAÇÃO)
+    # ==========================================================================
+    with tab_univ:
+        st.subheader("🎓 Universidade Catequética (Formação Continuada)")
         
+        col_status = None
         if not df_formacoes.empty:
             if 'status' in df_formacoes.columns: col_status = 'status'
             elif 'col_5' in df_formacoes.columns: col_status = 'col_5'
             else: col_status = df_formacoes.columns[5] if len(df_formacoes.columns) > 5 else None
-        else: col_status = None
+
+        # Calcula total de formações concluídas para a métrica de frequência
+        total_formacoes_concluidas = len(df_formacoes[df_formacoes[col_status].str.upper() == "CONCLUIDA"]) if col_status and not df_formacoes.empty else 0
 
         sub_tab_plan, sub_tab_valida, sub_tab_hist = st.tabs(["📅 Planejar Formação", "✅ Validar Presença", "📜 Histórico e Edição"])
 
@@ -2930,7 +2818,7 @@ elif menu == "👥 Gestão de Catequistas":
             with st.form("form_plan_formacao", clear_on_submit=True):
                 f_tema = st.text_input("Tema da Formação").upper()
                 c1, c2 = st.columns(2)
-                f_data = c1.date_input("Data Prevista", value=date.today())
+                f_data = c1.date_input("Data Prevista", value=date.today(), format="DD/MM/YYYY")
                 f_formador = c2.text_input("Quem irá ministrar? (Formador)").upper()
                 f_local = st.text_input("Local / Sala").upper()
                 
@@ -2955,16 +2843,26 @@ elif menu == "👥 Gestão de Catequistas":
                 st.divider()
                 st.markdown(f"### Lista de Presença: {escolha_f}")
                 
-                dict_equipe = dict(zip(equipe_tecnica['nome'], equipe_tecnica['email']))
-                selecionados = []
-                
+                selecionados =[]
                 cols = st.columns(2)
-                for i, (nome, email) in enumerate(dict_equipe.items()):
-                    with cols[i % 2]:
-                        if st.checkbox(nome, key=f"pres_f_{dados_f['id_formacao']}_{email}"):
-                            selecionados.append(email)
                 
-                if st.button("💾 FINALIZAR E REGISTRAR PRESENÇAS", use_container_width=True):
+                for i, (_, cat) in enumerate(equipe_tecnica.iterrows()):
+                    email_cat = cat['email']
+                    nome_cat = cat['nome']
+                    
+                    # Calcula a frequência histórica do catequista
+                    presencas_cat = len(df_pres_form[df_pres_form['email_participante'] == email_cat]) if not df_pres_form.empty else 0
+                    freq_cat = (presencas_cat / total_formacoes_concluidas * 100) if total_formacoes_concluidas > 0 else 100.0
+                    
+                    # Alerta visual se a frequência for baixa
+                    alerta_freq = "⚠️" if freq_cat < 50 and total_formacoes_concluidas > 0 else "✅"
+                    
+                    with cols[i % 2]:
+                        if st.checkbox(f"{nome_cat} ({alerta_freq} Freq: {freq_cat:.0f}%)", key=f"pres_f_{dados_f['id_formacao']}_{email_cat}"):
+                            selecionados.append(email_cat)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("💾 FINALIZAR E REGISTRAR PRESENÇAS", use_container_width=True, type="primary"):
                     if selecionados:
                         lista_p = [[dados_f['id_formacao'], email] for email in selecionados]
                         if salvar_presenca_formacao(lista_p):
@@ -2997,7 +2895,7 @@ elif menu == "👥 Gestão de Catequistas":
                         d_edit = df_hist[df_hist['tema'] == f_para_editar].iloc[0]
                         with st.form("form_edit_f_real"):
                             ed_tema = st.text_input("Tema", value=d_edit['tema']).upper()
-                            ed_data = st.date_input("Data", value=pd.to_datetime(d_edit['data']).date())
+                            ed_data = st.date_input("Data", value=pd.to_datetime(d_edit['data']).date(), format="DD/MM/YYYY")
                             ed_formador = st.text_input("Formador", value=d_edit['formador']).upper()
                             ed_local = st.text_input("Local", value=d_edit['local']).upper()
                             
@@ -3010,7 +2908,6 @@ elif menu == "👥 Gestão de Catequistas":
                                 if atualizar_formacao(d_edit['id_formacao'], [d_edit['id_formacao'], ed_tema, str(ed_data), ed_formador, ed_local, ed_status]):
                                     st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                             
-                            # Trava de Exclusão
                             st.markdown("---")
                             confirma_del = st.checkbox("Confirmo a exclusão desta formação")
                             if c_btn2.form_submit_button("🗑️ EXCLUIR", use_container_width=True):
@@ -3022,6 +2919,201 @@ elif menu == "👥 Gestão de Catequistas":
                                     st.error("Marque a caixa de confirmação para excluir.")
             else:
                 st.info("Nenhuma formação registrada.")
+
+    # ==========================================================================
+    # HUB 3: CENTRAL DE ACESSOS E PERFIS (CARTÓRIO)
+    # ==========================================================================
+    with tab_cartorio:
+        st.subheader("⚙️ Central de Acessos e Perfis")
+        
+        sub_lista, sub_novo = st.tabs(["📋 Lista e Edição de Perfis", "➕ Criar Novo Acesso"])
+        
+        with sub_lista:
+            if not equipe_tecnica.empty:
+                busca_c = st.text_input("🔍 Pesquisar catequista:", key="busca_cat").upper()
+                df_c_filtrado = equipe_tecnica[equipe_tecnica['nome'].str.contains(busca_c, na=False)] if busca_c else equipe_tecnica
+                st.dataframe(df_c_filtrado[['nome', 'email', 'turma_vinculada', 'papel']], use_container_width=True, hide_index=True)
+                
+                st.divider()
+                escolha_c = st.selectbox("Selecione para ver Perfil ou Editar:", [""] + df_c_filtrado['nome'].tolist(), key="sel_cat")
+                
+                if escolha_c:
+                    u = equipe_tecnica[equipe_tecnica['nome'] == escolha_c].iloc[0]
+                    
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        st.markdown(f"### {u['nome']}")
+                        st.write(f"**E-mail:** {u['email']} | **Telefone:** {u.get('telefone', 'N/A')}")
+                        st.warning(f"🚨 **EMERGÊNCIA:** {u.iloc[13] if len(u) > 13 else 'Não cadastrado'}")
+                        st.write(f"**Turmas:** {u['turma_vinculada']}")
+                    with c2:
+                        if st.button(f"📄 Gerar Ficha PDF", use_container_width=True):
+                            st.session_state.pdf_catequista = gerar_ficha_catequista_pdf(u.to_dict(), pd.DataFrame())
+                        if "pdf_catequista" in st.session_state:
+                            st.download_button("📥 Baixar Ficha", st.session_state.pdf_catequista, f"Ficha_{escolha_c}.pdf", use_container_width=True)
+
+                    with st.expander("✏️ Editar Cadastro e Permissões", expanded=False):
+                        hoje = date.today()
+                        d_min, d_max = date(1920, 1, 1), date(2050, 12, 31)
+
+                        def converter_ou_none(valor):
+                            if pd.isna(valor) or str(valor).strip() in["", "N/A", "None"]: return None
+                            try: return converter_para_data(valor)
+                            except: return None
+
+                        val_nasc = converter_ou_none(u.get('data_nascimento', '')) or hoje
+                        val_ini = converter_ou_none(u.get('data_inicio_catequese', '')) or hoje
+                        val_bat = converter_ou_none(u.get('data_batismo', ''))
+                        val_euc = converter_ou_none(u.get('data_eucaristia', ''))
+                        val_cri = converter_ou_none(u.get('data_crisma', ''))
+                        val_min = converter_ou_none(u.get('data_ministerio', ''))
+                        val_emerg = u.iloc[13] if len(u) > 13 else ""
+
+                        with st.form(f"form_edit_cat_{u['email']}"):
+                            st.markdown("#### 📍 Dados Cadastrais e Emergência")
+                            c1, c2 = st.columns(2)
+                            ed_nome = c1.text_input("Nome Completo", value=str(u.get('nome', ''))).upper()
+                            ed_senha = c2.text_input("Senha de Acesso", value=str(u.get('senha', '')), type="password")
+                            
+                            c3, c4 = st.columns(2)
+                            ed_tel = c3.text_input("Telefone / WhatsApp", value=str(u.get('telefone', '')))
+                            ed_emergencia = c4.text_input("🚨 Contato de Emergência (Nome e Tel)", value=val_emerg).upper()
+                            
+                            c5, c6 = st.columns(2)
+                            ed_papel = c5.selectbox("Papel",["CATEQUISTA", "COORDENADOR", "ADMIN"], index=["CATEQUISTA", "COORDENADOR", "ADMIN"].index(str(u.get('papel', 'CATEQUISTA')).upper()))
+                            ed_nasc = c6.date_input("Data de Nascimento", value=val_nasc, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
+                            
+                            lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
+                            ed_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes, default=[t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip() in lista_t_nomes])
+                            
+                            st.divider()
+                            st.markdown("#### ⛪ Itinerário Sacramental")
+                            
+                            if f"has_bat_{u['email']}" not in st.session_state: st.session_state[f"has_bat_{u['email']}"] = (val_bat is not None)
+                            if f"has_euc_{u['email']}" not in st.session_state: st.session_state[f"has_euc_{u['email']}"] = (val_euc is not None)
+                            if f"has_cri_{u['email']}" not in st.session_state: st.session_state[f"has_cri_{u['email']}"] = (val_cri is not None)
+                            if f"has_min_{u['email']}" not in st.session_state: st.session_state[f"has_min_{u['email']}"] = (val_min is not None)
+
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                has_ini = st.checkbox("Início na Catequese", value=True)
+                                dt_ini = st.date_input("Data Início", value=val_ini, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
+                            with col2:
+                                has_bat = st.checkbox("Possui Batismo?", key=f"has_bat_{u['email']}")
+                                dt_bat = st.date_input("Data Batismo", value=val_bat if val_bat else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_bat)
+                            with col3:
+                                has_euc = st.checkbox("Possui 1ª Eucaristia?", key=f"has_euc_{u['email']}")
+                                dt_euc = st.date_input("Data Eucaristia", value=val_euc if val_euc else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_euc)
+
+                            col4, col5 = st.columns(2)
+                            with col4:
+                                has_cri = st.checkbox("Possui Crisma?", key=f"has_cri_{u['email']}")
+                                dt_cri = st.date_input("Data Crisma", value=val_cri if val_cri else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_cri)
+                            with col5:
+                                has_min = st.checkbox("É Ministro de Catequese?", key=f"has_min_{u['email']}")
+                                dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
+
+                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", use_container_width=True):
+                                str_ini = str(dt_ini) if has_ini else ""
+                                str_bat = str(dt_bat) if has_bat else ""
+                                str_euc = str(dt_euc) if has_euc else ""
+                                str_cri = str(dt_cri) if has_cri else ""
+                                str_min = str(dt_min) if has_min else ""
+
+                                dados_up =[
+                                    ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
+                                    ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
+                                    str(u.iloc[12]) if len(u) > 12 else "", ed_emergencia
+                                ]
+                                
+                                nome_cat_original = str(u.get('nome', ''))
+                                
+                                if atualizar_usuario(u['email'], dados_up):
+                                    with st.spinner("Sincronizando catequista com as turmas e histórico..."):
+                                        try:
+                                            if ed_nome != nome_cat_original:
+                                                from database import sincronizar_renomeacao_catequista
+                                                sincronizar_renomeacao_catequista(nome_cat_original, ed_nome)
+                                                
+                                            planilha = conectar_google_sheets()
+                                            if planilha:
+                                                aba_t = planilha.worksheet("turmas")
+                                                aba_u = planilha.worksheet("usuarios")
+                                                nome_cat = ed_nome
+                                                
+                                                cel_u = aba_u.find(u['email'], in_column=2)
+                                                if cel_u: aba_u.update_cell(cel_u.row, 5, ", ".join(ed_turmas))
+                                                
+                                                turmas_afetadas = set([t.strip() for t in str(u.get('turma_vinculada', '')).split(",") if t.strip()] + ed_turmas)
+                                                
+                                                for t_nome in turmas_afetadas:
+                                                    cel_t = aba_t.find(t_nome, in_column=2)
+                                                    if cel_t:
+                                                        try: v_atual = aba_t.cell(cel_t.row, 5).value or ""
+                                                        except: v_atual = ""
+                                                        
+                                                        v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
+                                                        mudou = False
+                                                        
+                                                        if t_nome in ed_turmas:
+                                                            if nome_cat not in v_list:
+                                                                v_list.append(nome_cat); mudou = True
+                                                        else:
+                                                            if nome_cat in v_list:
+                                                                v_list.remove(nome_cat); mudou = True
+                                                                
+                                                        if mudou: aba_t.update_cell(cel_t.row, 5, ", ".join(v_list))
+                                        except Exception as e:
+                                            st.warning(f"Aviso: Erro ao sincronizar com a aba turmas: {e}")
+                                    
+                                    st.success("✅ Cadastro atualizado e sincronizado com as turmas!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+        with sub_novo:
+            st.markdown("#### ➕ Criar Novo Acesso para Equipe")
+            with st.form("form_novo_cat", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                n_nome = c1.text_input("Nome Completo (EM MAIÚSCULAS)").upper()
+                n_email = c2.text_input("E-mail (Login)")
+                
+                c3, c4, c5 = st.columns(3)
+                n_senha = c3.text_input("Senha Inicial", type="password")
+                n_tel = c4.text_input("Telefone / WhatsApp")
+                n_nasc = c5.date_input("Data de Nascimento", value=date(1990, 1, 1), min_value=date(1930, 1, 1), max_value=date(2011, 12, 31), format="DD/MM/YYYY")
+                
+                c_papel, c_emerg = st.columns(2)
+                n_papel = c_papel.selectbox("Papel / Nível de Acesso", ["CATEQUISTA", "COORDENADOR", "ADMIN"])
+                n_emergencia = c_emerg.text_input("🚨 Contato de Emergência (Nome e Tel)")
+                
+                lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
+                n_turmas = st.multiselect("Vincular às Turmas:", lista_t_nomes)
+                
+                if st.form_submit_button("🚀 CRIAR ACESSO E DEFINIR PERMISSÕES", use_container_width=True, type="primary"):
+                    if n_nome and n_email and n_senha:
+                        with st.spinner("Criando novo acesso..."):
+                            novo_user_lista =[
+                                n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
+                                n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia
+                            ]
+                            from database import adicionar_novo_usuario
+                            if adicionar_novo_usuario(novo_user_lista):
+                                try:
+                                    planilha = conectar_google_sheets()
+                                    if n_turmas:
+                                        aba_t = planilha.worksheet("turmas")
+                                        for t_nome in n_turmas:
+                                            cel_t = aba_t.find(t_nome)
+                                            if cel_t:
+                                                v_atual = aba_t.cell(cel_t.row, 5).value or ""
+                                                nova_v = f"{v_atual}, {n_nome}".strip(", ")
+                                                aba_t.update_cell(cel_t.row, 5, nova_v)
+                                except: pass
+                                st.success(f"✅ {n_nome} cadastrado com sucesso!"); st.balloons(); time.sleep(1); st.rerun()
+                    else:
+                        st.warning("⚠️ Nome, E-mail e Senha são obrigatórios.")
+
+
+
+                        
 
 # ==============================================================================
 # PÁGINA: 👨‍👩‍👧‍👦 GESTÃO FAMILIAR
