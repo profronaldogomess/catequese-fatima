@@ -1413,7 +1413,8 @@ elif menu == "👤 Perfil Individual":
     with tab_individual:
         st.subheader("🔍 Localizar Catequizando")
         
-        if eh_gestor:
+        # BLINDAGEM: A Secretaria precisa da mesma visão global de busca que o Gestor
+        if eh_gestor or eh_secretaria_perfil:
             c1, c2 = st.columns([2, 1])
             busca = c1.text_input("Pesquisar por nome:", key="busca_perfil").upper()
             lista_t = ["TODAS"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else[])
@@ -1630,7 +1631,7 @@ elif menu == "👤 Perfil Individual":
     # ==========================================================================
     # HUB 2: MALETA DE DOCUMENTOS (AUDITORIA VISUAL)
     # ==========================================================================
-    if eh_gestor and tab_auditoria_geral is not None:
+    if (eh_gestor or eh_secretaria_perfil) and tab_auditoria_geral is not None:
         with tab_auditoria_geral:
             st.subheader("📁 Maleta de Documentos (Auditoria por Turma)")
             lista_turmas_auditoria = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else[]
@@ -1708,7 +1709,7 @@ elif menu == "👤 Perfil Individual":
     # ==========================================================================
     # HUB 3: SECRETARIA PASTORAL (EGRESSOS E TRANSFERÊNCIAS)
     # ==========================================================================
-    if eh_gestor and tab_evasao_gestao is not None:
+    if (eh_gestor or eh_secretaria_perfil) and tab_evasao_gestao is not None:
         with tab_evasao_gestao:
             st.subheader("🏛️ Secretaria Pastoral (Egressos e Transferências)")
             df_saidas = df_cat[df_cat['status'] != 'ATIVO']
