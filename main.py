@@ -1799,14 +1799,14 @@ elif menu == "👤 Perfil Individual":
 
 
 # ==============================================================================
-# PÁGINA: 🏫 GESTÃO DE TURMAS
+# PÁGINA: 🏫 GESTÃO DE TURMAS E FILA DE ESPERA (TORRE DE CONTROLE 3.0)
 # ==============================================================================
 elif menu == "🏫 Gestão de Turmas":
     st.title("🏫 Gestão de Turmas e Fila de Espera")
     
-    t0, t1, t2, t3, t4, t_mapa, t5 = st.tabs([
-        "⏳ Fila de Espera", "📋 Visualizar Turmas", "➕ Criar Nova Turma", 
-        "✏️ Detalhes e Edição", "📊 Dashboard Local", "🗺️ Mapa de Planejamento", "🚀 Movimentação em Massa"
+    # --- NOVA ARQUITETURA: 3 SUPER HUBS ---
+    tab_visao, tab_painel, tab_logistica = st.tabs([
+        "🗺️ Visão Global", "🏫 Painel da Turma (Raio-X)", "🔀 Logística e Alocação"
     ])
     
     dias_opcoes =["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
@@ -1815,176 +1815,89 @@ elif menu == "🏫 Gestão de Turmas":
         "PERSEVERANÇA", "ADULTOS TURMA EUCARISTIA/BATISMO", "ADULTOS CRISMA"
     ]
 
-    with t0:
-        st.subheader("⏳ Fila de Espera")
-        if df_cat.empty:
-            st.info("Nenhum catequizando cadastrado no sistema.")
+    df_cron_local = ler_aba("cronograma")
+    df_enc_local = ler_aba("encontros")
+    df_pres_reu = ler_aba("presenca_reuniao")
+
+    # ==========================================================================
+    # HUB 1: VISÃO GLOBAL (MAPA DE PLANEJAMENTO)
+    # ==========================================================================
+    with tab_visao:
+        st.subheader("🗺️ Mapa Global de Planejamento e Itinerários")
+        st.markdown("Visão panorâmica de todas as turmas: saiba quem está planejando os encontros e quem está com o diário atrasado.")
+        
+        if not df_turmas.empty:
+            dados_mapa =[]
+            for _, t in df_turmas.iterrows():
+                nome_t = str(t['nome_turma']).strip().upper()
+                cats = str(t.get('catequista_responsavel', 'Não informado'))
+                
+                # 1. Encontros Realizados
+                enc_t = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == nome_t] if not df_enc_local.empty else pd.DataFrame()
+                qtd_realizados = len(enc_t)
+                ultimo_tema = "Nenhum"
+                if not enc_t.empty:
+                    enc_t['data_dt'] = pd.to_datetime(enc_t['data'], errors='coerce')
+                    enc_t = enc_t.sort_values(by='data_dt', ascending=False)
+                    ultimo_tema = enc_t.iloc[0]['tema']
+                
+                # 2. Cronograma Planejado
+                cron_t = df_cron_local[df_cron_local['etapa'].astype(str).str.strip().str.upper() == nome_t] if not df_cron_local.empty else pd.DataFrame()
+                qtd_planejados = len(cron_t)
+                proximo_tema = "Nenhum"
+                status_plan = "🔴 Sem Planejamento"
+                
+                if not cron_t.empty:
+                    col_status = 'status' if 'status' in cron_t.columns else ('col_4' if 'col_4' in cron_t.columns else None)
+                    if col_status:
+                        pendentes = cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+                        if not pendentes.empty:
+                            proximo_tema = pendentes.iloc[0]['titulo_tema']
+                            status_plan = "🟢 Em Dia"
+                        else:
+                            status_plan = "🟡 Planejamento Esgotado"
+                
+                dados_mapa.append({
+                    "Turma": nome_t, "Catequistas": cats, "Status": status_plan,
+                    "Realizados": qtd_realizados, "Planejados": qtd_planejados,
+                    "Último Tema Dado": ultimo_tema, "Próximo Tema": proximo_tema
+                })
+            
+            df_mapa = pd.DataFrame(dados_mapa)
+            
+            c1, c2 = st.columns([1, 2])
+            filtro_status = c1.selectbox("🔍 Filtrar por Status:",["TODOS", "🟢 Em Dia", "🟡 Planejamento Esgotado", "🔴 Sem Planejamento"])
+            if filtro_status != "TODOS":
+                df_mapa = df_mapa[df_mapa['Status'] == filtro_status]
+                
+            st.dataframe(df_mapa, use_container_width=True, hide_index=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            turmas_sem_plan = df_mapa[df_mapa['Status'] == "🔴 Sem Planejamento"]['Turma'].tolist()
+            if turmas_sem_plan:
+                st.error(f"⚠️ **Atenção Coordenação:** As seguintes turmas não possuem nenhum tema planejado no cronograma: {', '.join(turmas_sem_plan)}")
+                
+            turmas_esgotadas = df_mapa[df_mapa['Status'] == "🟡 Planejamento Esgotado"]['Turma'].tolist()
+            if turmas_esgotadas:
+                st.warning(f"⚠️ **Aviso:** As seguintes turmas já deram todos os temas planejados e precisam cadastrar novos: {', '.join(turmas_esgotadas)}")
         else:
-            turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else[]
-            fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
-            
-            if not fila_espera.empty:
-                colunas_para_exibir =['nome_completo', 'etapa', 'contato_principal']
-                cols_existentes =[c for c in colunas_para_exibir if c in fila_espera.columns]
-                st.dataframe(fila_espera[cols_existentes], use_container_width=True, hide_index=True)
-            else:
-                st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
+            st.info("Nenhuma turma cadastrada.")
 
-    with t1:
-        st.subheader("📋 Turmas Cadastradas")
-        st.dataframe(df_turmas, use_container_width=True, hide_index=True)
-
-    with t2:
-        st.subheader("➕ Cadastrar Nova Turma")
-        with st.form("form_criar_turma"):
-            c1, c2 = st.columns(2)
-            n_t = c1.text_input("Nome da Turma", help="Ex: PRÉ ETAPA 2026").upper()
-            e_t = c1.selectbox("Etapa Base", etapas_lista)
-            ano = c2.number_input("Ano Letivo", value=2026)
-            n_dias = st.multiselect("Dias de Encontro", dias_opcoes)
-            
-            st.markdown("---")
-            c3, c4 = st.columns(2)
-            turno_t = c3.selectbox("Turno do Encontro",["MANHÃ", "TARDE", "NOITE"])
-            local_t = c4.text_input("Local/Sala do Encontro", value="SALA").upper()
-            
-            cats_selecionados = st.multiselect("Catequistas Responsáveis (Opcional)", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else[])
-            
-            if st.form_submit_button("🚀 SALVAR NOVA TURMA"):
-                if n_t and n_dias:
-                    try:
-                        planilha = conectar_google_sheets()
-                        if planilha:
-                            nova_t =[f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
-                            planilha.worksheet("turmas").append_row(nova_t)
-                            
-                            if cats_selecionados:
-                                aba_u = planilha.worksheet("usuarios")
-                                for c_nome in cats_selecionados:
-                                    celula = aba_u.find(c_nome, in_column=1)
-                                    if celula:
-                                        v_atual = aba_u.cell(celula.row, 5).value or ""
-                                        v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
-                                        if n_t not in v_list:
-                                            v_list.append(n_t)
-                                            aba_u.update_cell(celula.row, 5, ", ".join(v_list))
-                            
-                            st.success(f"✅ Turma '{n_t}' criada com sucesso!")
-                            st.cache_data.clear(); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Erro ao salvar: {e}")
-                else: st.warning("⚠️ O Nome da Turma e os Dias de Encontro são obrigatórios.")
-
-    with t3:
-        st.subheader("✏️ Detalhes e Edição da Turma")
+    # ==========================================================================
+    # HUB 2: PAINEL DA TURMA (RAIO-X 360º)
+    # ==========================================================================
+    with tab_painel:
+        st.subheader("🏫 Raio-X e Gestão Profunda da Turma")
         if not df_turmas.empty:
-            sel_t = st.selectbox("Selecione a turma para editar:", [""] + df_turmas['nome_turma'].tolist(), key="sel_edit_turma")
+            t_alvo = st.selectbox("🔍 Selecione a turma para gerenciar:", df_turmas['nome_turma'].tolist(), key="sel_dash_turma_nova")
             
-            if sel_t:
-                d = df_turmas[df_turmas['nome_turma'] == sel_t].iloc[0]
-                nome_turma_original = str(d['nome_turma'])
+            if t_alvo:
+                alunos_t_todos = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
+                alunos_t = alunos_t_todos[alunos_t_todos['status'] == 'ATIVO']
+                info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
+                pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
                 
-                # --- CAMPOS DE EDIÇÃO ---
-                c1, c2 = st.columns(2)
-                en = c1.text_input("Nome da Turma", value=d['nome_turma']).upper()
-                ea = c2.number_input("Ano Letivo", value=int(d['ano']))
-                
-                ee = st.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(d['etapa']) if d['etapa'] in etapas_lista else 0)
-                
-                c3, c4 = st.columns(2)
-                pe = c3.text_input("Previsão Eucaristia", value=d.get('previsao_eucaristia', ''))
-                pc = c4.text_input("Previsão Crisma", value=d.get('previsao_crisma', ''))
-                
-                dias_atuais = [x.strip() for x in str(d.get('dias_semana', '')).split(',') if x.strip()]
-                ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
-                
-                c5, c6 = st.columns(2)
-                opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
-                turno_atual = str(d.get('turno', 'MANHÃ')).upper()
-                et = c5.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0)
-                el = c6.text_input("Local / Sala", value=d.get('local', 'SALA')).upper()
-                
-                lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else []
-                cats_atuais_lista = [c.strip() for c in str(d.get('catequista_responsavel', '')).split(',') if c.strip()]
-                ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats])
-                
-                st.markdown("---")
-                
-                # --- BOTÃO DE SALVAR ---
-                if st.button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", use_container_width=True):
-                    with st.spinner("Processando atualizações..."):
-                        lista_up = [str(d['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
-                        
-                        if atualizar_turma(d['id_turma'], lista_up):
-                            if en != nome_turma_original:
-                                sincronizar_renomeacao_turma_geral(nome_turma_original, en)
-                            sincronizar_logistica_turma_nos_catequizandos(en, et, el)
-                            
-                            # Sincronia de Catequistas na aba usuários
-                            planilha = conectar_google_sheets()
-                            if planilha:
-                                aba_u = planilha.worksheet("usuarios")
-                                for _, cat_row in equipe_tecnica.iterrows():
-                                    c_nome = cat_row['nome']
-                                    cel_u = aba_u.find(c_nome, in_column=1)
-                                    if cel_u:
-                                        v_atual = aba_u.cell(cel_u.row, 5).value or ""
-                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                        if c_nome in ed_cats and en not in v_list:
-                                            v_list.append(en); aba_u.update_cell(cel_u.row, 5, ", ".join(v_list))
-                                        elif c_nome not in ed_cats and en in v_list:
-                                            v_list.remove(en); aba_u.update_cell(cel_u.row, 5, ", ".join(v_list))
-                            
-                            st.success(f"✅ Turma '{en}' atualizada!"); time.sleep(1); st.rerun()
-
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
-                    st.error(f"Atenção: Ao excluir a turma '{sel_t}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
-                    
-                    # Chave única baseada no ID da turma para evitar conflitos
-                    confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {sel_t}", key=f"chk_del_{d['id_turma']}")
-                    
-                    if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, key=f"btn_del_{d['id_turma']}", use_container_width=True):
-                        with st.spinner("Movendo catequizandos e limpando histórico..."):
-                            alunos_da_turma = df_cat[df_cat['etapa'] == sel_t]
-                            if not alunos_da_turma.empty:
-                                ids_para_mover = alunos_da_turma['id_catequizando'].tolist()
-                                mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
-                            
-                            # Limpeza de vínculos na aba usuários
-                            planilha = conectar_google_sheets()
-                            if planilha:
-                                aba_u = planilha.worksheet("usuarios")
-                                for _, cat_row in equipe_tecnica.iterrows():
-                                    v_atual = str(cat_row.get('turma_vinculada', ''))
-                                    if sel_t in v_atual:
-                                        v_list = [x.strip() for x in v_atual.split(',') if x.strip()]
-                                        if sel_t in v_list:
-                                            v_list.remove(sel_t)
-                                            celula_u = aba_u.find(cat_row['nome'], in_column=1)
-                                            if celula_u: aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
-                            
-                            if excluir_turma(d['id_turma']):
-                                from database import limpar_lixo_turma_excluida
-                                limpar_lixo_turma_excluida(sel_t)
-                                st.success(f"Turma excluída! Catequizandos movidos para a Fila de Espera.")
-                                st.cache_data.clear(); time.sleep(2); st.rerun()
-
-    with t4:
-        st.subheader("📊 Inteligência Pastoral da Turma")
-        if not df_turmas.empty:
-            t_alvo = st.selectbox("Selecione a turma para auditoria:", df_turmas['nome_turma'].tolist(), key="sel_dash_turma")
-            
-            # Filtro rigoroso: Apenas catequizandos ATIVOS são considerados no Dashboard Local
-            alunos_t_todos = df_cat[df_cat['etapa'] == t_alvo] if not df_cat.empty else pd.DataFrame()
-            alunos_t = alunos_t_todos[alunos_t_todos['status'] == 'ATIVO']
-            
-            info_t = df_turmas[df_turmas['nome_turma'] == t_alvo].iloc[0]
-            pres_t = df_pres[df_pres['id_turma'] == t_alvo] if not df_pres.empty else pd.DataFrame()
-            df_cron_local = ler_aba("cronograma")
-            df_enc_local = ler_aba("encontros")
-            df_pres_reu = ler_aba("presenca_reuniao")
-            
-            if not alunos_t.empty:
+                # --- MÉTRICAS GERAIS ---
                 m1, m2, m3, m4, m5, m6 = st.columns(6)
                 qtd_cats_real = len(str(info_t['catequista_responsavel']).split(','))
                 m1.metric("Catequistas", qtd_cats_real)
@@ -2009,239 +1922,136 @@ elif menu == "🏫 Gestão de Turmas":
                 total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
                 total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
                 progresso = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
-                m6.metric("Itinerário", f"{progresso}%")
+                m6.metric("Itinerário", f"{min(progresso, 100)}%")
 
-                st.divider()
-                st.markdown("#### 🚀 Radar de Enturmação (Sugestão de Movimentação)")
-                etapa_base = str(info_t['etapa']).upper()
-                faixas = {"PRÉ": (4, 6), "PRIMEIRA ETAPA": (7, 8), "SEGUNDA ETAPA": (9, 10), "TERCEIRA ETAPA": (11, 13), "PERSEVERANÇA": (14, 15), "ADULTOS": (16, 99)}
-                min_ideal, max_ideal = faixas.get(etapa_base, (0, 99))
-                
-                fora_da_faixa =[]
-                for _, r in alunos_t.iterrows():
-                    idade_c = calcular_idade(r['data_nascimento'])
-                    if idade_c < min_ideal: fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔽 Abaixo"})
-                    elif idade_c > max_ideal: fora_da_faixa.append({"nome": r['nome_completo'], "idade": idade_c, "aviso": "🔼 Acima"})
-                
-                if fora_da_faixa:
-                    st.warning(f"⚠️ {len(fora_da_faixa)} catequizandos fora da faixa etária para {etapa_base}.")
-                    with st.expander("🔍 Ver quem precisa de atenção para movimentação"):
-                        for item in fora_da_faixa: st.write(f"**{item['nome']}** - {item['idade']} anos ({item['aviso']})")
-                else:
-                    st.success(f"✅ Todos na faixa etária ideal.")
-
-                st.divider()
-                col_sac, col_sau = st.columns(2)
-                with col_sac:
-                    st.markdown("#### 🕊️ Prontidão Sacramental")
+                # --- ALERTAS DA TURMA ---
+                with st.expander("🚨 Alertas de Enturmação, Sacramentos e Saúde", expanded=False):
+                    c_al1, c_al2, c_al3 = st.columns(3)
+                    
+                    # Idade
+                    etapa_base = str(info_t['etapa']).upper()
+                    faixas = {"PRÉ": (4, 6), "PRIMEIRA ETAPA": (7, 8), "SEGUNDA ETAPA": (9, 10), "TERCEIRA ETAPA": (11, 13), "PERSEVERANÇA": (14, 15), "ADULTOS": (16, 99)}
+                    min_ideal, max_ideal = faixas.get(etapa_base, (0, 99))
+                    fora_da_faixa = [r['nome_completo'] for _, r in alunos_t.iterrows() if not (min_ideal <= calcular_idade(r['data_nascimento']) <= max_ideal)]
+                    if fora_da_faixa: c_al1.warning(f"⚠️ {len(fora_da_faixa)} fora da faixa etária.")
+                    else: c_al1.success("✅ Idades adequadas.")
+                    
+                    # Sacramentos
                     sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
-                    if sem_batismo > 0: st.error(f"🚨 **{sem_batismo}** catequizandos sem Batismo.")
-                    else: st.success("✅ Todos os catequizandos são batizados.")
-                    docs_pend = len(alunos_t[~alunos_t['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])])
-                    if docs_pend > 0: st.warning(f"📄 **{docs_pend}** com pendência de documentos.")
-
-                with col_sau:
-                    st.markdown("#### 🏥 Cuidado e Inclusão")
+                    if sem_batismo > 0: c_al2.error(f"🚨 {sem_batismo} sem Batismo.")
+                    else: c_al2.success("✅ Todos batizados.")
+                    
+                    # Saúde
                     tgo_count = len(alunos_t[alunos_t['tgo_sn'] != 'NÃO'])
                     med_count = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
-                    if tgo_count > 0: st.info(f"💙 **{tgo_count}** catequizando(s) com TGO (Inclusão).")
-                    if med_count > 0: st.warning(f"💊 **{med_count}** fazem uso de medicamento/alergia.")
-                    if tgo_count == 0 and med_count == 0: st.write("Nenhuma observação de saúde registrada.")
+                    if tgo_count > 0 or med_count > 0: c_al3.info(f"💙 {tgo_count} TGO | 💊 {med_count} Med.")
+                    else: c_al3.success("✅ Sem alertas de saúde.")
 
                 st.divider()
-                st.markdown("#### 📖 Itinerário Pedagógico")
-                c_it1, c_it2 = st.columns(2)
-                with c_it1:
-                    st.caption("Últimos Temas Ministrados")
-                    if not df_enc_local.empty:
-                        ultimos = df_enc_local[df_enc_local['turma'] == t_alvo].sort_values('data', ascending=False).head(3)
-                        for _, u in ultimos.iterrows(): st.write(f"✅ {formatar_data_br(u['data'])} - {u['tema']}")
-                    else: st.write("Nenhum encontro registrado.")
-                with c_it2:
-                    st.caption("Próximos Temas Planejados")
-                    if not df_cron_local.empty:
-                        proximos = df_cron_local[(df_cron_local['etapa'] == t_alvo) & (df_cron_local.get('status','') != 'REALIZADO')].head(3)
-                        for _, p in proximos.iterrows(): st.write(f"📌 {p['titulo_tema']}")
-                    else: st.write("Cronograma concluído ou vazio.")
+                
+                # --- SUB-ABAS DE GESTÃO DA TURMA ---
+                sub_edit, sub_plan, sub_hist, sub_doc = st.tabs([
+                    "✏️ Editar Turma", "📅 Planejar Temas", "📜 Diário e Faltas", "📄 Documentos e Auditoria"
+                ])
+                
+                with sub_edit:
+                    st.markdown("#### ✏️ Detalhes e Edição da Turma")
+                    nome_turma_original = str(info_t['nome_turma'])
+                    with st.form(f"form_edit_turma_{info_t['id_turma']}"):
+                        c1, c2 = st.columns(2)
+                        en = c1.text_input("Nome da Turma", value=info_t['nome_turma']).upper()
+                        ea = c2.number_input("Ano Letivo", value=int(info_t['ano']))
+                        ee = st.selectbox("Etapa Base", etapas_lista, index=etapas_lista.index(info_t['etapa']) if info_t['etapa'] in etapas_lista else 0)
+                        
+                        c3, c4 = st.columns(2)
+                        pe = c3.text_input("Previsão Eucaristia", value=info_t.get('previsao_eucaristia', ''))
+                        pc = c4.text_input("Previsão Crisma", value=info_t.get('previsao_crisma', ''))
+                        
+                        dias_atuais =[x.strip() for x in str(info_t.get('dias_semana', '')).split(',') if x.strip()]
+                        ed_dias = st.multiselect("Dias de Encontro", dias_opcoes, default=[d for d in dias_atuais if d in dias_opcoes])
+                        
+                        c5, c6 = st.columns(2)
+                        opcoes_turno = ["MANHÃ", "TARDE", "NOITE"]
+                        turno_atual = str(info_t.get('turno', 'MANHÃ')).upper()
+                        et = c5.selectbox("Turno", opcoes_turno, index=opcoes_turno.index(turno_atual) if turno_atual in opcoes_turno else 0)
+                        el = c6.text_input("Local / Sala", value=info_t.get('local', 'SALA')).upper()
+                        
+                        lista_todos_cats = equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else[]
+                        cats_atuais_lista =[c.strip() for c in str(info_t.get('catequista_responsavel', '')).split(',') if c.strip()]
+                        ed_cats = st.multiselect("Catequistas Responsáveis", options=lista_todos_cats, default=[c for c in cats_atuais_lista if c in lista_todos_cats])
+                        
+                        if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", use_container_width=True):
+                            with st.spinner("Processando atualizações..."):
+                                lista_up = [str(info_t['id_turma']), en, ee, int(ea), ", ".join(ed_cats), ", ".join(ed_dias), pe, pc, et, el]
+                                if atualizar_turma(info_t['id_turma'], lista_up):
+                                    if en != nome_turma_original: sincronizar_renomeacao_turma_geral(nome_turma_original, en)
+                                    sincronizar_logistica_turma_nos_catequizandos(en, et, el)
+                                    
+                                    planilha = conectar_google_sheets()
+                                    if planilha:
+                                        aba_u = planilha.worksheet("usuarios")
+                                        for _, cat_row in equipe_tecnica.iterrows():
+                                            c_nome = cat_row['nome']
+                                            cel_u = aba_u.find(c_nome, in_column=1)
+                                            if cel_u:
+                                                v_atual = aba_u.cell(cel_u.row, 5).value or ""
+                                                v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
+                                                if c_nome in ed_cats and en not in v_list:
+                                                    v_list.append(en); aba_u.update_cell(cel_u.row, 5, ", ".join(v_list))
+                                                elif c_nome not in ed_cats and en in v_list:
+                                                    v_list.remove(en); aba_u.update_cell(cel_u.row, 5, ", ".join(v_list))
+                                    st.success(f"✅ Turma '{en}' atualizada!"); time.sleep(1); st.rerun()
 
-                st.divider()
-                st.markdown("#### 📄 Documentação e Auditoria")
-                col_doc1, col_doc2 = st.columns(2)
-                
-                with col_doc1:
-                    if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_turma"):
-                        with st.spinner("Analisando prontidão da turma..."):
-                            sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
-                            batizados = len(alunos_t) - sem_batismo
-                            tgo_c = len(alunos_t[alunos_t['tgo_sn'] != 'NÃO'])
-                            saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
-                            
-                            perc_pais = 0
-                            if not df_pres_reu.empty:
-                                pais_presentes = df_pres_reu[df_pres_reu.iloc[:, 3] == t_alvo].iloc[:, 1].nunique()
-                                perc_pais = int((pais_presentes / len(alunos_t)) * 100) if len(alunos_t) > 0 else 0
+                    with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
+                        st.error(f"Atenção: Ao excluir a turma '{t_alvo}', todos os catequizandos nela matriculados serão movidos para a Fila de Espera.")
+                        confirmar_exclusao = st.checkbox(f"Confirmo a exclusão definitiva da turma {t_alvo}", key=f"chk_del_{info_t['id_turma']}")
+                        if st.button("🗑️ EXCLUIR TURMA AGORA", type="primary", disabled=not confirmar_exclusao, key=f"btn_del_{info_t['id_turma']}", use_container_width=True):
+                            with st.spinner("Movendo catequizandos e limpando histórico..."):
+                                if not alunos_t_todos.empty:
+                                    ids_para_mover = alunos_t_todos['id_catequizando'].tolist()
+                                    mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
+                                
+                                planilha = conectar_google_sheets()
+                                if planilha:
+                                    aba_u = planilha.worksheet("usuarios")
+                                    for _, cat_row in equipe_tecnica.iterrows():
+                                        v_atual = str(cat_row.get('turma_vinculada', ''))
+                                        if t_alvo in v_atual:
+                                            v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
+                                            if t_alvo in v_list:
+                                                v_list.remove(t_alvo)
+                                                celula_u = aba_u.find(cat_row['nome'], in_column=1)
+                                                if celula_u: aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
+                                
+                                if excluir_turma(info_t['id_turma']):
+                                    from database import limpar_lixo_turma_excluida
+                                    limpar_lixo_turma_excluida(t_alvo)
+                                    st.success(f"Turma excluída! Catequizandos movidos para a Fila de Espera."); st.cache_data.clear(); time.sleep(2); st.rerun()
 
-                            total_p = len(df_cron_local[df_cron_local['etapa'] == t_alvo]) if not df_cron_local.empty else 0
-                            total_f = len(df_enc_local[df_enc_local['turma'] == t_alvo]) if not df_enc_local.empty else 0
-                            prog_it = int((total_f / (total_f + total_p) * 100)) if (total_f + total_p) > 0 else 0
-
-                            lista_geral =[]
-                            for _, r in alunos_t.iterrows():
-                                f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-                                has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
-                                lista_geral.append({
-                                    'nome': r['nome_completo'], 'faltas': f, 'batismo': r['batizado_sn'],
-                                    'eucaristia': has_euc, 'status': r['status']
-                                })
-
-                            resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%. Pais: {perc_pais}%. Batizados: {batizados}. Pendentes Batismo: {sem_batismo}. TGO: {tgo_c}."
-                            parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
-
-                            st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_pdf(
-                                t_alvo, 
-                                {
-                                    'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 
-                                    'freq_global': freq_global, 'idade_media': idade_media_val,
-                                    'engaj_pais': perc_pais, 'progresso_it': prog_it,
-                                    'batizados': batizados, 'pend_batismo': sem_batismo,
-                                    'tgo': tgo_c, 'saude': saude_c
-                                }, 
-                                {'geral': lista_geral}, 
-                                parecer_ia
-                            )
-                    if f"pdf_auditoria_{t_alvo}" in st.session_state:
-                        st.write("")
-                        st.download_button(
-                            label=f"📥 BAIXAR AUDITORIA: {t_alvo}",
-                            data=st.session_state[f"pdf_auditoria_{t_alvo}"],
-                            file_name=f"Auditoria_Pastoral_{t_alvo.replace(' ', '_')}_{date.today().year}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                with col_doc2:
-                    if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
-                        with st.spinner("Gerando fichas individuais..."):
-                            pdf_fichas = gerar_fichas_turma_completa(t_alvo, alunos_t)
-                            st.session_state[f"pdf_fichas_{t_alvo}"] = pdf_fichas
-                    if f"pdf_fichas_{t_alvo}" in st.session_state:
-                        st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
-
-                st.divider()
-                st.markdown("### 📋 Lista Nominal de Caminhada")
-                lista_preview =[]
-                for _, r in alunos_t.iterrows():
-                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-                    idade_c = calcular_idade(r['data_nascimento'])
-                    lista_preview.append({'Catequizando': r['nome_completo'], 'Idade': f"{idade_c} anos", 'Faltas': f, 'Status': r['status']})
-                st.dataframe(pd.DataFrame(lista_preview), use_container_width=True, hide_index=True)
-            else:
-                st.info("Selecione uma turma com catequizandos ativos.")
-
-    with t_mapa:
-        st.subheader("🗺️ Mapa Global de Planejamento e Itinerários")
-        st.markdown("Visão panorâmica de todas as turmas: saiba quem está planejando os encontros e quem está com o diário atrasado.")
-        
-        df_cron_mapa = ler_aba("cronograma")
-        df_enc_mapa = ler_aba("encontros")
-        
-        if not df_turmas.empty:
-            dados_mapa =[]
-            for _, t in df_turmas.iterrows():
-                nome_t = str(t['nome_turma']).strip().upper()
-                cats = str(t.get('catequista_responsavel', 'Não informado'))
-                
-                # 1. Encontros Realizados
-                enc_t = df_enc_mapa[df_enc_mapa['turma'].astype(str).str.strip().str.upper() == nome_t] if not df_enc_mapa.empty else pd.DataFrame()
-                qtd_realizados = len(enc_t)
-                ultimo_tema = "Nenhum"
-                if not enc_t.empty:
-                    enc_t['data_dt'] = pd.to_datetime(enc_t['data'], errors='coerce')
-                    enc_t = enc_t.sort_values(by='data_dt', ascending=False)
-                    ultimo_tema = enc_t.iloc[0]['tema']
-                
-                # 2. Cronograma Planejado
-                cron_t = df_cron_mapa[df_cron_mapa['etapa'].astype(str).str.strip().str.upper() == nome_t] if not df_cron_mapa.empty else pd.DataFrame()
-                qtd_planejados = len(cron_t)
-                proximo_tema = "Nenhum"
-                status_plan = "🔴 Sem Planejamento"
-                
-                if not cron_t.empty:
-                    col_status = 'status' if 'status' in cron_t.columns else ('col_4' if 'col_4' in cron_t.columns else None)
-                    if col_status:
-                        pendentes = cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
-                        if not pendentes.empty:
-                            proximo_tema = pendentes.iloc[0]['titulo_tema']
-                            status_plan = "🟢 Em Dia"
-                        else:
-                            status_plan = "🟡 Planejamento Esgotado"
-                
-                dados_mapa.append({
-                    "Turma": nome_t,
-                    "Catequistas": cats,
-                    "Status": status_plan,
-                    "Realizados": qtd_realizados,
-                    "Planejados": qtd_planejados,
-                    "Último Tema Dado": ultimo_tema,
-                    "Próximo Tema": proximo_tema
-                })
-            
-            df_mapa = pd.DataFrame(dados_mapa)
-            
-            # Filtros rápidos para a Coordenação
-            c1, c2 = st.columns([1, 2])
-            filtro_status = c1.selectbox("🔍 Filtrar por Status:",["TODOS", "🟢 Em Dia", "🟡 Planejamento Esgotado", "🔴 Sem Planejamento"])
-            if filtro_status != "TODOS":
-                df_mapa = df_mapa[df_mapa['Status'] == filtro_status]
-                
-            st.dataframe(df_mapa, use_container_width=True, hide_index=True)
-            
-            # Alertas Automáticos
-            st.markdown("<br>", unsafe_allow_html=True)
-            turmas_sem_plan = df_mapa[df_mapa['Status'] == "🔴 Sem Planejamento"]['Turma'].tolist()
-            if turmas_sem_plan:
-                st.error(f"⚠️ **Atenção Coordenação:** As seguintes turmas não possuem nenhum tema planejado no cronograma: {', '.join(turmas_sem_plan)}")
-                
-            turmas_esgotadas = df_mapa[df_mapa['Status'] == "🟡 Planejamento Esgotado"]['Turma'].tolist()
-            if turmas_esgotadas:
-                st.warning(f"⚠️ **Aviso:** As seguintes turmas já deram todos os temas planejados e precisam cadastrar novos: {', '.join(turmas_esgotadas)}")
-            
-            # ==================================================================
-            # NOVO: RAIO-X E GESTÃO PROFUNDA DA TURMA (VISÃO DO COORDENADOR)
-            # ==================================================================
-            st.divider()
-            st.subheader("🔎 Raio-X e Gestão Profunda da Turma")
-            st.markdown("Selecione uma turma abaixo para planejar novos temas, editar diários e analisar a frequência detalhada de cada encontro.")
-            
-            turma_raiox = st.selectbox("Selecione a Turma para o Raio-X:", df_turmas['nome_turma'].tolist(), key="sel_raiox_turma")
-            
-            if turma_raiox:
-                tab_plan_rx, tab_hist_rx = st.tabs(["📅 Planejar Temas (Cronograma)", "📜 Histórico, Edição e Faltas (Diário)"])
-                
-                with tab_plan_rx:
-                    st.markdown(f"#### Adicionar novo tema para: {turma_raiox}")
-                    with st.form(f"form_plan_rx_{turma_raiox}", clear_on_submit=True):
+                with sub_plan:
+                    st.markdown("#### 📅 Adicionar novo tema ao Cronograma")
+                    with st.form(f"form_plan_rx_{t_alvo}", clear_on_submit=True):
                         novo_tema_rx = st.text_input("Título do Tema").upper()
                         desc_tema_rx = st.text_area("Objetivo / Descrição Base (Opcional)", height=100)
                         if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
                             if novo_tema_rx:
-                                if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_raiox, novo_tema_rx, desc_tema_rx, "PENDENTE"]):
+                                if salvar_tema_cronograma([f"PLAN-{int(time.time())}", t_alvo, novo_tema_rx, desc_tema_rx, "PENDENTE"]):
                                     st.success("Tema planejado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                     
                     st.markdown("---")
                     st.markdown("#### 📋 Temas Pendentes na Fila")
-                    cron_t_rx = df_cron_mapa[(df_cron_mapa['etapa'].astype(str).str.strip().str.upper() == turma_raiox.strip().upper())]
+                    cron_t_rx = df_cron_local[(df_cron_local['etapa'].astype(str).str.strip().str.upper() == t_alvo.strip().upper())]
                     col_status_rx = 'status' if 'status' in cron_t_rx.columns else ('col_4' if 'col_4' in cron_t_rx.columns else None)
                     if col_status_rx and not cron_t_rx.empty:
                         pendentes_rx = cron_t_rx[cron_t_rx[col_status_rx].astype(str).str.strip().str.upper() != 'REALIZADO']
                         if not pendentes_rx.empty:
                             st.dataframe(pendentes_rx[['titulo_tema', 'descricao_base']], use_container_width=True, hide_index=True)
-                        else:
-                            st.info("Nenhum tema pendente no momento.")
-                    else:
-                        st.info("Nenhum tema cadastrado.")
+                        else: st.info("Nenhum tema pendente no momento.")
+                    else: st.info("Nenhum tema cadastrado.")
 
-                with tab_hist_rx:
-                    enc_t_rx = df_enc_mapa[df_enc_mapa['turma'].astype(str).str.strip().str.upper() == turma_raiox.strip().upper()].copy()
+                with sub_hist:
+                    st.markdown("#### 📜 Histórico, Edição e Faltas (Diário)")
+                    enc_t_rx = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()].copy()
                     if not enc_t_rx.empty:
                         enc_t_rx['data_dt'] = pd.to_datetime(enc_t_rx['data'], errors='coerce')
                         enc_t_rx = enc_t_rx.sort_values(by='data_dt', ascending=False)
@@ -2252,8 +2062,7 @@ elif menu == "🏫 Gestão de Turmas":
                             cat_e = row.get('catequista', 'Não informado')
                             obs_e = row.get('observacoes', '')
                             
-                            # Buscar presenças exatas deste encontro
-                            pres_e = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_raiox.strip().upper()) & (df_pres['data_encontro'].astype(str) == data_e)]
+                            pres_e = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()) & (df_pres['data_encontro'].astype(str) == data_e)]
                             qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE'])
                             qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
                             faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
@@ -2263,10 +2072,8 @@ elif menu == "🏫 Gestão de Turmas":
                                 c_met1.metric("✅ Presentes", qtd_pres)
                                 c_met2.metric("❌ Ausentes", qtd_aus)
                                 
-                                if faltosos:
-                                    st.error(f"**Faltosos neste dia:** {', '.join(faltosos)}")
-                                else:
-                                    st.success("**Nenhuma falta registrada neste dia!**")
+                                if faltosos: st.error(f"**Faltosos neste dia:** {', '.join(faltosos)}")
+                                else: st.success("**Nenhuma falta registrada neste dia!**")
                                 
                                 st.markdown("---")
                                 st.markdown("**✏️ Editar Registro do Encontro**")
@@ -2274,28 +2081,127 @@ elif menu == "🏫 Gestão de Turmas":
                                     ed_tema_rx = st.text_input("Tema Ministrado:", value=tema_e).upper()
                                     ed_obs_rx = st.text_area("Observações / Relato:", value=obs_e, height=100)
                                     
-                                    if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                                    c_btn1, c_btn2 = st.columns([3, 1])
+                                    btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
+                                    btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR ENCONTRO", use_container_width=True)
+                                    
+                                    st.markdown("---")
+                                    confirma_del = st.checkbox("⚠️ Confirmo a exclusão deste encontro e de todas as presenças do dia", key=f"chk_del_rx_{data_e}_{idx}")
+                                    
+                                    if btn_salvar:
                                         with st.spinner("Atualizando diário..."):
-                                            if atualizar_encontro_global(turma_raiox, data_e, ed_tema_rx, ed_obs_rx):
+                                            if atualizar_encontro_global(t_alvo, data_e, ed_tema_rx, ed_obs_rx):
                                                 st.success("Atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                    if btn_excluir:
+                                        if confirma_del:
+                                            with st.spinner("Excluindo encontro e revertendo cronograma..."):
+                                                if excluir_encontro_cascata(t_alvo, data_e, tema_e):
+                                                    st.success("Encontro excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        else: st.error("⚠️ Marque a caixa de confirmação para excluir.")
                     else:
                         st.info("Nenhum encontro registrado para esta turma.")
 
+                with sub_doc:
+                    st.markdown("#### 📄 Documentação e Auditoria")
+                    col_doc1, col_doc2 = st.columns(2)
+                    with col_doc1:
+                        if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_turma"):
+                            with st.spinner("Analisando prontidão da turma..."):
+                                sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
+                                batizados = len(alunos_t) - sem_batismo
+                                tgo_c = len(alunos_t[alunos_t['tgo_sn'] != 'NÃO'])
+                                saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
+                                
+                                lista_geral =[]
+                                for _, r in alunos_t.iterrows():
+                                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
+                                    has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
+                                    lista_geral.append({'nome': r['nome_completo'], 'faltas': f, 'batismo': r['batizado_sn'], 'eucaristia': has_euc, 'status': r['status']})
+
+                                resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%. Pais: {perc_pais}%. Batizados: {batizados}. Pendentes Batismo: {sem_batismo}. TGO: {tgo_c}."
+                                parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
+
+                                st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_pdf(
+                                    t_alvo, 
+                                    {'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 'freq_global': freq_global, 'idade_media': idade_media_val, 'engaj_pais': perc_pais, 'progresso_it': progresso, 'batizados': batizados, 'pend_batismo': sem_batismo, 'tgo': tgo_c, 'saude': saude_c}, 
+                                    {'geral': lista_geral}, parecer_ia
+                                )
+                        if f"pdf_auditoria_{t_alvo}" in st.session_state:
+                            st.download_button(label=f"📥 BAIXAR AUDITORIA: {t_alvo}", data=st.session_state[f"pdf_auditoria_{t_alvo}"], file_name=f"Auditoria_{t_alvo}.pdf", mime="application/pdf", use_container_width=True)
+                    
+                    with col_doc2:
+                        if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
+                            with st.spinner("Gerando fichas individuais..."):
+                                st.session_state[f"pdf_fichas_{t_alvo}"] = gerar_fichas_turma_completa(t_alvo, alunos_t)
+                        if f"pdf_fichas_{t_alvo}" in st.session_state:
+                            st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
         else:
             st.info("Nenhuma turma cadastrada.")
 
+    # ==========================================================================
+    # HUB 3: LOGÍSTICA E ALOCAÇÃO (RH DA CATEQUESE)
+    # ==========================================================================
+    with tab_logistica:
+        st.subheader("🔀 Logística, Fila de Espera e Alocação")
+        
+        col_fila, col_nova = st.columns([2, 1])
+        
+        with col_fila:
+            st.markdown("#### ⏳ Fila de Espera")
+            if df_cat.empty:
+                st.info("Nenhum catequizando cadastrado no sistema.")
+            else:
+                turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else []
+                fila_espera = df_cat[(df_cat['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_cat['etapa'].isin(turmas_reais))]
+                
+                if not fila_espera.empty:
+                    st.dataframe(fila_espera[['nome_completo', 'etapa', 'contato_principal']], use_container_width=True, hide_index=True)
+                else:
+                    st.success("Todos os catequizandos estão alocados em turmas válidas! 🎉")
 
-    with t5:
-        st.subheader("🚀 Movimentação em Massa")
+        with col_nova:
+            with st.expander("➕ Criar Nova Turma", expanded=False):
+                with st.form("form_criar_turma"):
+                    n_t = st.text_input("Nome da Turma", help="Ex: PRÉ ETAPA 2026").upper()
+                    e_t = st.selectbox("Etapa Base", etapas_lista)
+                    ano = st.number_input("Ano Letivo", value=2026)
+                    n_dias = st.multiselect("Dias de Encontro", dias_opcoes)
+                    turno_t = st.selectbox("Turno do Encontro",["MANHÃ", "TARDE", "NOITE"])
+                    local_t = st.text_input("Local/Sala", value="SALA").upper()
+                    cats_selecionados = st.multiselect("Catequistas Responsáveis", equipe_tecnica['nome'].tolist() if not equipe_tecnica.empty else[])
+                    
+                    if st.form_submit_button("🚀 SALVAR NOVA TURMA", use_container_width=True):
+                        if n_t and n_dias:
+                            try:
+                                planilha = conectar_google_sheets()
+                                if planilha:
+                                    nova_t =[f"TRM-{int(time.time())}", n_t, e_t, int(ano), ", ".join(cats_selecionados), ", ".join(n_dias), "", "", turno_t, local_t]
+                                    planilha.worksheet("turmas").append_row(nova_t)
+                                    
+                                    if cats_selecionados:
+                                        aba_u = planilha.worksheet("usuarios")
+                                        for c_nome in cats_selecionados:
+                                            celula = aba_u.find(c_nome, in_column=1)
+                                            if celula:
+                                                v_atual = aba_u.cell(celula.row, 5).value or ""
+                                                v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
+                                                if n_t not in v_list:
+                                                    v_list.append(n_t)
+                                                    aba_u.update_cell(celula.row, 5, ", ".join(v_list))
+                                    st.success(f"✅ Turma '{n_t}' criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            except Exception as e: st.error(f"Erro ao salvar: {e}")
+                        else: st.warning("⚠️ Nome e Dias são obrigatórios.")
+
+        st.divider()
+        st.markdown("#### 🚀 Movimentação em Massa")
         if not df_turmas.empty and not df_cat.empty:
             c1, c2 = st.columns(2)
-            opcoes_origem =["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
+            opcoes_origem = ["CATEQUIZANDOS SEM TURMA"] + sorted(df_cat['etapa'].unique().tolist())
             t_origem = c1.selectbox("1. Turma de ORIGEM (Sair de):", opcoes_origem, key="mov_orig_turma")
             t_destino = c2.selectbox("2. Turma de DESTINO (Ir para):", df_turmas['nome_turma'].tolist(), key="mov_dest_turma")
             
             if t_origem:
                 alunos_mov = df_cat[(df_cat['etapa'] == t_origem) & (df_cat['status'] == 'ATIVO')]
-                
                 if not alunos_mov.empty:
                     def toggle_all_mov():
                         for _, al in alunos_mov.iterrows():
@@ -2305,23 +2211,20 @@ elif menu == "🏫 Gestão de Turmas":
                     
                     lista_ids_selecionados =[]
                     cols = st.columns(2)
-                    
                     for i, (_, al) in enumerate(alunos_mov.iterrows()):
                         idade_atual = calcular_idade(al['data_nascimento'])
                         with cols[i % 2]:
-                            label_exibicao = f"{al['nome_completo']} ({idade_atual} anos)"
-                            if st.checkbox(label_exibicao, key=f"mov_al_{al['id_catequizando']}"):
+                            if st.checkbox(f"{al['nome_completo']} ({idade_atual} anos)", key=f"mov_al_{al['id_catequizando']}"):
                                 lista_ids_selecionados.append(al['id_catequizando'])
                     
-                    st.divider()
+                    st.markdown("<br>", unsafe_allow_html=True)
                     col_mov1, col_mov2 = st.columns(2)
                     with col_mov1:
                         if st.button(f"🚀 MOVER {len(lista_ids_selecionados)} PARA {t_destino}", key="btn_exec_mov", use_container_width=True):
                             if t_destino and t_origem != t_destino and lista_ids_selecionados:
                                 if mover_catequizandos_em_massa(lista_ids_selecionados, t_destino):
                                     st.success(f"✅ Sucesso! {len(lista_ids_selecionados)} movidos para {t_destino}."); st.cache_data.clear(); time.sleep(2); st.rerun()
-                            else: 
-                                st.error("Selecione um destino válido e ao menos um catequizando.")
+                            else: st.error("Selecione um destino válido e ao menos um catequizando.")
                     
                     with col_mov2:
                         if st.button(f"🎓 CONCLUIR CAMINHADA DE {len(lista_ids_selecionados)} CATEQUIZANDOS", key="btn_exec_concluir", type="primary", use_container_width=True, help="Marca o status como CONCLUÍDO (Egresso) após a Crisma."):
@@ -2331,13 +2234,15 @@ elif menu == "🏫 Gestão de Turmas":
                                         cat_row = df_cat[df_cat['id_catequizando'] == cid].iloc[0]
                                         lista_up = cat_row.tolist()
                                         while len(lista_up) < 30: lista_up.append("N/A")
-                                        lista_up[12] = "CONCLUÍDO" # Índice 12 é a coluna de Status
+                                        lista_up[12] = "CONCLUÍDO"
                                         atualizar_catequizando(cid, lista_up)
                                     st.success(f"✅ Glória a Deus! {len(lista_ids_selecionados)} catequizandos formados com sucesso!"); st.balloons(); st.cache_data.clear(); time.sleep(2); st.rerun()
-                            else:
-                                st.error("Selecione ao menos um catequizando.")
+                            else: st.error("Selecione ao menos um catequizando.")
                 else:
                     st.info("Não há catequizandos ativos nesta turma de origem.")
+
+
+
 
 # ==============================================================================
 # PÁGINA: 🕊️ GESTÃO DE SACRAMENTOS
