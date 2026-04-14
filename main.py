@@ -2592,27 +2592,32 @@ elif menu == "✅ Fazer Chamada":
             
             st.session_state[buffer_key] = buffer
 
-        registros_presenca = []
+        registros_presenca =[]
         contador_p = 0
         contador_a = 0
+        
+        st.markdown("### 📋 Lista de Presença")
+        # Cria um grid de 2 colunas para turmas grandes ficarem mais compactas
+        cols_chamada = st.columns(2)
         
         for i, (_, row) in enumerate(lista_cat.iterrows()):
             id_cat = row['id_catequizando']
             key_toggle = f"p_{id_cat}_{data_enc}_{i}"
             
-            with st.container():
-                col_info, col_check = st.columns([3, 1])
-                col_info.markdown(f"{row['nome_completo']}")
-                presente = col_check.toggle("P", key=key_toggle, value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat])
-                st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
-                
-                if presente: contador_p += 1
-                else: contador_a += 1
+            with cols_chamada[i % 2]:
+                with st.container(border=True):
+                    c_nome, c_tog = st.columns([3, 1])
+                    c_nome.markdown(f"<span style='font-size:14px; font-weight:600; color:#417b99;'>{row['nome_completo']}</span>", unsafe_allow_html=True)
+                    presente = c_tog.toggle("P", key=key_toggle, value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat])
+                    st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
+                    
+                    if presente: contador_p += 1
+                    else: contador_a += 1
 
-                registros_presenca.append([str(data_enc), id_cat, row['nome_completo'], turma_sel, "PRESENTE" if presente else "AUSENTE", tema_dia, st.session_state.usuario['nome']])
-            st.markdown("---")
+                    registros_presenca.append([str(data_enc), id_cat, row['nome_completo'], turma_sel, "PRESENTE" if presente else "AUSENTE", tema_dia, st.session_state.usuario['nome']])
 
-        st.subheader("📊 Resumo da Chamada")
+        st.markdown("---")
+        st.markdown("### 📊 Resumo da Chamada")
         c_res1, c_res2 = st.columns(2)
         c_res1.metric("✅ Presentes", contador_p)
         c_res2.metric("❌ Ausentes", contador_a)
