@@ -357,7 +357,9 @@ def _desenhar_corpo_ficha(pdf, dados):
     
     y += 12
     desenhar_campo_box(pdf, "WhatsApp / Contato:", dados.get('contato_principal', ''), 10, y, 60)
-    desenhar_campo_box(pdf, "Saúde (Medicamentos/Alergias):", dados.get('toma_medicamento_sn', 'NÃO'), 75, y, 125)
+    desenhar_campo_box(pdf, "Saúde (Medicamentos/Alergias):", dados.get('toma_medicamento_sn', 'NÃO'), 75, y, 60)
+    # Novo campo para TGO
+    desenhar_campo_box(pdf, "TGO/Neurodivergência (Laudo Exigido):", dados.get('tgo_sn', 'NÃO'), 140, y, 60)
 
     # --- SEÇÃO 2: FAMÍLIA OU EMERGÊNCIA ---
     pdf.set_y(y + 13) # Reduzido de 16 para 13
