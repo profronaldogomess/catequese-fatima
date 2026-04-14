@@ -140,8 +140,24 @@ def salvar_presencas(lista_presencas):
         # 1. Limpa presenças antigas do dia/turma (para reescrever as novas)
         dados = aba_pres.get_all_values()
         linhas_del =[i + 1 for i, linha in enumerate(dados) if len(linha) >= 4 and linha[0] == data_alvo and linha[3].strip().upper() == turma_alvo]
-        for row_idx in sorted(linhas_del, reverse=True): 
-            aba_pres.delete_rows(row_idx)
+        
+        if linhas_del:
+            # BLINDAGEM ANTI-ERRO 429: Agrupa todas as exclusões em 1 único comando (Batch Update)
+            sheet_id = aba_pres.id
+            requests =[]
+            for row_idx in sorted(linhas_del, reverse=True):
+                requests.append({
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": row_idx - 1,
+                            "endIndex": row_idx
+                        }
+                    }
+                })
+            if requests:
+                planilha.batch_update({"requests": requests})
         
         # 2. Salva as novas presenças com o tema (novo ou editado)
         aba_pres.append_rows(lista_presencas)
