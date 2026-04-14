@@ -94,7 +94,7 @@ def finalizar_pdf(pdf):
         st.error(f"Erro crítico ao finalizar PDF: {e}")
         return b""
 
-def desenhar_campo_box(pdf, label, valor, x, y, w, h=8):
+def desenhar_campo_box(pdf, label, valor, x, y, w, h=7):
     """Desenha uma caixa de formulário com fundo creme (#f8f9f0) e label superior."""
     pdf.set_xy(x, y)
     pdf.set_font("helvetica", "B", 8)
@@ -238,12 +238,12 @@ def gerar_card_aniversario(dados_niver, tipo="DIA"):
 def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
     """Adiciona o brasão e as informações oficiais da paróquia e diocese."""
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", 10, 10, 25)
+        pdf.image("logo.png", 10, 10, 20) # Reduzido de 25 para 20
     
     hoje = datetime.now(timezone.utc) + timedelta(hours=-3)
     data_local = f"{hoje.day:02d} / {hoje.month:02d} / {hoje.year}"
     
-    pdf.set_xy(40, 15)
+    pdf.set_xy(35, 12) # Ajustado para acompanhar a logo menor
     pdf.set_font("helvetica", "B", 11)
     pdf.set_text_color(65, 123, 153) 
     pdf.cell(100, 5, limpar_texto("Pastoral da Catequese Diocese de Itabuna-BA."), ln=False)
@@ -252,25 +252,25 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 5, limpar_texto(f"Data: {data_local}"), ln=True, align='R')
     
-    pdf.set_x(40)
+    pdf.set_x(35)
     pdf.set_font("helvetica", "B", 11)
     pdf.set_text_color(65, 123, 153)
     pdf.cell(100, 5, limpar_texto("Paróquia: Nossa Senhora de Fátima"), ln=True)
     
-    pdf.ln(20)
+    pdf.ln(12) # Reduzido de 20 para 12
     
     if titulo:
         y_topo = pdf.get_y()
         pdf.set_fill_color(245, 245, 245)
-        pdf.rect(10, y_topo, 190, 15, 'F')
-        pdf.rect(10, y_topo, 190, 15)
-        pdf.set_xy(10, y_topo + 4)
+        pdf.rect(10, y_topo, 190, 12, 'F') # Reduzido de 15 para 12
+        pdf.rect(10, y_topo, 190, 12)
+        pdf.set_xy(10, y_topo + 2)
         pdf.set_font("helvetica", "B", 12)
         pdf.set_text_color(65, 123, 153)
-        pdf.cell(190, 7, limpar_texto(titulo), align='C')
-        pdf.ln(18)
+        pdf.cell(190, 8, limpar_texto(titulo), align='C')
+        pdf.ln(12) # Reduzido de 18 para 12
     else:
-        pdf.ln(5)
+        pdf.ln(2) # Reduzido de 5 para 2
 
 # ==============================================================================
 # 5. GESTÃO DE FICHAS DE INSCRIÇÃO (CATEQUIZANDOS - 30 COLUNAS)
@@ -278,7 +278,7 @@ def adicionar_cabecalho_diocesano(pdf, titulo="", etapa=""):
 
 def _desenhar_corpo_ficha(pdf, dados):
     """Desenha o corpo moderno da ficha de inscrição com herança de Turma."""
-    from database import ler_aba # Importação local para não quebrar dependências
+    from database import ler_aba 
     
     y_base = pdf.get_y()
     idade_real = calcular_idade(dados.get('data_nascimento', ''))
@@ -296,103 +296,100 @@ def _desenhar_corpo_ficha(pdf, dados):
             turno_oficial = str(turma_info.iloc[0].get('turno', '')).upper()
             local_oficial = str(turma_info.iloc[0].get('local', '')).upper()
     
-    # Fallback caso a turma não exista no banco
     if not turno_oficial or turno_oficial == "N/A":
         turno_oficial = str(dados.get('turno', '')).upper()
     if not local_oficial or local_oficial == "N/A":
         local_oficial = str(dados.get('local_encontro', '')).upper()
 
-    # Correção do Bug do "N" (Busca palavra exata)
     mark_m = "X" if "MANHÃ" in turno_oficial or turno_oficial == "M" else " "
     mark_t = "X" if "TARDE" in turno_oficial or turno_oficial == "T" else " "
     mark_n = "X" if "NOITE" in turno_oficial or turno_oficial == "N" else " "
     
     # --- CABEÇALHO DA FICHA (BOX SUPERIOR) ---
     pdf.set_fill_color(240, 242, 246)
-    pdf.rect(10, y_base, 190, 25, 'F') # Altura aumentada para 25 para caber o Local
-    pdf.rect(10, y_base, 190, 25)
+    pdf.rect(10, y_base, 190, 22, 'F') # Reduzido de 25 para 22
+    pdf.rect(10, y_base, 190, 22)
     
-    pdf.set_xy(15, y_base + 4)
+    pdf.set_xy(15, y_base + 3)
     pdf.set_font("helvetica", "B", 14)
-    pdf.set_text_color(65, 123, 153) # Azul Paroquial
-    pdf.cell(130, 7, limpar_texto("FICHA DE INSCRIÇÃO CATEQUÉTICA"), ln=0)
+    pdf.set_text_color(65, 123, 153) 
+    pdf.cell(130, 6, limpar_texto("FICHA DE INSCRIÇÃO CATEQUÉTICA"), ln=0)
     
     pdf.set_font("helvetica", "B", 10)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(50, 7, limpar_texto(f"ANO LETIVO: {date.today().year}"), ln=1, align='R')
+    pdf.cell(50, 6, limpar_texto(f"ANO LETIVO: {date.today().year}"), ln=1, align='R')
     
     pdf.set_x(15)
     pdf.set_font("helvetica", "B", 11)
-    pdf.cell(130, 7, limpar_texto(f"ETAPA: {etapa_aluno if etapa_aluno else 'N/A'}"), ln=0)
+    pdf.cell(130, 6, limpar_texto(f"ETAPA: {etapa_aluno if etapa_aluno else 'N/A'}"), ln=0)
     
     pdf.set_font("helvetica", "", 9)
-    pdf.cell(50, 7, limpar_texto(f"TURNO: ( {mark_m} ) M  ( {mark_t} ) T  ( {mark_n} ) N"), ln=1, align='R')
+    pdf.cell(50, 6, limpar_texto(f"TURNO: ( {mark_m} ) M  ( {mark_t} ) T  ( {mark_n} ) N"), ln=1, align='R')
     
-    # NOVO: Inserção do Local do Encontro
     pdf.set_x(15)
     pdf.set_font("helvetica", "B", 9)
-    pdf.set_text_color(100, 100, 100) # Cinza escuro para diferenciar
+    pdf.set_text_color(100, 100, 100) 
     pdf.cell(130, 5, limpar_texto(f"LOCAL: {local_oficial if local_oficial else 'NÃO DEFINIDO'}"), ln=1)
 
     # --- SEÇÃO 1: IDENTIFICAÇÃO ---
-    pdf.set_y(y_base + 28) # Ajuste do Y base para a próxima seção
+    pdf.set_y(y_base + 24) # Reduzido de 28 para 24
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 7, limpar_texto("  1. IDENTIFICAÇÃO DO CATEQUIZANDO"), ln=True, fill=True)
+    pdf.cell(190, 6, limpar_texto("  1. IDENTIFICAÇÃO DO CATEQUIZANDO"), ln=True, fill=True)
     
     pdf.set_text_color(0, 0, 0)
-    y = pdf.get_y() + 2
+    y = pdf.get_y() + 1
     desenhar_campo_box(pdf, "Nome Completo:", dados.get('nome_completo', ''), 10, y, 190)
     
-    y += 14
+    y += 12 # Reduzido de 14 para 12
     desenhar_campo_box(pdf, "Data de Nascimento:", formatar_data_br(dados.get('data_nascimento', '')), 10, y, 45)
     desenhar_campo_box(pdf, "Idade:", f"{idade_real} anos", 60, y, 25)
     
-    pdf.set_xy(90, y + 4)
+    pdf.set_xy(90, y + 3)
     pdf.set_font("helvetica", "B", 8)
     pdf.cell(20, 4, "Batizado:", ln=0)
-    marcar_opcao(pdf, "Sim", dados.get('batizado_sn') == 'SIM', 110, y + 4)
-    marcar_opcao(pdf, "Não", dados.get('batizado_sn') == 'NÃO', 130, y + 4)
+    marcar_opcao(pdf, "Sim", dados.get('batizado_sn') == 'SIM', 110, y + 3)
+    marcar_opcao(pdf, "Não", dados.get('batizado_sn') == 'NÃO', 130, y + 3)
     
-    y += 14
+    y += 12
     desenhar_campo_box(pdf, "Endereço Residencial:", dados.get('endereco_completo', ''), 10, y, 190)
     
-    y += 14
+    y += 12
     desenhar_campo_box(pdf, "WhatsApp / Contato:", dados.get('contato_principal', ''), 10, y, 60)
     desenhar_campo_box(pdf, "Saúde (Medicamentos/Alergias):", dados.get('toma_medicamento_sn', 'NÃO'), 75, y, 125)
 
     # --- SEÇÃO 2: FAMÍLIA OU EMERGÊNCIA ---
-    pdf.set_y(y + 16)
+    pdf.set_y(y + 13) # Reduzido de 16 para 13
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     
     if is_adulto:
-        pdf.cell(190, 7, limpar_texto("  2. CONTATO DE EMERGÊNCIA / VÍNCULO"), ln=True, fill=True)
+        pdf.cell(190, 6, limpar_texto("  2. CONTATO DE EMERGÊNCIA / VÍNCULO"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0)
-        y = pdf.get_y() + 2
+        y = pdf.get_y() + 1
         desenhar_campo_box(pdf, "Nome do Contato:", dados.get('nome_responsavel', 'N/A'), 10, y, 110)
         desenhar_campo_box(pdf, "Vínculo / Telefone:", dados.get('obs_pastoral_familia', 'N/A'), 125, y, 75)
     else:
-        pdf.cell(190, 7, limpar_texto("  2. FILIAÇÃO E RESPONSÁVEIS"), ln=True, fill=True)
+        pdf.cell(190, 6, limpar_texto("  2. FILIAÇÃO E RESPONSÁVEIS"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0)
-        y = pdf.get_y() + 2
+        y = pdf.get_y() + 1
         desenhar_campo_box(pdf, "Nome da Mãe:", dados.get('nome_mae', 'N/A'), 10, y, 110)
         desenhar_campo_box(pdf, "Profissão/Tel:", f"{dados.get('profissao_mae','')} / {dados.get('tel_mae','')}", 125, y, 75)
-        y += 14
+        y += 12
         desenhar_campo_box(pdf, "Nome do Pai:", dados.get('nome_pai', 'N/A'), 10, y, 110)
         desenhar_campo_box(pdf, "Profissão/Tel:", f"{dados.get('profissao_pai','')} / {dados.get('tel_pai','')}", 125, y, 75)
-        y += 14
+        y += 12
         desenhar_campo_box(pdf, "Responsável Legal (Caso não more com pais):", dados.get('nome_responsavel', 'N/A'), 10, y, 190)
 
     # --- SEÇÃO 3: VIDA ECLESIAL E DOCUMENTOS ---
-    pdf.set_y(pdf.get_y() + 16)
+    pdf.set_y(y + 13) # Reduzido de 16 para 13
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 7, limpar_texto("  3. VIDA ECLESIAL E DOCUMENTAÇÃO"), ln=True, fill=True)
+    pdf.cell(190, 6, limpar_texto("  3. VIDA ECLESIAL E DOCUMENTAÇÃO"), ln=True, fill=True)
     
     pdf.set_text_color(0, 0, 0)
-    y_ec = pdf.get_y() + 2
+    y_ec = pdf.get_y() + 1
     pdf.set_font("helvetica", "B", 8)
     pdf.set_xy(10, y_ec)
     pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
@@ -404,14 +401,12 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.cell(40, 5, "Documentos Faltando:", ln=0)
     
     pdf.set_font("helvetica", "", 8)
-    # Usamos multi_cell para permitir que o texto quebre linha e não seja cortado
-    # A largura 60 é o espaço restante na linha
     pdf.multi_cell(60, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
 
     # --- SEÇÃO 4: TERMO LGPD E ECA DIGITAL ---
-    pdf.ln(5)
+    pdf.ln(2) # Reduzido de 5 para 2
     pdf.set_font("helvetica", "B", 9)
-    pdf.set_text_color(224, 61, 17) # Laranja Alerta
+    pdf.set_text_color(224, 61, 17) 
     pdf.cell(0, 5, limpar_texto("4. AUTORIZAÇÃO DE USO DE IMAGEM E VOZ (LGPD E ECA DIGITAL)"), ln=True)
     
     pdf.set_font("helvetica", "", 8)
@@ -435,8 +430,7 @@ def _desenhar_corpo_ficha(pdf, dados):
         
     pdf.multi_cell(0, 4, limpar_texto(texto_lgpd), align='J')
     
-    # Manifestação de Vontade (Checkboxes físicos)
-    pdf.ln(2)
+    pdf.ln(1)
     pdf.set_font("helvetica", "B", 8)
     pdf.cell(0, 4, limpar_texto("MANIFESTAÇÃO DE VONTADE:"), ln=True)
     pdf.set_font("helvetica", "", 8)
@@ -450,7 +444,7 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.write(4, limpar_texto("A recusa de autorização será integralmente respeitada, sem qualquer prejuízo à participação nas atividades.\n"))
     
     # --- ASSINATURAS ---
-    pdf.ln(8)
+    pdf.ln(6) # Reduzido de 12 para 6
     y_ass = pdf.get_y()
     pdf.line(15, y_ass, 95, y_ass)
     pdf.line(115, y_ass, 195, y_ass)
