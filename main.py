@@ -1571,11 +1571,19 @@ elif menu == "👤 Perfil Individual":
                     ed_tgo_final = s2.text_input("Qual transtorno?", value=tgo_atual if tgo_atual != "NÃO" else "").upper() if ed_tem_tgo == "SIM" else "NÃO"
 
                     st.markdown("**📁 Checklist de Documentos (Xerox):**")
-                    docs_obrigatorios =["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
+                    # --- Checklist Inteligente: Se tiver TGO, exige LAUDO MÉDICO ---
+                    is_neuro = (ed_tem_tgo == "SIM") # ed_tem_tgo é definido logo acima no formulário
+                    docs_obrigatorios = ["RG/CERTIDÃO", "COMPROVANTE RESIDÊNCIA", "BATISTÉRIO", "CERTIDÃO EUCARISTIA"]
+                    if is_neuro: docs_obrigatorios.append("LAUDO MÉDICO")
+                    
                     faltas_atuais = str(dados.get('doc_em_falta', '')).upper()
-                    entregues_pre =[d for d in docs_obrigatorios if d not in faltas_atuais]
+                    # Filtra o que já está entregue
+                    entregues_pre = [d for d in docs_obrigatorios if d not in faltas_atuais]
+                    
+                    st.markdown("**📁 Checklist de Documentos (Xerox):**")
                     ed_docs_entregues = st.multiselect("Marque o que JÁ ESTÁ NA PASTA:", docs_obrigatorios, default=entregues_pre)
-                    novas_faltas =[d for d in docs_obrigatorios if d not in ed_docs_entregues]
+                    
+                    novas_faltas = [d for d in docs_obrigatorios if d not in ed_docs_entregues]
                     ed_doc_status_k = ", ".join(novas_faltas) if novas_faltas else "COMPLETO"
 
                     if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True, type="primary"):
@@ -1691,7 +1699,8 @@ elif menu == "👤 Perfil Individual":
                                 if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
                                 if not num_limpo.startswith("55"): num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
                                 
-                                msg_doc = f"Paz e Bem, {nome_alvo}! Aqui é da Secretaria da Catequese. Notamos que ainda falta entregar a cópia do(s) documento(s): {p['doc_em_falta']} do(a) catequizando(a) {p['nome_completo']}. Poderia nos enviar ou levar no próximo encontro? Deus abençoe!"
+                                # A mensagem agora carrega dinamicamente o que falta, incluindo o LAUDO MÉDICO se for necessário
+                                msg_doc = f"Paz e Bem, {nome_alvo}! Aqui é da Secretaria da Paróquia de Fátima. Verificamos que falta entregar a cópia do(s) seguinte(s) documento(s): {p['doc_em_falta']} para a pasta do(a) catequizando(a) {p['nome_completo']}. Poderia nos enviar ou levar na secretaria no próximo encontro? Deus abençoe!"                                
                                 link_doc = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg_doc)}"
                                 col_p1.markdown(f"<a href='{link_doc}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-size:13px; font-weight:bold;'>📲 Enviar Cobrança no WhatsApp</div></a>", unsafe_allow_html=True)
                             else:
