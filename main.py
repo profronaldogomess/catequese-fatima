@@ -467,14 +467,17 @@ if menu == "🏠 Início / Dashboard":
     df_pend_doc = df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
     r1.metric("📄 Doc. Pendente", len(df_pend_doc), delta="Ação Necessária", delta_color="inverse")
 
-    # 2. Risco de Evasão
+    # 2. Risco de Evasão (Ignora quem já foi visitado)
     df_risco_detalhado = pd.DataFrame()
     if not df_pres.empty and not df_ativos.empty:
         df_faltas = df_pres[df_pres['status'] == 'AUSENTE']
         if not df_faltas.empty:
             contagem_faltas = df_faltas.groupby('id_catequizando').size().reset_index(name='qtd_faltas')
             contagem_risco = contagem_faltas[contagem_faltas['qtd_faltas'] >= 3]
-            df_risco_detalhado = pd.merge(contagem_risco, df_ativos[['id_catequizando', 'nome_completo', 'etapa']], on='id_catequizando', how='inner')
+            # Trazemos a coluna obs_pastoral_familia para verificar a tag de visita
+            df_risco_detalhado = pd.merge(contagem_risco, df_ativos[['id_catequizando', 'nome_completo', 'etapa', 'obs_pastoral_familia']], on='id_catequizando', how='inner')
+            # O PULO DO GATO: Filtra removendo quem já tem a tag [VISITA_CONCLUIDA]
+            df_risco_detalhado = df_risco_detalhado[~df_risco_detalhado['obs_pastoral_familia'].str.contains(r'\[VISITA_CONCLUIDA\]', na=False, case=False)]
             df_risco_detalhado = df_risco_detalhado.sort_values(by='qtd_faltas', ascending=False)
     r2.metric("🚩 Risco de Evasão", len(df_risco_detalhado), delta="Visita Urgente", delta_color="inverse")
 
@@ -3191,8 +3194,8 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
         return irmaos[['nome_completo', 'etapa']].to_dict('records')
 
     if eh_gestor:
-        tab_reunioes, tab_censo, tab_agenda, tab_visitas, tab_ia = st.tabs([
-            "📅 Reuniões de Pais", "📊 Censo Familiar", "📞 Agenda Geral", "🏠 Visitas", "✨ IA"
+        tab_reunioes, tab_censo, tab_agenda, tab_visitas = st.tabs([
+            "📅 Reuniões de Pais", "📊 Censo Familiar", "📞 Agenda Geral", "🏠 Visitas"
         ])
 
         with tab_reunioes:
@@ -3284,10 +3287,24 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 st.bar_chart(sac_series.value_counts())
 
         with tab_agenda:
-            busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):", key="txt_busca_fam").upper()
-            df_age = df_cat[df_cat['nome_completo'].str.contains(busca_g, na=False) | df_cat['nome_mae'].str.contains(busca_g, na=False)] if busca_g else df_cat
+            st.subheader("📞 Agenda Geral e Comunicação (CRM Pastoral)")
+            st.markdown("Filtre as famílias e envie mensagens padronizadas pelo WhatsApp com apenas um clique.")
             
-            for _, row in df_age.iterrows():
+            c_filtro1, c_filtro2 = st.columns(2)
+            filtro_turma_ag = c_filtro1.selectbox("Filtrar por Turma:", ["TODAS"] + df_turmas['nome_turma'].tolist() if not df_turmas.empty else ["TODAS"])
+            filtro_pendencia = c_filtro2.checkbox("Mostrar apenas com Documentos Pendentes")
+            
+            busca_g = st.text_input("🔍 Pesquisar por nome (Catequizando ou Pais):", key="txt_busca_fam").upper()
+            
+            df_age = df_cat.copy()
+            if filtro_turma_ag != "TODAS": df_age = df_age[df_age['etapa'] == filtro_turma_ag]
+            if filtro_pendencia: df_age = df_age[~df_age['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
+            if busca_g: df_age = df_age[df_age['nome_completo'].str.contains(busca_g, na=False) | df_age['nome_mae'].str.contains(busca_g, na=False) | df_age['nome_pai'].str.contains(busca_g, na=False)]
+            
+            st.write(f"**{len(df_age)} famílias encontradas.**")
+            
+            import urllib.parse
+            for _, row in df_age.head(50).iterrows(): # Limita a 50 para não travar a tela
                 with st.container():
                     st.markdown(f"""
                         <div style='background-color:#f8f9f0; padding:10px; border-radius:10px; border-left:5px solid #417b99; margin-bottom:5px;'>
@@ -3295,29 +3312,36 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    c_ia1, c_ia2 = st.columns(2)
+                    c_btn1, c_btn2 = st.columns(2)
+                    nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else (row['nome_pai'] if row['nome_pai'] != "N/A" else row['nome_responsavel'])
+                    tel_alvo = row['tel_mae'] if row['tel_mae'] != "N/A" else (row['tel_pai'] if row['tel_pai'] != "N/A" else row['contato_principal'])
                     
-                    if c_ia1.button("✨ IA: Cobrar Docs", key=f"btn_cob_{row['id_catequizando']}", use_container_width=True):
-                        nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
-                        msg = gerar_mensagem_cobranca_doc_ia(row['nome_completo'], row['doc_em_falta'], row['etapa'], nome_alvo, "Responsável")
-                        msg_segura = msg.replace("$", "\$") 
-                        st.info(f"**Mensagem de Cobrança:**\n\n{msg_segura}")
-
-                    if c_ia2.button("📝 IA: Atualizar Ficha", key=f"btn_upd_{row['id_catequizando']}", use_container_width=True):
-                        nome_alvo = row['nome_mae'] if row['nome_mae'] != "N/A" else row['nome_pai']
-                        resumo = f"Endereço: {row['endereco_completo']} | Saúde: {row['toma_medicamento_sn']}"
-                        msg = gerar_mensagem_atualizacao_cadastral_ia(row['nome_completo'], resumo, nome_alvo)
-                        msg_segura = msg.replace("$", "\$")
-                        st.info(f"**Mensagem de Atualização:**\n\n{msg_segura}")
+                    num_limpo = "".join(filter(str.isdigit, str(tel_alvo)))
+                    if num_limpo:
+                        if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
+                        if not num_limpo.startswith("55"): num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
+                        
+                        # Mensagem de Documentos (Gerada pelo Python, sem custo de IA)
+                        if row['doc_em_falta'] not in['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO']:
+                            msg_doc = f"Paz e Bem, {nome_alvo}! Aqui é da Catequese da Paróquia de Fátima. Notamos que ainda falta entregar a cópia do(s) documento(s): {row['doc_em_falta']} do(a) catequizando(a) {row['nome_completo']}. Poderia nos enviar ou levar no próximo encontro? Deus abençoe!"
+                            link_doc = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg_doc)}"
+                            c_btn1.markdown(f"<a href='{link_doc}' target='_blank' style='text-decoration:none;'><div style='background-color:#e03d11; color:white; text-align:center; padding:8px; border-radius:5px; font-size:12px; font-weight:bold;'>📄 Cobrar Documentos</div></a>", unsafe_allow_html=True)
+                        else:
+                            c_btn1.markdown("<div style='background-color:#e0e0e0; color:#666; text-align:center; padding:8px; border-radius:5px; font-size:12px;'>✅ Docs em dia</div>", unsafe_allow_html=True)
+                            
+                        # Mensagem de Atualização Cadastral
+                        msg_upd = f"Paz e Bem, {nome_alvo}! Aqui é da Catequese. Estamos atualizando nossos cadastros para este ano. O endereço de vocês continua sendo: {row['endereco_completo']}? Deus abençoe!"
+                        link_upd = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg_upd)}"
+                        c_btn2.markdown(f"<a href='{link_upd}' target='_blank' style='text-decoration:none;'><div style='background-color:#417b99; color:white; text-align:center; padding:8px; border-radius:5px; font-size:12px; font-weight:bold;'>🔄 Confirmar Cadastro</div></a>", unsafe_allow_html=True)
+                    else:
+                        st.caption("Sem telefone válido cadastrado.")
                     
-                    st.markdown("**Contatos Disponíveis:**")
-                    montar_botoes_whatsapp(row)
+                    st.markdown("<br>", unsafe_allow_html=True)
 
         with tab_visitas:
             st.subheader("🏠 Central de Resgate Pastoral (Visitas)")
             st.markdown("Identificação automática de famílias que necessitam de acompanhamento urgente devido à infrequência dos catequizandos.")
             
-            # --- 1. FILA DE VISITAS AUTOMÁTICA (RISCO CRÍTICO) ---
             df_ativos = df_cat[df_cat['status'] == 'ATIVO'] if not df_cat.empty else pd.DataFrame()
             df_risco_visita = pd.DataFrame()
             
@@ -3329,71 +3353,72 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     df_risco_visita = pd.merge(contagem_risco, df_ativos, on='id_catequizando', how='inner')
                     df_risco_visita = df_risco_visita.sort_values(by='qtd_faltas', ascending=False)
             
+            # Separa quem já foi visitado de quem está pendente
             if not df_risco_visita.empty:
-                st.error(f"🚨 **Atenção Coordenação:** Temos **{len(df_risco_visita)} catequizandos** em risco crítico de evasão que precisam de visita familiar.")
-                
-                for _, row in df_risco_visita.iterrows():
-                    with st.expander(f"🚩 {row['nome_completo']} ({row['etapa']}) - {row['qtd_faltas']} Faltas Acumuladas"):
-                        c_v1, c_v2 = st.columns([2, 1])
-                        
-                        with c_v1:
-                            st.markdown(f"**👨‍👩‍👧 Pais/Responsáveis:** {row['nome_mae']} e {row['nome_pai']}")
-                            st.markdown(f"**📍 Endereço:** {row['endereco_completo']}")
-                            st.markdown(f"**💍 Situação Matrimonial:** {row['est_civil_pais']}")
-                            st.markdown(f"**📞 Contato Principal:** {row['contato_principal']}")
-                            
-                            # Botões de WhatsApp rápidos
-                            montar_botoes_whatsapp(row)
-                            
-                        with c_v2:
-                            st.markdown("**📄 Encaminhamento**")
-                            if st.button("🖨️ Gerar Ficha para Pastoral Familiar", key=f"btn_pdf_visita_{row['id_catequizando']}", use_container_width=True):
-                                # Prepara dados para o PDF existente de visitação
-                                filhos_lista = [{'nome': row['nome_completo'], 'etapa': row['etapa'], 'status': f"{row['qtd_faltas']} Faltas (Risco de Evasão)"}]
-                                pdf_visita = gerar_relatorio_familia_pdf(row.to_dict(), filhos_lista)
-                                st.session_state[f"pdf_v_{row['id_catequizando']}"] = pdf_visita
-                                
-                            if f"pdf_v_{row['id_catequizando']}" in st.session_state:
-                                st.download_button("📥 Baixar Ficha (PDF)", st.session_state[f"pdf_v_{row['id_catequizando']}"], f"Visita_{row['nome_completo']}.pdf", "application/pdf", use_container_width=True)
-                        
-                        st.markdown("---")
-                        st.markdown("**📝 Registrar Retorno da Visita**")
-                        with st.form(key=f"form_visita_{row['id_catequizando']}"):
-                            novo_relato = st.text_area("Relato da Pastoral Familiar / Catequista:", value=row.get('obs_pastoral_familia', ''), height=100, help="Anote aqui o motivo das faltas e o que foi conversado com a família.")
-                            if st.form_submit_button("💾 SALVAR RELATO NO HISTÓRICO"):
-                                lista_up = row.tolist()
-                                while len(lista_up) < 30: lista_up.append("N/A")
-                                lista_up[29] = novo_relato
-                                if atualizar_catequizando(row['id_catequizando'], lista_up):
-                                    st.success("Relato salvo com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                df_pendentes = df_risco_visita[~df_risco_visita['obs_pastoral_familia'].str.contains(r'\[VISITA_CONCLUIDA\]', na=False, case=False)]
+                df_visitados = df_risco_visita[df_risco_visita['obs_pastoral_familia'].str.contains(r'\[VISITA_CONCLUIDA\]', na=False, case=False)]
             else:
-                st.success("✅ Glória a Deus! Nenhuma família em risco crítico de evasão no momento.")
-                
-            # --- 2. BUSCA MANUAL (MANTER FUNCIONALIDADE ANTIGA) ---
-            st.divider()
-            st.subheader("🔍 Busca Manual de Famílias")
-            busca_v = st.text_input("Localizar outra família para relato (Nome da Mãe ou Pai):").upper()
-            if busca_v:
-                fam = df_cat[df_cat['nome_mae'].str.contains(busca_v, na=False) | df_cat['nome_pai'].str.contains(busca_v, na=False)]
-                if not fam.empty:
-                    dados_f = fam.iloc[0]
-                    st.info(f"✅ Família encontrada: {dados_f['nome_mae']} & {dados_f['nome_pai']}")
-                    with st.form("form_busca_manual_visita"):
-                        novo_relato_m = st.text_area("Relato da Visita:", value=dados_f.get('obs_pastoral_familia', ''), height=150)
-                        if st.form_submit_button("💾 SALVAR RELATO"):
-                            for _, filho in fam.iterrows():
-                                lista_up = filho.tolist()
-                                while len(lista_up) < 30: lista_up.append("N/A")
-                                lista_up[29] = novo_relato_m
-                                atualizar_catequizando(filho['id_catequizando'], lista_up)
-                            st.success("Relato salvo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                else:
-                    st.warning("Família não encontrada.")
+                df_pendentes = pd.DataFrame()
+                df_visitados = pd.DataFrame()
 
-        with tab_ia:
-            if st.button("🚀 EXECUTAR DIAGNÓSTICO FAMILIAR IA"):
-                resumo_fam = str(df_cat['est_civil_pais'].value_counts().to_dict())
-                st.info(analisar_saude_familiar_ia(resumo_fam))
+            sub_pendentes, sub_historico = st.tabs([f"🚨 Fila de Resgate ({len(df_pendentes)})", f"✅ Visitas Realizadas ({len(df_visitados)})"])
+            
+            with sub_pendentes:
+                if not df_pendentes.empty:
+                    st.error(f"Temos **{len(df_pendentes)} catequizandos** em risco crítico de evasão aguardando visita familiar.")
+                    for _, row in df_pendentes.iterrows():
+                        with st.expander(f"🚩 {row['nome_completo']} ({row['etapa']}) - {row['qtd_faltas']} Faltas Acumuladas"):
+                            c_v1, c_v2 = st.columns([2, 1])
+                            with c_v1:
+                                st.markdown(f"**👨‍👩‍👧 Pais/Responsáveis:** {row['nome_mae']} e {row['nome_pai']}")
+                                st.markdown(f"**📍 Endereço:** {row['endereco_completo']}")
+                                st.markdown(f"**📞 Contato Principal:** {row['contato_principal']}")
+                                montar_botoes_whatsapp(row)
+                            with c_v2:
+                                st.markdown("**📄 Encaminhamento**")
+                                if st.button("🖨️ Gerar Ficha para Pastoral Familiar", key=f"btn_pdf_visita_{row['id_catequizando']}", use_container_width=True):
+                                    filhos_lista =[{'nome': row['nome_completo'], 'etapa': row['etapa'], 'status': f"{row['qtd_faltas']} Faltas (Risco de Evasão)"}]
+                                    pdf_visita = gerar_relatorio_familia_pdf(row.to_dict(), filhos_lista)
+                                    st.session_state[f"pdf_v_{row['id_catequizando']}"] = pdf_visita
+                                if f"pdf_v_{row['id_catequizando']}" in st.session_state:
+                                    st.download_button("📥 Baixar Ficha (PDF)", st.session_state[f"pdf_v_{row['id_catequizando']}"], f"Visita_{row['nome_completo']}.pdf", "application/pdf", use_container_width=True)
+                            
+                            st.markdown("---")
+                            st.markdown("**📝 Registrar Baixa da Visita**")
+                            with st.form(key=f"form_visita_{row['id_catequizando']}"):
+                                data_v = st.date_input("Data da Visita", date.today(), format="DD/MM/YYYY")
+                                status_v = st.selectbox("Resultado do Resgate:",["Comprometeu-se a retornar", "Desistiu da Catequese", "Problema de Saúde/Familiar", "Mudou-se"])
+                                relato_v = st.text_area("Relato da Conversa:", height=80, help="Descreva o que foi conversado.")
+                                
+                                if st.form_submit_button("💾 CONCLUIR VISITA E REMOVER DO ALERTA"):
+                                    if relato_v:
+                                        # Monta a tag invisível
+                                        tag_visita = f"\n[VISITA_CONCLUIDA] Data: {data_v.strftime('%d/%m/%Y')} | Status: {status_v} | Relato: {relato_v}"
+                                        obs_atual = str(row.get('obs_pastoral_familia', '')).replace("N/A", "")
+                                        novo_relato = f"{obs_atual}{tag_visita}".strip()
+                                        
+                                        lista_up = row.tolist()
+                                        while len(lista_up) < 30: lista_up.append("N/A")
+                                        lista_up[29] = novo_relato
+                                        
+                                        # Se desistiu ou mudou, já altera o status do catequizando
+                                        if status_v in["Desistiu da Catequese", "Mudou-se"]:
+                                            lista_up[12] = "DESISTENTE" if status_v == "Desistiu da Catequese" else "TRANSFERIDO"
+                                            
+                                        if atualizar_catequizando(row['id_catequizando'], lista_up):
+                                            st.success("Visita registrada! O alerta foi removido do Dashboard."); st.cache_data.clear(); time.sleep(1.5); st.rerun()
+                                    else:
+                                        st.error("Por favor, preencha o relato da conversa.")
+                else:
+                    st.success("✅ Fila zerada! Nenhuma família aguardando visita no momento.")
+
+            with sub_historico:
+                if not df_visitados.empty:
+                    for _, row in df_visitados.iterrows():
+                        with st.expander(f"✅ {row['nome_completo']} ({row['etapa']})"):
+                            st.info(f"**Histórico Pastoral:**\n{row.get('obs_pastoral_familia', '')}")
+                else:
+                    st.info("Nenhum histórico de visitas concluídas.")
 
     else:
         vinculo = str(st.session_state.usuario.get('turma_vinculada', '')).split(',')[0].strip()
