@@ -153,10 +153,10 @@ def montar_botoes_whatsapp(dados):
         if (tel := formatar_wa(dados.get('nome_responsavel', '').split('TEL: ')[-1] if 'TEL: ' in dados.get('nome_responsavel', '') else None)):
              botoes.append(("🛡️ Resp.", tel))
 
-    # Renderização dos botões
+    # Renderização dos botões (Clean UI Mobile-First)
     cols = st.columns(len(botoes) if botoes else 1)
     for i, (label, tel) in enumerate(botoes):
-        cols[i].markdown(f'''<a href="https://wa.me/{tel}" target="_blank" style="text-decoration:none;"><div style="background-color:#25d366; color:white; text-align:center; padding:8px; border-radius:5px; font-weight:bold; font-size:12px;">📲 {label}</div></a>''', unsafe_allow_html=True)
+        cols[i].markdown(f'''<a href="https://wa.me/{tel}" target="_blank" style="text-decoration:none;"><div style="border: 1px solid #417b99; color:#417b99; text-align:center; padding:8px; border-radius:5px; font-weight:600; font-size:13px; transition: 0.3s;">💬 Contatar {label}</div></a>''', unsafe_allow_html=True)
 
 def mostrar_logo_sidebar():
     if os.path.exists("logo.png"):
@@ -706,73 +706,52 @@ elif menu == "📚 Minha Turma":
     else:
         minhas_pres = pd.DataFrame()
 
-    # --- 💌 CORREIO PASTORAL (POP-UP INTELIGENTE) ---
-    @st.dialog("💌 Correio Pastoral - Assistente da Turma")
-    def exibir_assistente_pastoral(turma, aniversariantes, status_chamada, faltosos, proximo_tema):
-        st.markdown(f"### Olá, Catequista! 👋")
-        st.write(f"Aqui está o seu resumo pastoral de hoje para a turma **{turma}**:")
+    # --- 🕊️ VISÃO PASTORAL (POP-UP SÓBRIO E CORRIGIDO) ---
+    @st.dialog("🕊️ Visão Pastoral Diária")
+    def exibir_assistente_pastoral(turma, aniversariantes, status_chamada, faltosos, proximo_tema, chave_sessao):
+        st.markdown(f"### Paz e Bem, Catequista.")
+        st.write(f"Resumo da caminhada para a turma **{turma}**:")
         
-        # 1. Aniversariantes
         if aniversariantes:
-            st.info(f"🎂 **Aniversariantes da Semana:**\n" + "\n".join([f"• {n}" for n in aniversariantes]))
+            st.info(f"**Aniversariantes da Semana:**\n" + "\n".join([f"• {n}" for n in aniversariantes]))
         
-        # 2. Chamada e Faltas
         if status_chamada == "PENDENTE":
-            st.error("⚠️ **Atenção:** A chamada dos últimos 7 dias não foi registrada. Por favor, atualize o Diário!")
+            st.error("**Atenção:** O diário do último encontro está pendente de preenchimento.")
         elif faltosos > 0:
-            st.warning(f"🚩 **Cuidado Pastoral:** Tivemos **{faltosos} faltas** no último encontro. Já mandou uma mensagem no WhatsApp ou ligou para os pais para saber se está tudo bem?")
+            st.warning(f"**Cuidado Pastoral:** Tivemos **{faltosos} faltas** no último encontro. Lembre-se de buscar essas ovelhas.")
         else:
-            st.success("✅ **Frequência:** Que bênção! Todos estiveram presentes no último encontro.")
+            st.success("**Frequência:** Excelente participação no último encontro.")
             
-        # 3. Planejamento
         if proximo_tema:
-            st.success(f"📖 **Próximo Encontro:** O tema planejado é **'{proximo_tema}'**. Já preparou a dinâmica e a Palavra?")
+            st.success(f"**Próximo Encontro:** O tema planejado é '{proximo_tema}'.")
         else:
-            st.warning("📅 **Planejamento:** O cronograma está sem próximos temas. Que tal planejar os próximos encontros no Diário?")
+            st.warning("**Planejamento:** O cronograma está sem próximos temas definidos.")
             
-        # 4. Dica Aleatória
-        import random
-        dicas =[
-            "💡 **Dica:** Mantenha o grupo do WhatsApp da turma sempre animado com mensagens de bom dia e lembretes da Missa!",
-            "💡 **Dica:** Lembre os catequizandos e suas famílias da importância de participarem da Santa Missa dominical.",
-            "💡 **Dica:** Um catequista que reza por sua turma colhe frutos eternos. Já rezou por seus catequizandos hoje?",
-            "💡 **Dica:** Envie um áudio curto no grupo da turma resumindo o que aprenderam no último encontro!",
-            "💡 **Dica:** Fique atento à programação da Paróquia e convide as famílias para os eventos comunitários."
-        ]
-        st.info(random.choice(dicas))
+        st.markdown("---")
+        st.caption('"O catequista é um cristão que recebe o chamado de Deus para anunciar a Sua Palavra."')
         
-        if st.button("✅ Ciente! Vamos à missão", use_container_width=True):
-            st.session_state[f"assistente_visto_{turma}_{date.today()}"] = True
+        if st.button("✅ Ciente, iniciar missão", use_container_width=True):
+            st.session_state[chave_sessao] = True
             st.rerun()
 
-    hoje_str = str(date.today())
+    hoje_str = date.today().strftime('%Y-%m-%d')
     key_assistente = f"assistente_visto_{turma_ativa}_{hoje_str}"
     
+    ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
+    limite_t = date.today() - timedelta(days=7)
+    status_chamada = "PENDENTE" if (not ultima_data_chamada or ultima_data_chamada < limite_t) else "OK"
+    faltosos_qtd = len(chamada_recente[chamada_recente['status'] == 'AUSENTE']) if not chamada_recente.empty else 0
+    
+    proximo_tema_str = None
+    if not df_cron_t.empty:
+        col_status = 'status' if 'status' in df_cron_t.columns else ('col_4' if 'col_4' in df_cron_t.columns else None)
+        proximo = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+        if col_status: proximo = proximo[proximo[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+        if not proximo.empty: proximo_tema_str = proximo.iloc[0]['titulo_tema']
+
     if key_assistente not in st.session_state:
-        # 1. Aniversariantes
-        aniversariantes_semana =[]
-        for _, row in meus_alunos.iterrows():
-            if eh_aniversariante_da_semana(row['data_nascimento'], date.today()):
-                aniversariantes_semana.append(row['nome_completo'])
-        
-        # 2. Chamada
-        ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
-        limite_t = date.today() - timedelta(days=7)
-        status_chamada = "PENDENTE" if (not ultima_data_chamada or ultima_data_chamada < limite_t) else "OK"
-        faltosos_qtd = len(chamada_recente[chamada_recente['status'] == 'AUSENTE']) if not chamada_recente.empty else 0
-        
-        # 3. Próximo Tema
-        proximo_tema_str = None
-        if not df_cron_t.empty:
-            col_status = 'status' if 'status' in df_cron_t.columns else ('col_4' if 'col_4' in df_cron_t.columns else None)
-            proximo = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
-            if col_status:
-                proximo = proximo[proximo[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
-            if not proximo.empty:
-                proximo_tema_str = proximo.iloc[0]['titulo_tema']
-        
-        # Dispara o Pop-up
-        exibir_assistente_pastoral(turma_ativa, aniversariantes_semana, status_chamada, faltosos_qtd, proximo_tema_str)
+        aniversariantes_semana = [r['nome_completo'] for _, r in meus_alunos.iterrows() if eh_aniversariante_da_semana(r['data_nascimento'], date.today())]
+        exibir_assistente_pastoral(turma_ativa, aniversariantes_semana, status_chamada, faltosos_qtd, proximo_tema_str, key_assistente)
 
     # --- ALERTA DE REUNIÃO DE PAIS ---
     df_reunioes_agendadas = ler_aba("reunioes_pais")
@@ -781,177 +760,130 @@ elif menu == "📚 Minha Turma":
             (df_reunioes_agendadas.iloc[:, 5] == "PENDENTE") & 
             (df_reunioes_agendadas.iloc[:, 3].isin([turma_ativa.strip().upper(), "GERAL (TODAS)"]))
         ]
-        
         if not reunioes_pendentes.empty:
             for _, reu in reunioes_pendentes.iterrows():
-                tema_reu = reu.iloc[1]
-                data_reu = reu.iloc[2]
-                local_reu = reu.iloc[4]
-                
                 st.markdown(f"""
-                    <div style='background-color:#e3f2fd; padding:15px; border-radius:10px; border-left:6px solid #1976d2; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                    <div style='background-color:#e3f2fd; padding:15px; border-radius:10px; border-left:6px solid #1976d2; margin-bottom:15px;'>
                         <h4 style='margin:0; color:#1976d2;'>📢 Lembrete: Reunião de Pais Agendada!</h4>
                         <p style='margin:5px 0 10px 0; color:#333; font-size:14px;'>
-                            <b>Tema:</b> {tema_reu} <br>
-                            <b>Data:</b> {data_reu} &nbsp;|&nbsp; <b>Local:</b> {local_reu}
+                            <b>Tema:</b> {reu.iloc[1]} <br>
+                            <b>Data:</b> {reu.iloc[2]} &nbsp;|&nbsp; <b>Local:</b> {reu.iloc[4]}
                         </p>
                     </div>
                 """, unsafe_allow_html=True)
-                
                 import urllib.parse
-                msg_convite = f"Paz e Bem, famílias da turma {turma_ativa}! Teremos uma Reunião de Pais muito importante.\n\n📅 Data: {data_reu}\n📍 Local: {local_reu}\n📖 Tema: {tema_reu}\n\nContamos com a presença de um responsável por catequizando. Deus abençoe!"
+                msg_convite = f"Paz e Bem, famílias da turma {turma_ativa}! Teremos uma Reunião de Pais muito importante.\n\n📅 Data: {reu.iloc[2]}\n📍 Local: {reu.iloc[4]}\n📖 Tema: {reu.iloc[1]}\n\nContamos com a presença de um responsável por catequizando. Deus abençoe!"
                 link_wa_grupo = f"https://wa.me/?text={urllib.parse.quote(msg_convite)}"
-                
                 st.markdown(f"<a href='{link_wa_grupo}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:8px; font-size:14px; font-weight:bold; margin-top:-10px; margin-bottom:20px; width: 300px;'>📲 Enviar Convite no Grupo do WhatsApp</div></a>", unsafe_allow_html=True)
 
-    # --- ALERTAS DE GESTÃO ---
-    ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
-    
-    hoje_t = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
-    limite_t = hoje_t - dt_module.timedelta(days=7)
-    
-    col_a1, col_a2 = st.columns(2)
-    if not ultima_data_chamada or ultima_data_chamada < limite_t:
-        data_exibicao = formatar_data_br(ultima_data_chamada) if ultima_data_chamada else "Nenhuma"
-        col_a1.error(f"⚠️ Nenhuma chamada registrada nos últimos 7 dias! (Última: {data_exibicao})")
-    else:
-        col_a1.success(f"✅ Chamada em dia! (Último encontro: {formatar_data_br(ultima_data_chamada)})")
-        faltosos = chamada_recente[chamada_recente['status'] == 'AUSENTE']
-        if not faltosos.empty:
-            with st.expander(f"🚩 {len(faltosos)} Faltosos no último encontro"):
-                for _, f in faltosos.iterrows():
-                    cat_f = meus_alunos[meus_alunos['id_catequizando'] == f['id_catequizando']]
-                    if not cat_f.empty:
-                        c = cat_f.iloc[0]
-                        st.write(f"• {c['nome_completo']}")
-                        montar_botoes_whatsapp(c)
-
-    proximo_tema = df_cron_t[(df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_cron_t.get('status', '') != 'REALIZADO')]
-    if proximo_tema.empty:
-        col_a2.warning("📅 Planeje o próximo encontro no Diário!")
-    else:
-        col_a2.info(f"📌 Próximo tema: {proximo_tema.iloc[0]['titulo_tema']}")
-
-    st.divider()
-
-    # --- MURAL DE CELEBRAÇÃO ---
-    with st.expander("🎂 Mural de Celebração", expanded=False):
-        df_niver_t = obter_aniversariantes_mes(meus_alunos)
-        if not df_niver_t.empty:
-            if st.button("🖼️ GERAR CARD COLETIVO DO MÊS (DA TURMA)", use_container_width=True, key=f"btn_card_mes_{turma_ativa}"):
-                lista_para_card =[f"{int(row['dia'])} | {row['tipo']} | {row['nome']}" for _, row in df_niver_t.iterrows()]
-                card_coletivo = gerar_card_aniversario(lista_para_card, tipo="MES")
-                if card_coletivo:
-                    st.image(card_coletivo, caption=f"Aniversariantes do Mês - {turma_ativa}")
-                    st.download_button("📥 Baixar Card Coletivo", card_coletivo, f"Aniversariantes_Mes_{turma_ativa}.png", "image/png", key=f"dl_card_mes_{turma_ativa}")
-            
-            st.write("")
-            st.markdown("---")
-            
-            cols_niver = st.columns(4)
-            for i, (_, niver) in enumerate(df_niver_t.iterrows()):
-                with cols_niver[i % 4]:
-                    st.markdown(f"""
-                        <div style='background-color:#f0f2f6; padding:8px; border-radius:10px; border-left:4px solid #417b99; margin-bottom:5px; min-height:80px;'>
-                            <small style='color:#666;'>Dia {int(niver['dia'])}</small><br>
-                            <b style='font-size:13px;'>🎁 {niver['nome'].split()[0]} {niver['nome'].split()[-1] if len(niver['nome'].split()) > 1 else ''}</b>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    if st.button(f"🎨 Card", key=f"btn_indiv_t_{turma_ativa}_{i}"):
-                        dados_envio = f"{int(niver['dia'])} | {niver['tipo']} | {niver['nome']}"
-                        card_indiv = gerar_card_aniversario(dados_envio, tipo="DIA")
-                        if card_indiv:
-                            st.image(card_indiv, use_container_width=True)
-                            st.download_button(f"📥 Baixar", card_indiv, f"Niver_{niver['nome']}.png", "image/png", key=f"dl_indiv_t_{turma_ativa}_{i}")
-        else:
-            st.write("Nenhum aniversariante este mês.")
-
-    # --- MÉTRICAS ---
+    # --- PAINEL DE INDICADORES (CLEAN) ---
+    st.markdown("#### 📊 Indicadores da Caminhada")
     c1, c2, c3 = st.columns(3)
+    
     cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
     total_temas = len(cron_turma)
     total_feito = len(df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()])
+    progresso_seguro = min((total_feito / total_temas) if total_temas > 0 else 0.0, 1.0)
     
-    # Trava de segurança para não exibir mais de 100%
-    progresso_bruto = (total_feito / total_temas) if total_temas > 0 else 0.0
-    progresso_seguro = min(progresso_bruto, 1.0)
-    
-    texto_metrica = f"{total_feito} de {total_temas} temas" if total_temas > 0 else f"{total_feito} encontros"
-    c1.metric("Caminhada da Fé", texto_metrica, f"{progresso_seguro*100:.0f}% concluído")
+    c1.metric("Encontros Realizados", f"{total_feito}/{total_temas}", f"{progresso_seguro*100:.0f}% concluído")
     
     freq = (minhas_pres['status'] == 'PRESENTE').mean() * 100 if not minhas_pres.empty else 0
     c2.metric("Frequência Média", f"{freq:.1f}%")
 
+    perc_pais = 0
     if not df_reu_t.empty and not meus_alunos.empty:
         pais_presentes = df_reu_t[df_reu_t.iloc[:, 3].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()].iloc[:, 1].nunique()
         perc_pais = (pais_presentes / len(meus_alunos)) * 100
-        c3.metric("Engajamento Pais", f"{perc_pais:.0f}%")
-    else:
-        c3.metric("Engajamento Pais", "0%")
+    c3.metric("Engajamento Familiar", f"{perc_pais:.0f}%")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    c_alerta1, c_alerta2 = st.columns(2)
+    
+    with c_alerta1:
+        if status_chamada == "PENDENTE":
+            st.error(f"**Diário Pendente** (Última chamada: {formatar_data_br(ultima_data_chamada) if ultima_data_chamada else 'Nenhuma'})")
+        else:
+            st.success(f"**Diário em Dia** (Último encontro: {formatar_data_br(ultima_data_chamada)})")
+            faltosos = chamada_recente[chamada_recente['status'] == 'AUSENTE']
+            if not faltosos.empty:
+                with st.expander(f"🚩 {len(faltosos)} Faltosos no último encontro"):
+                    for _, f in faltosos.iterrows():
+                        cat_f = meus_alunos[meus_alunos['id_catequizando'] == f['id_catequizando']]
+                        if not cat_f.empty:
+                            c = cat_f.iloc[0]
+                            st.write(f"• {c['nome_completo']}")
+                            montar_botoes_whatsapp(c)
+
+    with c_alerta2:
+        if not proximo_tema_str:
+            st.warning("**Planejamento:** Adicione o próximo tema no Diário.")
+        else:
+            st.info(f"**Próximo Tema:** {proximo_tema_str}")
 
     st.divider()
 
-    # --- RADAR DE ATENÇÃO ---
-    st.subheader("🚩 Radar de Atenção")
+    # --- RADAR DE ATENÇÃO (TABS COMPACTAS) ---
+    st.markdown("#### 🎯 Radar Pastoral")
     risco_c, atencao_p = processar_alertas_evasao(minhas_pres)
-    
-    if risco_c:
-        with st.expander(f"🔴 {len(risco_c)} em Risco Crítico (3+ faltas)"):
-            for r in risco_c: st.write(f"• {r}")
-    
     df_pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
-    if not df_pend_doc.empty:
-        with st.expander(f"⚠️ {len(df_pend_doc)} com Documentos Pendentes"):
-            for n in df_pend_doc['nome_completo'].tolist(): st.write(f"• {n}")
-    
     df_sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
-    if not df_sem_batismo.empty:
-        with st.expander(f"🕊️ {len(df_sem_batismo)} sem registro de Batismo"):
-            for n in df_sem_batismo['nome_completo'].tolist(): st.write(f"• {n}")
 
     if not risco_c and df_pend_doc.empty and df_sem_batismo.empty:
-        st.success("✨ Turma em caminhada estável. Nenhum alerta crítico.")
+        st.success("Turma em caminhada estável. Nenhum alerta crítico.")
+    else:
+        tab_risco, tab_doc, tab_sac = st.tabs([f"Risco de Evasão ({len(risco_c)})", f"Documentos ({len(df_pend_doc)})", f"Sacramentos ({len(df_sem_batismo)})"])
+        with tab_risco:
+            if risco_c:
+                for r in risco_c: st.markdown(f"• {r}")
+            else: st.write("Nenhum catequizando em risco.")
+        with tab_doc:
+            if not df_pend_doc.empty:
+                for n in df_pend_doc['nome_completo'].tolist(): st.markdown(f"• {n}")
+            else: st.write("Documentação em dia.")
+        with tab_sac:
+            if not df_sem_batismo.empty:
+                for n in df_sem_batismo['nome_completo'].tolist(): st.markdown(f"• {n}")
+            else: st.write("Todos batizados.")
 
     st.divider()
 
-    # --- CONSULTA INDIVIDUAL ---
-    st.subheader("👥 Consulta Individual")
+    # --- CONSULTA INDIVIDUAL (CARD MODERNO) ---
+    st.markdown("#### 👤 Ficha do Catequizando")
     lista_nomes = sorted(meus_alunos['nome_completo'].tolist())
-    nome_sel = st.selectbox("🔍 Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t")
+    nome_sel = st.selectbox("Selecione um catequizando para ver detalhes:", [""] + lista_nomes, key="busca_indiv_t")
 
     if nome_sel:
         row = meus_alunos[meus_alunos['nome_completo'] == nome_sel].iloc[0]
-        bat = "💧" if row['batizado_sn'] == "SIM" else "⚪"
-        euc = "🍞" if "EUCARISTIA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-        cri = "🔥" if "CRISMA" in str(row['sacramentos_ja_feitos']).upper() else "⚪"
-        tem_reu = "👪 Ativos" if not df_reu_t.empty and row['id_catequizando'] in df_reu_t.iloc[:, 1].values else "👪 Ausentes"
+        bat = "Sim" if row['batizado_sn'] == "SIM" else "Não"
+        euc = "Sim" if "EUCARISTIA" in str(row['sacramentos_ja_feitos']).upper() else "Não"
+        cri = "Sim" if "CRISMA" in str(row['sacramentos_ja_feitos']).upper() else "Não"
+        tem_reu = "Ativos" if not df_reu_t.empty and row['id_catequizando'] in df_reu_t.iloc[:, 1].values else "Ausentes"
+        idade_c = calcular_idade(row['data_nascimento'])
         
         st.markdown(f"""
-            <div style='background-color:#ffffff; padding:20px; border-radius:15px; border-left:10px solid #417b99; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                <h3 style='margin:0; color:#417b99;'>{row['nome_completo']}</h3>
-                <p style='margin:5px 0; color:#666;'>{bat} Batismo | {euc} Eucaristia | {cri} Crisma</p>
-                <p style='margin:0; font-size:14px;'><b>Situação Familiar:</b> {tem_reu}</p>
+            <div style='background-color:#ffffff; padding:20px; border-radius:10px; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                <h4 style='margin:0; color:#417b99;'>{row['nome_completo']}</h4>
+                <p style='margin:5px 0; color:#666; font-size:14px;'>
+                    <b>Idade:</b> {idade_c} anos &nbsp;|&nbsp; <b>Saúde:</b> {row.get('toma_medicamento_sn', 'NÃO')} &nbsp;|&nbsp; <b>Docs:</b> {row.get('doc_em_falta', 'OK')}
+                </p>
+                <hr style='margin: 10px 0; border-color: #f0f0f0;'>
+                <p style='margin:0; font-size:13px; color:#555;'>
+                    <b>Batismo:</b> {bat} &nbsp;|&nbsp; <b>Eucaristia:</b> {euc} &nbsp;|&nbsp; <b>Crisma:</b> {cri}
+                </p>
+                <p style='margin:5px 0 0 0; font-size:13px; color:#555;'>
+                    <b>Família:</b> {tem_reu} &nbsp;|&nbsp; <b>Obs:</b> {row.get('obs_pastoral_familia', 'Sem registros.')}
+                </p>
             </div>
         """, unsafe_allow_html=True)
-        
-        st.markdown("#### 📋 Dossiê Rápido")
-        idade_c = calcular_idade(row['data_nascimento'])
-        c_d1, c_d2 = st.columns(2)
-        c_d1.write(f"🎂 **Idade:** {idade_c} anos")
-        c_d1.write(f"🏥 **Saúde:** {row.get('toma_medicamento_sn', 'NÃO')}")
-        c_d2.write(f"📄 **Docs:** {row.get('doc_em_falta', 'OK')}")
-        
-        st.info(f"📝 **Última Obs. Pastoral:**\n{row.get('obs_pastoral_familia', 'Sem registros.')}")
         
         st.markdown("<br>", unsafe_allow_html=True)
         montar_botoes_whatsapp(row)
         
         st.markdown("<br>", unsafe_allow_html=True)
-        with st.expander("📜 Ver Extrato de Caminhada (Presenças e Temas)"):
+        with st.expander("Ver Extrato de Caminhada (Presenças e Temas)"):
             if not minhas_pres.empty and 'id_catequizando' in minhas_pres.columns:
                 pres_aluno = minhas_pres[minhas_pres['id_catequizando'] == row['id_catequizando']].copy()
-                pres_aluno['data_dt'] = pd.to_datetime(pres_aluno.get('data_encontro', ''), errors='coerce')
+                pres_aluno['data_dt'] = pd.to_datetime(pres_aluno.get('data_encontro', ''), errors='coerce', dayfirst=True)
                 pres_aluno = pres_aluno.sort_values('data_dt', ascending=False)
                 for _, p in pres_aluno.iterrows():
                     icone_p = "✅" if p.get('status', '') == "PRESENTE" else "❌"
@@ -959,47 +891,6 @@ elif menu == "📚 Minha Turma":
                     st.markdown(f"<div style='padding:5px; border-bottom:1px solid #eee;'><span style='color:{cor_p};'>{icone_p}</span> <b>{formatar_data_br(p.get('data_encontro', ''))}</b> | {p.get('tema_do_dia', 'Tema não registrado')}</div>", unsafe_allow_html=True)
             else:
                 st.info("Nenhum registro de presença.")
-
-    st.divider()
-
-    st.subheader("🎯 Itinerário")
-    col_p1, col_p2 = st.columns(2)
-    
-    with col_p1:
-        st.info("**Último Tema Dado:**")
-        if not df_enc_t.empty:
-            ultimo = df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()].copy()
-            if not ultimo.empty:
-                # Converte para data real e filtra apenas encontros que já aconteceram (<= hoje)
-                ultimo['data_sort'] = pd.to_datetime(ultimo['data'], errors='coerce', dayfirst=True)
-                hoje_str = pd.to_datetime(date.today())
-                ultimo_passado = ultimo[ultimo['data_sort'] <= hoje_str].sort_values('data_sort', ascending=False)
-                
-                if not ultimo_passado.empty: 
-                    st.write(ultimo_passado.iloc[0]['tema'])
-                else: 
-                    st.write("Nenhum encontro anterior a hoje.")
-            else: 
-                st.write("Nenhum registro.")
-        else: 
-            st.write("Nenhum registro.")
-            
-    with col_p2:
-        st.success("**Próximo Tema Planejado:**")
-        if not df_cron_t.empty:
-            # Blindagem: O Google Sheets pode deixar o cabeçalho vazio, o Pandas chama de 'col_4'
-            col_status = 'status' if 'status' in df_cron_t.columns else ('col_4' if 'col_4' in df_cron_t.columns else None)
-            
-            proximo = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
-            
-            # Filtra os temas que não estão marcados como REALIZADO
-            if col_status:
-                proximo = proximo[proximo[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
-                
-            if not proximo.empty: 
-                st.write(proximo.iloc[0]['titulo_tema'])
-            else: 
-                st.write("Cronograma em dia!")
 
 
 # ==============================================================================
