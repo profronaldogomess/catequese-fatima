@@ -492,6 +492,9 @@ if menu == "🏠 Início / Dashboard":
         turmas_em_recesso =[]
         
         if not df_enc_local.empty:
+            # BLINDAGEM: Cria a coluna de data formatada antes de tentar filtrar
+            df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
+            
             df_enc_recente = df_enc_local[df_enc_local['data_dt'].dt.date >= limite_aud]
             recessos_recentes = df_enc_recente[df_enc_recente['tema'].str.contains("RECESSO|FERIADO", na=False, case=False)]
             turmas_em_recesso = recessos_recentes['turma'].str.strip().str.upper().unique().tolist()
