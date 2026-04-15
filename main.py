@@ -1256,13 +1256,33 @@ elif menu == "📝 Inscrever Catequizando":
             qual_grupo = st.text_input("Qual grupo/pastoral e quem participa?", key=f"qual_grupo_{fk}").upper()
 
         st.divider()
-        st.subheader("📜 4. Histórico de Sacramentos (Outras Paróquias)")
-        st.info("Preencha as datas abaixo se o catequizando já possuir sacramentos de outras paróquias (pode ser ano aproximado).")
+        st.subheader("🕊️ 4. Histórico de Sacramentos")
+        st.info("Se o catequizando já possui sacramentos, informe a data (se souber) e a paróquia de origem.")
+        
         c_hist1, c_hist2, c_hist3 = st.columns(3)
-        dt_bat_hist = c_hist1.text_input("Data do Batismo", placeholder="Ex: 15/04/2015", key=f"dt_bat_{fk}")
-        dt_euc_hist = c_hist2.text_input("Data da 1ª Eucaristia", placeholder="Ex: 20/11/2022", key=f"dt_euc_{fk}")
-        dt_cri_hist = c_hist3.text_input("Data da Crisma", placeholder="Ex: 10/12/2025", key=f"dt_cri_{fk}")
-        paroq_hist = st.text_input("Paróquia de Origem dos Sacramentos", placeholder="Ex: Paróquia São José - Ilhéus", key=f"paroq_hist_{fk}").upper()
+        with c_hist1:
+            dt_bat_hist_dt = st.date_input("Data do Batismo", value=None, format="DD/MM/YYYY", min_value=data_min, max_value=hoje, key=f"dt_bat_{fk}")
+        with c_hist2:
+            dt_euc_hist_dt = st.date_input("Data da Eucaristia", value=None, format="DD/MM/YYYY", min_value=data_min, max_value=hoje, key=f"dt_euc_{fk}")
+        with c_hist3:
+            dt_cri_hist_dt = st.date_input("Data da Crisma", value=None, format="DD/MM/YYYY", min_value=data_min, max_value=hoje, key=f"dt_cri_{fk}")
+            
+        paroq_hist = st.text_input("⛪ Paróquia de Origem (Se feito fora daqui)", placeholder="Ex: Paróquia São José - Ilhéus", key=f"paroq_hist_{fk}").upper()
+        
+        dt_bat_hist = dt_bat_hist_dt.strftime('%d/%m/%Y') if dt_bat_hist_dt else "N/A"
+        dt_euc_hist = dt_euc_hist_dt.strftime('%d/%m/%Y') if dt_euc_hist_dt else "N/A"
+        dt_cri_hist = dt_cri_hist_dt.strftime('%d/%m/%Y') if dt_cri_hist_dt else "N/A"
+        
+        # Sincroniza o status de batismo e sacramentos com as datas preenchidas
+        if dt_bat_hist != "N/A": batizado = "SIM"
+        
+        sacs_marcados_novo =[]
+        if dt_bat_hist != "N/A" or batizado == "SIM": sacs_marcados_novo.append("BATISMO")
+        if dt_euc_hist != "N/A": sacs_marcados_novo.append("EUCARISTIA")
+        if dt_cri_hist != "N/A": sacs_marcados_novo.append("CRISMA")
+        if tipo_ficha == "Adulto" and "MATRIMÔNIO" in sacramentos: sacs_marcados_novo.append("MATRIMÔNIO")
+        
+        sacramentos = ", ".join(sacs_marcados_novo) if sacs_marcados_novo else "N/A"
 
         st.divider()
         st.subheader("🏥 5. Saúde e Documentação")
@@ -1323,17 +1343,17 @@ elif menu == "📝 Inscrever Catequizando":
                     obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
 
                 registro = [[
-                    novo_id, etapa_inscricao, nome, data_nasc.strftime('%d/%m/%Y'), batizado, 
-                    contato, endereco, nome_mae, nome_pai, resp_final, 
-                    doc_status_k, qual_grupo, "ATIVO", medicamento, tgo_final, 
-                    estado_civil, sacramentos, prof_mae, tel_mae, prof_pai, 
-                    tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo, 
-                    tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia,
-                    formatar_data_br(dt_bat_hist) if dt_bat_hist else "N/A",
-                    formatar_data_br(dt_euc_hist) if dt_euc_hist else "N/A",
-                    formatar_data_br(dt_cri_hist) if dt_cri_hist else "N/A",
-                    paroq_hist if paroq_hist else "N/A"
-                ]]
+                        novo_id, etapa_inscricao, nome, data_nasc.strftime('%d/%m/%Y'), batizado, 
+                        contato, endereco, nome_mae, nome_pai, resp_final, 
+                        doc_status_k, qual_grupo, "ATIVO", medicamento, tgo_final, 
+                        estado_civil, sacramentos, prof_mae, tel_mae, prof_pai, 
+                        tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo, 
+                        tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia,
+                        dt_bat_hist,
+                        dt_euc_hist,
+                        dt_cri_hist,
+                        paroq_hist if paroq_hist else "N/A"
+                    ]]
 
                 # 2. Verificar duplicidade
                 duplicatas = df_cat[df_cat['nome_completo'].str.upper() == nome.upper()]
@@ -1492,14 +1512,14 @@ elif menu == "👤 Perfil Individual":
                 tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
                 
                 # --- BUSCA HÍBRIDA DE DATAS (Passado + Presente) ---
-                v_bat_hist = str(dados.iloc[30]) if len(dados) > 30 else "N/A"
-                v_euc_hist = str(dados.iloc[31]) if len(dados) > 31 else "N/A"
-                v_cri_hist = str(dados.iloc[32]) if len(dados) > 32 else "N/A"
-                v_paroq_hist = str(dados.iloc[33]) if len(dados) > 33 else "N/A"
+                v_bat_hist = str(dados.iloc[30]).strip() if len(dados) > 30 else "N/A"
+                v_euc_hist = str(dados.iloc[31]).strip() if len(dados) > 31 else "N/A"
+                v_cri_hist = str(dados.iloc[32]).strip() if len(dados) > 32 else "N/A"
+                v_paroq_hist = str(dados.iloc[33]).strip() if len(dados) > 33 else "N/A"
 
-                data_bat = f" ({v_bat_hist})" if v_bat_hist != "N/A" else ""
-                data_euc = f" ({v_euc_hist})" if v_euc_hist != "N/A" else ""
-                data_cri = f" ({v_cri_hist})" if v_cri_hist != "N/A" else ""
+                data_bat = f" ({v_bat_hist})" if v_bat_hist not in ["N/A", "", "None", "()"] else ""
+                data_euc = f" ({v_euc_hist})" if v_euc_hist not in["N/A", "", "None", "()"] else ""
+                data_cri = f" ({v_cri_hist})" if v_cri_hist not in ["N/A", "", "None", "()"] else ""
 
                 df_recebidos = ler_aba("sacramentos_recebidos")
                 if not df_recebidos.empty:
@@ -1551,11 +1571,10 @@ elif menu == "👤 Perfil Individual":
                     idx_status = opcoes_status.index(status_atual) if status_atual in opcoes_status else 0
                     ed_status = ce2.selectbox("Alterar Status para:", opcoes_status, index=idx_status, help="CONCLUÍDO: Finalizou a Crisma. DESISTENTE: Saiu da catequese.")
 
-                    c3, c4, c5 = st.columns([1, 1, 2])
+                    c3, c5 = st.columns([1, 2])
                     hoje = date.today()
                     data_min = date(hoje.year - 100, 1, 1)
                     ed_nasc = c3.date_input("Nascimento", value=converter_para_data(dados['data_nascimento']), min_value=data_min, max_value=hoje, format="DD/MM/YYYY")
-                    ed_batizado = c4.selectbox("Batizado?",["SIM", "NÃO"], index=0 if dados['batizado_sn'] == "SIM" else 1)
                     
                     lista_t_nomes = df_turmas['nome_turma'].tolist() if not df_turmas.empty else [dados['etapa']]
                     try: idx_turma_banco = lista_t_nomes.index(dados['etapa'])
@@ -1613,18 +1632,50 @@ elif menu == "👤 Perfil Individual":
                         ed_est_civil = "N/A"
 
                     st.markdown("#### 🕊️ Sacramentos Possuídos e Histórico")
-                    sac_atuais = str(dados.get('sacramentos_ja_feitos', '')).upper()
-                    opcoes_sac =["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"]
-                    default_sacs =[s.strip() for s in sac_atuais.split(',') if s.strip() in opcoes_sac]
-                    ed_sacramentos = st.multiselect("Marque/Desmarque os sacramentos possuídos:", opcoes_sac, default=default_sacs)
-                    ed_sac_final = ", ".join(ed_sacramentos)
+                    st.info("Marque os sacramentos que o catequizando já possui. Se souber a data, preencha no calendário.")
                     
-                    st.info("Caso os sacramentos tenham sido feitos em outra paróquia, preencha as datas abaixo:")
-                    c_h1, c_h2, c_h3 = st.columns(3)
-                    ed_bat_hist = c_h1.text_input("Data Batismo (Histórico)", value="" if v_bat_hist=="N/A" else v_bat_hist)
-                    ed_euc_hist = c_h2.text_input("Data Eucaristia (Histórico)", value="" if v_euc_hist=="N/A" else v_euc_hist)
-                    ed_cri_hist = c_h3.text_input("Data Crisma (Histórico)", value="" if v_cri_hist=="N/A" else v_cri_hist)
-                    ed_paroq_hist = st.text_input("Paróquia de Origem dos Sacramentos", value="" if v_paroq_hist=="N/A" else v_paroq_hist).upper()
+                    sac_atuais = str(dados.get('sacramentos_ja_feitos', '')).upper()
+                    
+                    def parse_hist_date(d_str):
+                        if d_str in["N/A", "", "None", "()"]: return None
+                        try: return dt_module.datetime.strptime(d_str, "%d/%m/%Y").date()
+                        except: return None
+
+                    d_bat_val = parse_hist_date(v_bat_hist)
+                    d_euc_val = parse_hist_date(v_euc_hist)
+                    d_cri_val = parse_hist_date(v_cri_hist)
+
+                    has_bat_init = "BATISMO" in sac_atuais or dados.get('batizado_sn', '') == "SIM"
+                    has_euc_init = "EUCARISTIA" in sac_atuais
+                    has_cri_init = "CRISMA" in sac_atuais
+                    has_mat_init = "MATRIMÔNIO" in sac_atuais
+
+                    c_h1, c_h2, c_h3, c_h4 = st.columns(4)
+                    with c_h1:
+                        ed_has_bat = st.toggle("💧 Batismo", value=has_bat_init)
+                        ed_bat_hist_dt = st.date_input("Data Batismo", value=d_bat_val, format="DD/MM/YYYY", min_value=data_min, max_value=hoje) if ed_has_bat else None
+                    with c_h2:
+                        ed_has_euc = st.toggle("🍞 Eucaristia", value=has_euc_init)
+                        ed_euc_hist_dt = st.date_input("Data Eucaristia", value=d_euc_val, format="DD/MM/YYYY", min_value=data_min, max_value=hoje) if ed_has_euc else None
+                    with c_h3:
+                        ed_has_cri = st.toggle("🔥 Crisma", value=has_cri_init)
+                        ed_cri_hist_dt = st.date_input("Data Crisma", value=d_cri_val, format="DD/MM/YYYY", min_value=data_min, max_value=hoje) if ed_has_cri else None
+                    with c_h4:
+                        ed_has_mat = st.toggle("💍 Matrimônio", value=has_mat_init)
+
+                    ed_paroq_hist = st.text_input("⛪ Paróquia de Origem (Se feito fora daqui)", value="" if v_paroq_hist in ["N/A", "None"] else v_paroq_hist, help="Ex: Paróquia São José - Ilhéus").upper()
+                    
+                    sacs_marcados =[]
+                    if ed_has_bat: sacs_marcados.append("BATISMO")
+                    if ed_has_euc: sacs_marcados.append("EUCARISTIA")
+                    if ed_has_cri: sacs_marcados.append("CRISMA")
+                    if ed_has_mat: sacs_marcados.append("MATRIMÔNIO")
+                    ed_sac_final = ", ".join(sacs_marcados)
+                    
+                    ed_batizado = "SIM" if ed_has_bat else "NÃO"
+                    ed_bat_hist = ed_bat_hist_dt.strftime('%d/%m/%Y') if ed_bat_hist_dt else "N/A"
+                    ed_euc_hist = ed_euc_hist_dt.strftime('%d/%m/%Y') if ed_euc_hist_dt else "N/A"
+                    ed_cri_hist = ed_cri_hist_dt.strftime('%d/%m/%Y') if ed_cri_hist_dt else "N/A"
 
                     st.divider()
 
