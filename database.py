@@ -335,8 +335,29 @@ def registrar_evento_sacramento_completo(dados_evento, lista_participantes, tipo
     planilha = conectar_google_sheets()
     if not planilha: return False
     try:
+        aba_recebidos = planilha.worksheet("sacramentos_recebidos")
+        dados_recebidos = aba_recebidos.get_all_values()
+        
+        # BLINDAGEM: Cria uma lista de (ID, Sacramento) que já existem no banco
+        existentes = set()
+        if len(dados_recebidos) > 1:
+            for linha in dados_recebidos[1:]:
+                if len(linha) >= 4: existentes.add((linha[1], str(linha[3]).upper()))
+        
+        # Filtra quem já tem o sacramento para não duplicar no arquivo CSV
+        participantes_filtrados =[]
+        for p in lista_participantes:
+            if (p[1], tipo_sacramento.upper()) not in existentes:
+                participantes_filtrados.append(p)
+                
+        if not participantes_filtrados:
+            st.warning("⚠️ Todos os catequizandos selecionados já possuem este sacramento registrado no Cartório!")
+            return False
+
+        # Salva o evento e APENAS os participantes que não estavam duplicados
         planilha.worksheet("sacramentos_eventos").append_row(dados_evento)
-        planilha.worksheet("sacramentos_recebidos").append_rows(lista_participantes)
+        aba_recebidos.append_rows(participantes_filtrados)
+        
         aba_cat = planilha.worksheet("catequizandos")
         headers = [h.lower() for h in aba_cat.row_values(1)]
         col_id = headers.index("id_catequizando") + 1
