@@ -1647,7 +1647,6 @@ elif menu == "👤 Perfil Individual":
                     # Filtra o que já está entregue
                     entregues_pre = [d for d in docs_obrigatorios if d not in faltas_atuais]
                     
-                    st.markdown("**📁 Checklist de Documentos (Xerox):**")
                     ed_docs_entregues = st.multiselect("Marque o que JÁ ESTÁ NA PASTA:", docs_obrigatorios, default=entregues_pre)
                     
                     novas_faltas = [d for d in docs_obrigatorios if d not in ed_docs_entregues]
