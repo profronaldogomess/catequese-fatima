@@ -105,7 +105,8 @@ from database import (
     registrar_evento_sacramento_completo, salvar_reuniao_pais, salvar_presenca_reuniao_pais, 
     atualizar_reuniao_pais, sincronizar_logistica_turma_nos_catequizandos, sincronizar_renomeacao_turma_geral,
     marcar_tema_realizado_cronograma, carregar_dados_globais, sincronizar_edicao_catequizando, 
-    salvar_com_seguranca, atualizar_encontro_global, excluir_encontro_cascata
+    salvar_com_seguranca, atualizar_encontro_global, excluir_encontro_cascata,
+    gerenciar_edicao_evento_sacramento, excluir_evento_sacramento_cascata
 )
 from utils import (
     calcular_idade, sugerir_etapa, eh_aniversariante_da_semana, 
@@ -119,7 +120,6 @@ from utils import (
     gerar_lista_assinatura_reuniao_pdf, gerar_relatorio_diocesano_pdf, 
     gerar_relatorio_pastoral_pdf, gerar_relatorio_local_turma_pdf,
     gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes,gerar_pdf_auditoria_chamadas, obter_data_ultimo_sabado, obter_ultima_chamada_turma
-
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -2490,17 +2490,61 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 df_eventos = df_eventos.sort_values(by='data_dt', ascending=False)
                 st.dataframe(df_eventos[['tipo', 'data', 'turmas', 'catequista']], use_container_width=True, hide_index=True)
                 
-                with st.expander("✏️ Corrigir Data de um Evento"):
+                with st.expander("✏️ Gerenciar Evento (Corrigir, Adicionar Alunos ou Excluir)"):
                     id_para_editar = st.selectbox("Selecione o ID do Evento:", [""] + df_eventos['id_evento'].tolist())
                     if id_para_editar:
                         dados_atuais = df_eventos[df_eventos['id_evento'] == id_para_editar].iloc[0]
+                        tipo_atual = dados_atuais['tipo']
+                        turmas_str = dados_atuais['turmas']
+                        
+                        df_recebidos = ler_aba("sacramentos_recebidos")
+                        participantes_atuais = df_recebidos[df_recebidos.iloc[:, 0] == id_para_editar].iloc[:, 1].tolist() if not df_recebidos.empty else []
+                        
+                        turmas_lista =[t.strip() for t in turmas_str.split(",") if t.strip()]
+                        alunos_elegiveis = df_cat[(df_cat['etapa'].isin(turmas_lista))]
+                        
                         with st.form("form_edit_sac_evento"):
+                            st.markdown(f"**Evento:** {tipo_atual} | **Turmas:** {turmas_str}")
                             ed_data = st.date_input("Data Correta", value=pd.to_datetime(dados_atuais['data']).date(), format="DD/MM/YYYY")
-                            if st.form_submit_button("💾 SALVAR NOVA DATA"):
-                                from database import atualizar_evento_sacramento
-                                novos_dados =[id_para_editar, dados_atuais['tipo'], str(ed_data), dados_atuais['turmas'], dados_atuais['catequista']]
-                                if atualizar_evento_sacramento(id_para_editar, novos_dados):
-                                    st.success("✅ Data corrigida!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            
+                            st.markdown("---")
+                            st.markdown("**👥 Gerenciar Participantes:**")
+                            opcoes_nomes = alunos_elegiveis['nome_completo'].tolist() if not alunos_elegiveis.empty else []
+                            nomes_atuais = list(set(df_cat[df_cat['id_catequizando'].isin(participantes_atuais)]['nome_completo'].tolist())) if participantes_atuais else[]
+                            
+                            # Para eventos avulsos, garante que o nome exista na lista
+                            for n in nomes_atuais:
+                                if n not in opcoes_nomes: opcoes_nomes.append(n)
+                                
+                            ed_participantes = st.multiselect("Alunos Presentes no Sacramento:", options=opcoes_nomes, default=[n for n in nomes_atuais if n in opcoes_nomes])
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            c_btn1, c_btn2 = st.columns([3, 1])
+                            btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
+                            btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR EVENTO", use_container_width=True)
+                            
+                            st.markdown("---")
+                            confirma_del = st.checkbox("⚠️ Confirmo a exclusão definitiva deste evento e de todos os seus registros", key=f"chk_del_sac_{id_para_editar}")
+                            
+                            if btn_salvar:
+                                with st.spinner("Atualizando registros no cartório e nas fichas..."):
+                                    novos_p_lista =[]
+                                    for nome in ed_participantes:
+                                        id_c = df_cat[df_cat['nome_completo'] == nome].iloc[0]['id_catequizando']
+                                        novos_p_lista.append([id_para_editar, id_c, nome, tipo_atual, str(ed_data)])
+                                    
+                                    novos_dados_ev =[id_para_editar, tipo_atual, str(ed_data), turmas_str, dados_atuais['catequista']]
+                                    
+                                    if gerenciar_edicao_evento_sacramento(id_para_editar, novos_dados_ev, novos_p_lista, tipo_atual):
+                                        st.success("✅ Evento atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        
+                            if btn_excluir:
+                                if confirma_del:
+                                    with st.spinner("Excluindo evento e revertendo selos sacramentais..."):
+                                        if excluir_evento_sacramento_cascata(id_para_editar, tipo_atual):
+                                            st.success("✅ Evento excluído e revertido!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                else:
+                                    st.error("⚠️ Marque a caixa de confirmação para excluir.")
             else:
                 st.info("Nenhum evento registrado no histórico.")
 
