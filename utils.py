@@ -438,18 +438,10 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
     marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec2)
     marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec2)
-
-    y_ec2 = pdf.get_y()
-    if y_ec2 < y_ec + 5: y_ec2 = y_ec + 5
     
-    pdf.set_font("helvetica", "B", 8)
-    pdf.set_xy(10, y_ec2)
-    pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
-    marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec2)
-    marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec2)
-
     # --- SEÇÃO 4: TERMO LGPD E ECA DIGITAL ---
-    pdf.ln(2) # Reduzido de 5 para 2
+    # BLINDAGEM VISUAL: Força o cursor a ficar exatamente 6mm abaixo dos checkboxes para não atropelar a escrita
+    pdf.set_y(y_ec2 + 6) 
     pdf.set_font("helvetica", "B", 9)
     pdf.set_text_color(224, 61, 17) 
     pdf.cell(0, 5, limpar_texto("4. AUTORIZAÇÃO DE USO DE IMAGEM E VOZ (LGPD E ECA DIGITAL)"), ln=True)
