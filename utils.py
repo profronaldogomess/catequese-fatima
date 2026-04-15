@@ -384,15 +384,20 @@ def _desenhar_corpo_ficha(pdf, dados):
         y += 12
         desenhar_campo_box(pdf, "Responsável Legal (Caso não more com pais):", dados.get('nome_responsavel', 'N/A'), 10, y, 190)
 
-# --- BUSCA INTELIGENTE DE DATAS DE SACRAMENTOS ---
-    df_recebidos = ler_aba("sacramentos_recebidos")
-    data_bat_pdf, data_euc_pdf = "Pendente", "Pendente"
-    id_cat = str(dados.get('id_catequizando', ''))
-    if not df_recebidos.empty and id_cat:
-        rec_aluno = df_recebidos[df_recebidos.iloc[:, 1] == id_cat]
-        for _, r in rec_aluno.iterrows():
-            if r.iloc[3].upper() == 'BATISMO': data_bat_pdf = formatar_data_br(r.iloc[4])
-            if r.iloc[3].upper() == 'EUCARISTIA': data_euc_pdf = formatar_data_br(r.iloc[4])
+    # --- BUSCA INTELIGENTE DE DATAS DE SACRAMENTOS ---
+    try:
+        from database import ler_aba
+        df_recebidos = ler_aba("sacramentos_recebidos")
+        data_bat_pdf, data_euc_pdf, data_cri_pdf = "---", "---", "---"
+        id_cat = str(dados.get('id_catequizando', ''))
+        if not df_recebidos.empty and id_cat:
+            rec_aluno = df_recebidos[df_recebidos.iloc[:, 1] == id_cat]
+            for _, r in rec_aluno.iterrows():
+                if str(r.iloc[3]).upper() == 'BATISMO': data_bat_pdf = formatar_data_br(r.iloc[4])
+                if str(r.iloc[3]).upper() == 'EUCARISTIA': data_euc_pdf = formatar_data_br(r.iloc[4])
+                if str(r.iloc[3]).upper() == 'CRISMA': data_cri_pdf = formatar_data_br(r.iloc[4])
+    except:
+        data_bat_pdf, data_euc_pdf, data_cri_pdf = "---", "---", "---"
 
     # --- SEÇÃO 3: VIDA ECLESIAL E DOCUMENTOS ---
     pdf.set_y(y + 13) 
@@ -403,22 +408,36 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_text_color(0, 0, 0)
     y_ec = pdf.get_y() + 1
     
-    # Sub-bloco: Sacramentos Realizados (Com Data) e Documentos
+    # Sub-bloco: Sacramentos Realizados (Com Data) e Documentos Faltando
     pdf.set_font("helvetica", "B", 8)
     pdf.set_xy(10, y_ec)
-    pdf.cell(20, 5, "Batizado:", ln=0)
+    pdf.cell(14, 5, "Batismo:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.cell(25, 5, limpar_texto(data_bat_pdf), ln=0)
+    pdf.cell(20, 5, limpar_texto(data_bat_pdf), ln=0)
     
     pdf.set_font("helvetica", "B", 8)
-    pdf.cell(25, 5, "1ª Eucaristia:", ln=0)
+    pdf.cell(18, 5, "Eucaristia:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.cell(25, 5, limpar_texto(data_euc_pdf), ln=0)
+    pdf.cell(20, 5, limpar_texto(data_euc_pdf), ln=0)
+
+    pdf.set_font("helvetica", "B", 8)
+    pdf.cell(12, 5, "Crisma:", ln=0)
+    pdf.set_font("helvetica", "", 8)
+    pdf.cell(20, 5, limpar_texto(data_cri_pdf), ln=0)
     
     pdf.set_font("helvetica", "B", 8)
-    pdf.cell(30, 5, "Faltando Docs:", ln=0)
+    pdf.cell(26, 5, "Faltando Docs:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.multi_cell(65, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
+    pdf.multi_cell(60, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
+
+    y_ec2 = pdf.get_y()
+    if y_ec2 < y_ec + 5: y_ec2 = y_ec + 5
+    
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_xy(10, y_ec2)
+    pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
+    marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec2)
+    marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec2)
 
     y_ec2 = pdf.get_y()
     if y_ec2 < y_ec + 5: y_ec2 = y_ec + 5
