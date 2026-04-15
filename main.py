@@ -119,7 +119,7 @@ from utils import (
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
     gerar_lista_assinatura_reuniao_pdf, gerar_relatorio_diocesano_pdf, 
     gerar_relatorio_pastoral_pdf, gerar_relatorio_local_turma_pdf,
-    gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes,gerar_pdf_auditoria_chamadas, obter_data_ultimo_sabado, obter_ultima_chamada_turma
+    gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes,gerar_pdf_auditoria_chamadas, obter_data_ultimo_sabado, obter_ultima_chamada_turma, gerar_livro_sacramentos_pdf
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -3622,32 +3622,9 @@ elif menu == "🕊️ Acervo de Sacramentos":
     st.title("🕊️ Cartório e Acervo Sacramental")
     st.markdown("Consulte o histórico de sacramentos ou registre lançamentos avulsos (ex: lembranças de outras paróquias).")
     
-    col_busca, col_hist = st.columns([1, 1])
-    with col_busca:
-        st.markdown("#### 🔍 Lançamento Avulso")
-        nome_busca = st.text_input("Digite o nome do catequizando:").upper()
-        if nome_busca:
-            sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
-            if not sugestoes.empty:
-                escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist())
-                dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
-                st.info(f"**Sacramentos Atuais:** {dados_c.get('sacramentos_ja_feitos', 'Nenhum')}")
-                
-                with st.form("form_sac_individual_sec"):
-                    c1, c2 = st.columns(2)
-                    tipo_s_ind = c1.selectbox("Sacramento", ["BATISMO", "EUCARISTIA", "CRISMA"])
-                    data_s_ind = c2.date_input("Data", date.today(), format="DD/MM/YYYY")
-                    local_ind = st.text_input("Local (Ex: Paróquia São José - Ilhéus)").upper()
-                    
-                    if st.form_submit_button("💾 SALVAR REGISTRO AVULSO", use_container_width=True):
-                        id_ev = f"IND-{int(time.time())}"
-                        local_final = f"Avulso: {local_ind}" if local_ind else "Avulso"
-                        if registrar_evento_sacramento_completo([id_ev, tipo_s_ind, str(data_s_ind), dados_c['etapa'], f"{st.session_state.usuario['nome']} ({local_final})"], [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s_ind, str(data_s_ind)]], tipo_s_ind):
-                            st.success("Registrado no acervo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-            else:
-                st.warning("Catequizando não encontrado.")
-
-    with col_hist:
+    tab_livro, tab_avulso = st.tabs(["📜 Livro de Registros (Cartório Oficial)", "➕ Lançamento Avulso"])
+    
+    with tab_livro:
         st.markdown("#### 📜 Livro de Registros (Cartório Oficial)")
         df_eventos = ler_aba("sacramentos_eventos")
         df_recebidos = ler_aba("sacramentos_recebidos")
@@ -3665,16 +3642,49 @@ elif menu == "🕊️ Acervo de Sacramentos":
                 'nome': 'Catequizando', 'tipo': 'Sacramento', 'data': 'Data', 'turmas': 'Turma', 'catequista': 'Local / Celebrante'
             })
             
-            busca_livro = st.text_input("🔍 Buscar Certidão (Nome ou Sacramento):").upper()
+            c_busca, c_btn = st.columns([3, 1])
+            busca_livro = c_busca.text_input("🔍 Buscar Certidão (Nome ou Sacramento):").upper()
+            
             if busca_livro:
                 df_livro_exibicao = df_livro_exibicao[
                     df_livro_exibicao['Catequizando'].str.contains(busca_livro, na=False) | 
                     df_livro_exibicao['Sacramento'].str.contains(busca_livro, na=False)
                 ]
             
+            if c_btn.button("🖨️ Gerar PDF do Livro", use_container_width=True):
+                st.session_state.pdf_livro_sacramentos = gerar_livro_sacramentos_pdf(df_livro_exibicao)
+                
+            if "pdf_livro_sacramentos" in st.session_state:
+                c_btn.download_button("📥 Baixar PDF", st.session_state.pdf_livro_sacramentos, "Livro_Sacramentos.pdf", "application/pdf", use_container_width=True)
+            
             st.dataframe(df_livro_exibicao, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhum sacramento registrado no histórico.")
+
+    with tab_avulso:
+        st.markdown("#### 🔍 Lançamento Avulso")
+        st.markdown("Use para registrar um sacramento feito em outra cidade ou corrigir o acervo de um catequizando específico.")
+        nome_busca = st.text_input("Digite o nome do catequizando:").upper()
+        if nome_busca:
+            sugestoes = df_cat[df_cat['nome_completo'].str.contains(nome_busca)] if not df_cat.empty else pd.DataFrame()
+            if not sugestoes.empty:
+                escolhido = st.selectbox("Selecione o catequizando:", sugestoes['nome_completo'].tolist())
+                dados_c = sugestoes[sugestoes['nome_completo'] == escolhido].iloc[0]
+                st.info(f"**Sacramentos Atuais:** {dados_c.get('sacramentos_ja_feitos', 'Nenhum')}")
+                
+                with st.form("form_sac_individual_sec"):
+                    c1, c2 = st.columns(2)
+                    tipo_s_ind = c1.selectbox("Sacramento",["BATISMO", "EUCARISTIA", "CRISMA"])
+                    data_s_ind = c2.date_input("Data", date.today(), format="DD/MM/YYYY")
+                    local_ind = st.text_input("Local (Ex: Paróquia São José - Ilhéus)").upper()
+                    
+                    if st.form_submit_button("💾 SALVAR REGISTRO AVULSO", use_container_width=True):
+                        id_ev = f"IND-{int(time.time())}"
+                        local_final = f"Avulso: {local_ind}" if local_ind else "Avulso"
+                        if registrar_evento_sacramento_completo([id_ev, tipo_s_ind, data_s_ind.strftime('%d/%m/%Y'), dados_c['etapa'], f"{st.session_state.usuario['nome']} ({local_final})"], [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s_ind, data_s_ind.strftime('%d/%m/%Y')]], tipo_s_ind):
+                            st.success("Registrado no acervo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+            else:
+                st.warning("Catequizando não encontrado.")
 
 elif menu == "📖 Consulta de Encontros":
     st.title("📖 Consulta de Encontros (Diário)")
