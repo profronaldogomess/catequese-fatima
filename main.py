@@ -351,7 +351,7 @@ else:
 if menu == "🏠 Início / Dashboard":
     st.title("📊 Torre de Controle Pastoral")
     
-    # Helper local para salvar recesso em lote sem sobrecarregar a API
+    # Helpers locais do Calendário Paroquial
     def registrar_recesso_lote(data_rec, motivo, turmas_lista, nome_coord):
         planilha = conectar_google_sheets()
         if planilha:
@@ -361,9 +361,25 @@ if menu == "🏠 Início / Dashboard":
                 aba.append_rows(linhas)
                 st.cache_data.clear()
                 return True
-            except Exception as e:
-                st.error(f"Erro: {e}")
-                return False
+            except Exception as e: st.error(f"Erro: {e}"); return False
+        return False
+
+    def excluir_recesso_lote(data_alvo):
+        planilha = conectar_google_sheets()
+        if planilha:
+            try:
+                aba = planilha.worksheet("encontros")
+                dados_enc = aba.get_all_values()
+                data_str = str(data_alvo)
+                linhas_del =[i + 1 for i, l in enumerate(dados_enc) if len(l) >= 3 and l[0] == data_str and "RECESSO" in str(l[2]).upper()]
+                
+                if linhas_del: # Usa Batch Update para não estourar o limite da API do Google
+                    sheet_id = aba.id
+                    requests =[{"deleteDimension": {"range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": r - 1, "endIndex": r}}} for r in sorted(linhas_del, reverse=True)]
+                    planilha.batch_update({"requests": requests})
+                st.cache_data.clear()
+                return True
+            except Exception as e: st.error(f"Erro: {e}"); return False
         return False
 
     tab_diaria, tab_global, tab_relatorios = st.tabs([
@@ -417,42 +433,48 @@ if menu == "🏠 Início / Dashboard":
                     st.write("Nenhum aniversariante este mês.")
 
         with c_dia2:
-            st.markdown("#### ⏸️ Calendário e Recessos")
-            st.markdown("Não haverá catequese esta semana? Declare um recesso para pausar as cobranças de chamada.")
+            st.markdown("#### ⏸️ Calendário Paroquial")
+            st.markdown("Abono de faltas: registre ou remova feriados passados e futuros.")
             
-            @st.dialog("⏸️ Declarar Recesso Geral")
-            def dialog_recesso():
-                st.warning("Isso registrará um 'Encontro de Recesso' para todas as turmas, evitando que o sistema cobre chamadas atrasadas.")
-                data_rec = st.date_input("Data do Recesso/Feriado", hoje_data, format="DD/MM/YYYY")
-                motivo_rec = st.text_input("Motivo (Ex: Feriado, Chuva, Retiro)").upper()
-                
-                if st.button("✅ Confirmar Recesso para Todas as Turmas", type="primary", use_container_width=True):
-                    if motivo_rec:
-                        with st.spinner("Registrando recesso..."):
-                            turmas_ativas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
-                            if registrar_recesso_lote(data_rec, motivo_rec, turmas_ativas, st.session_state.usuario['nome']):
-                                st.success("Recesso registrado com sucesso!")
-                                st.session_state[f"recesso_ok_{hoje_data}"] = True
-                                time.sleep(1)
-                                st.rerun()
-                    else:
-                        st.error("Digite o motivo do recesso.")
-
-            if st.button("🏖️ Declarar Recesso / Feriado", use_container_width=True):
-                dialog_recesso()
-                
-            # Verifica se hoje é recesso
+            with st.expander("➕ Agendar Novo Recesso/Feriado", expanded=False):
+                with st.form("form_add_recesso"):
+                    data_rec = st.date_input("Data do Recesso", hoje_data, format="DD/MM/YYYY")
+                    motivo_rec = st.text_input("Motivo (Ex: Semana Santa, Chuva)").upper()
+                    
+                    if st.form_submit_button("✅ Aplicar para Todas as Turmas", use_container_width=True, type="primary"):
+                        if motivo_rec:
+                            with st.spinner("Abonando o calendário..."):
+                                turmas_ativas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]
+                                if registrar_recesso_lote(data_rec, motivo_rec, turmas_ativas, st.session_state.usuario['nome']):
+                                    st.success("Recesso registrado!"); time.sleep(1); st.rerun()
+                        else:
+                            st.error("Digite o motivo.")
+                            
+            st.markdown("<br><b>📜 Histórico de Recessos:</b>", unsafe_allow_html=True)
             if not df_enc_local.empty:
-                df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
-                recessos_hoje = df_enc_local[(df_enc_local['data_dt'].dt.date == hoje_data) & (df_enc_local['tema'].str.contains("RECESSO", na=False))]
-                if not recessos_hoje.empty:
-                    motivo_exibicao = recessos_hoje.iloc[0]['tema'].replace("RECESSO:", "").strip()
-                    st.markdown(f"""
-                        <div style='background-color:#fff3cd; padding:15px; border-radius:10px; border-left:5px solid #ffb300; margin-top:15px;'>
-                            <h4 style='color:#ffb300; margin:0;'>🏖️ Recesso Hoje</h4>
-                            <p style='margin:0; font-size:14px;'>{motivo_exibicao}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
+                df_recessos = df_enc_local[df_enc_local['tema'].str.contains("RECESSO", na=False, case=False)].copy()
+                if not df_recessos.empty:
+                    # Agrupa por data e motivo para não repetir a mesma data 15 vezes (1 por turma)
+                    df_recs_grouped = df_recessos.groupby(['data', 'tema']).size().reset_index()
+                    df_recs_grouped['data_dt'] = pd.to_datetime(df_recs_grouped['data'], errors='coerce')
+                    df_recs_grouped = df_recs_grouped.sort_values('data_dt', ascending=False)
+                    
+                    for idx, row in df_recs_grouped.iterrows():
+                        data_r = row['data']
+                        motivo_r = row['tema'].replace("RECESSO:", "").strip()
+                        
+                        c_r1, c_r2 = st.columns([5, 1])
+                        c_r1.markdown(f"<div style='background-color:#fff3cd; padding:8px; border-radius:5px; border-left:4px solid #ffb300; margin-bottom:5px; font-size:13px;'><b style='color:#ffb300;'>{formatar_data_br(data_r)}</b> - {motivo_r}</div>", unsafe_allow_html=True)
+                        
+                        # A Lixeira Mágica
+                        if c_r2.button("🗑️", key=f"del_rec_{data_r}_{idx}", help="Desfazer/Excluir este recesso para todas as turmas"):
+                            with st.spinner("Limpando recesso..."):
+                                if excluir_recesso_lote(data_r):
+                                    st.success("Desfeito!"); time.sleep(1); st.rerun()
+                else:
+                    st.info("Nenhum recesso registrado no sistema.")
+            else:
+                st.info("Nenhum recesso registrado no sistema.")
 
     # ==========================================================================
     # HUB 2: VISÃO GLOBAL (RADAR DE ATENÇÃO)
