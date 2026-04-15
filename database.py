@@ -222,9 +222,9 @@ def atualizar_catequizando(id_catequizando, novos_dados_lista):
             aba = planilha.worksheet("catequizandos")
             celula = aba.find(str(id_catequizando), in_column=1) # Busca estrita na Coluna A
             if celula:
-                # RIGOR 30 COLUNAS: Preenche com N/A se faltar dado, corta se sobrar
-                dados_seguros = novos_dados_lista + ["N/A"] * (30 - len(novos_dados_lista)) if len(novos_dados_lista) < 30 else novos_dados_lista[:30]
-                aba.update(f"A{celula.row}:AD{celula.row}", [dados_seguros])
+                # RIGOR 34 COLUNAS (EXPANSÃO DO ACERVO HISTÓRICO): A até AH
+                dados_seguros = novos_dados_lista + ["N/A"] * (34 - len(novos_dados_lista)) if len(novos_dados_lista) < 34 else novos_dados_lista[:34]
+                aba.update(f"A{celula.row}:AH{celula.row}", [dados_seguros])
                 st.cache_data.clear(); return True
         except Exception as e: st.error(f"Erro: {e}")
     return False
