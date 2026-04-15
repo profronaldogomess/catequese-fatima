@@ -917,7 +917,7 @@ def gerar_relatorio_diocesano_pdf(df_turmas, df_cat, df_usuarios):
     df_eventos = ler_aba("sacramentos_eventos")
     df_recebidos = ler_aba("sacramentos_recebidos")
     if not df_eventos.empty:
-        df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
+        df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce', dayfirst=True)
         df_ano_ev = df_eventos[df_eventos['data_dt'].dt.year == ANO_ATUAL]
         if not df_ano_ev.empty:
             pdf.ln(5); pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
@@ -1482,12 +1482,11 @@ def obter_ultima_chamada_turma(df_pres, nome_turma):
     pres_t = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_turma.strip().upper()].copy()
     if pres_t.empty: return None, pd.DataFrame()
     
-    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], errors='coerce')
+    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], errors='coerce', dayfirst=True)
     ultima_data = pres_t['data_dt'].max()
     if pd.isna(ultima_data): return None, pd.DataFrame()
     
-    data_str = ultima_data.strftime('%Y-%m-%d')
-    chamada_recente = pres_t[pres_t['data_encontro'] == data_str]
+    chamada_recente = pres_t[pres_t['data_dt'] == ultima_data]
     return ultima_data.date(), chamada_recente
 
 def gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, dias_limite=7):
