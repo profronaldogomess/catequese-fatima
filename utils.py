@@ -402,9 +402,9 @@ def _desenhar_corpo_ficha(pdf, dados):
         d_cri = get_dado_seguro(dados, 32)
         paroq = get_dado_seguro(dados, 33)
         
-        data_bat_pdf = d_bat if d_bat != "N/A" else "Pendente"
-        data_euc_pdf = d_euc if d_euc != "N/A" else "Pendente"
-        data_cri_pdf = d_cri if d_cri != "N/A" else "Pendente"
+        data_bat_pdf = d_bat if str(d_bat).strip() not in["N/A", "", "None"] else "Pendente"
+        data_euc_pdf = d_euc if str(d_euc).strip() not in ["N/A", "", "None"] else "Pendente"
+        data_cri_pdf = d_cri if str(d_cri).strip() not in ["N/A", "", "None"] else "Pendente"
         
         df_recebidos = ler_aba("sacramentos_recebidos")
         id_cat = str(dados.get('id_catequizando', ''))
@@ -419,10 +419,11 @@ def _desenhar_corpo_ficha(pdf, dados):
         if data_bat_pdf == "Pendente" and str(dados.get('batizado_sn', '')).upper() == "SIM":
             data_bat_pdf = "Sim (Sem data)"
             
-        if paroq != "N/A":
-            if data_bat_pdf not in ["Pendente", "---", "Sim (Sem data)"]: data_bat_pdf += f" ({paroq})"
-            if data_euc_pdf not in ["Pendente", "---"]: data_euc_pdf += f" ({paroq})"
-            if data_cri_pdf not in["Pendente", "---"]: data_cri_pdf += f" ({paroq})"
+        paroq_val = str(paroq).strip()
+        if paroq_val not in ["N/A", "", "None"]:
+            if data_bat_pdf not in["Pendente", "---", "Sim (Sem data)"]: data_bat_pdf += f" ({paroq_val})"
+            if data_euc_pdf not in ["Pendente", "---"]: data_euc_pdf += f" ({paroq_val})"
+            if data_cri_pdf not in["Pendente", "---"]: data_cri_pdf += f" ({paroq_val})"
 
     except Exception as e:
         data_bat_pdf, data_euc_pdf, data_cri_pdf = "---", "---", "---"
@@ -441,31 +442,31 @@ def _desenhar_corpo_ficha(pdf, dados):
     pdf.set_xy(10, y_ec)
     pdf.cell(14, 5, "Batismo:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.cell(20, 5, limpar_texto(data_bat_pdf), ln=0)
+    pdf.cell(45, 5, limpar_texto(data_bat_pdf), ln=0)
     
     pdf.set_font("helvetica", "B", 8)
     pdf.cell(18, 5, "Eucaristia:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.cell(20, 5, limpar_texto(data_euc_pdf), ln=0)
+    pdf.cell(45, 5, limpar_texto(data_euc_pdf), ln=0)
 
     pdf.set_font("helvetica", "B", 8)
-    pdf.cell(12, 5, "Crisma:", ln=0)
+    pdf.cell(14, 5, "Crisma:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.cell(20, 5, limpar_texto(data_cri_pdf), ln=0)
+    pdf.cell(45, 5, limpar_texto(data_cri_pdf), ln=1)
     
-    pdf.set_font("helvetica", "B", 8)
-    pdf.cell(26, 5, "Faltando Docs:", ln=0)
-    pdf.set_font("helvetica", "", 8)
-    pdf.multi_cell(60, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
-
-    y_ec2 = pdf.get_y()
-    if y_ec2 < y_ec + 5: y_ec2 = y_ec + 5
-    
+    y_ec2 = pdf.get_y() + 1
     pdf.set_font("helvetica", "B", 8)
     pdf.set_xy(10, y_ec2)
+    pdf.cell(26, 5, "Faltando Docs:", ln=0)
+    pdf.set_font("helvetica", "", 8)
+    pdf.multi_cell(150, 5, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
+
+    y_ec3 = pdf.get_y() + 1
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_xy(10, y_ec3)
     pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
-    marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec2)
-    marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec2)
+    marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec3)
+    marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec3)
     
     # --- SEÇÃO 4: TERMO LGPD E ECA DIGITAL ---
     # BLINDAGEM VISUAL: Força o cursor a ficar exatamente 6mm abaixo dos checkboxes para não atropelar a escrita
@@ -1441,6 +1442,44 @@ def gerar_lista_secretaria_pdf(nome_turma, data_cerimonia, tipo_sacramento, list
     pdf.set_font("helvetica", "", 10)
     for i, nome in enumerate(lista_nomes, 1):
         pdf.cell(15, 7, str(i), border=1, align='C'); pdf.cell(175, 7, limpar_texto(nome), border=1); pdf.ln()
+    return finalizar_pdf(pdf)
+
+def gerar_livro_sacramentos_pdf(df_livro):
+    """Gera o Livro de Registros (Cartório) em PDF."""
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, "LIVRO DE REGISTROS SACRAMENTAIS (CARTÓRIO)")
+    
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 9)
+    
+    pdf.cell(70, 8, "Catequizando", border=1, fill=True)
+    pdf.cell(35, 8, "Sacramento", border=1, fill=True, align='C')
+    pdf.cell(25, 8, "Data", border=1, fill=True, align='C')
+    pdf.cell(60, 8, "Local / Celebrante", border=1, fill=True)
+    pdf.ln()
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 8)
+    
+    for _, row in df_livro.iterrows():
+        pdf.cell(70, 6, limpar_texto(row['Catequizando']), border=1)
+        pdf.cell(35, 6, limpar_texto(row['Sacramento']), border=1, align='C')
+        
+        data_val = row['Data']
+        if isinstance(data_val, pd.Timestamp):
+            data_str = data_val.strftime('%d/%m/%Y')
+        else:
+            data_str = formatar_data_br(data_val)
+            
+        pdf.cell(25, 6, data_str, border=1, align='C')
+        pdf.cell(60, 6, limpar_texto(str(row['Local / Celebrante'])[:35]), border=1)
+        pdf.ln()
+        
+        if pdf.get_y() > 270:
+            pdf.add_page()
+            
     return finalizar_pdf(pdf)
 
 def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
