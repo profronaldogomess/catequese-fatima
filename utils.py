@@ -384,26 +384,50 @@ def _desenhar_corpo_ficha(pdf, dados):
         y += 12
         desenhar_campo_box(pdf, "Responsável Legal (Caso não more com pais):", dados.get('nome_responsavel', 'N/A'), 10, y, 190)
 
+# --- BUSCA INTELIGENTE DE DATAS DE SACRAMENTOS ---
+    df_recebidos = ler_aba("sacramentos_recebidos")
+    data_bat_pdf, data_euc_pdf = "Pendente", "Pendente"
+    id_cat = str(dados.get('id_catequizando', ''))
+    if not df_recebidos.empty and id_cat:
+        rec_aluno = df_recebidos[df_recebidos.iloc[:, 1] == id_cat]
+        for _, r in rec_aluno.iterrows():
+            if r.iloc[3].upper() == 'BATISMO': data_bat_pdf = formatar_data_br(r.iloc[4])
+            if r.iloc[3].upper() == 'EUCARISTIA': data_euc_pdf = formatar_data_br(r.iloc[4])
+
     # --- SEÇÃO 3: VIDA ECLESIAL E DOCUMENTOS ---
-    pdf.set_y(y + 13) # Reduzido de 16 para 13
+    pdf.set_y(y + 13) 
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 6, limpar_texto("  3. VIDA ECLESIAL E DOCUMENTAÇÃO"), ln=True, fill=True)
     
     pdf.set_text_color(0, 0, 0)
     y_ec = pdf.get_y() + 1
+    
+    # Sub-bloco: Sacramentos Realizados (Com Data) e Documentos
     pdf.set_font("helvetica", "B", 8)
     pdf.set_xy(10, y_ec)
-    pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
-    marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec)
-    marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec)
-    
-    pdf.set_xy(105, y_ec)
-    pdf.set_font("helvetica", "B", 8)
-    pdf.cell(40, 5, "Documentos Faltando:", ln=0)
-    
+    pdf.cell(20, 5, "Batizado:", ln=0)
     pdf.set_font("helvetica", "", 8)
-    pdf.multi_cell(60, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
+    pdf.cell(25, 5, limpar_texto(data_bat_pdf), ln=0)
+    
+    pdf.set_font("helvetica", "B", 8)
+    pdf.cell(25, 5, "1ª Eucaristia:", ln=0)
+    pdf.set_font("helvetica", "", 8)
+    pdf.cell(25, 5, limpar_texto(data_euc_pdf), ln=0)
+    
+    pdf.set_font("helvetica", "B", 8)
+    pdf.cell(30, 5, "Faltando Docs:", ln=0)
+    pdf.set_font("helvetica", "", 8)
+    pdf.multi_cell(65, 4, limpar_texto(dados.get('doc_em_falta', 'NADA')), border=0, align='L')
+
+    y_ec2 = pdf.get_y()
+    if y_ec2 < y_ec + 5: y_ec2 = y_ec + 5
+    
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_xy(10, y_ec2)
+    pdf.cell(40, 5, "Participa de Grupo/Pastoral?", ln=0)
+    marcar_opcao(pdf, "Sim", dados.get('participa_grupo') == 'SIM', 55, y_ec2)
+    marcar_opcao(pdf, "Não", dados.get('participa_grupo') == 'NÃO', 75, y_ec2)
 
     # --- SEÇÃO 4: TERMO LGPD E ECA DIGITAL ---
     pdf.ln(2) # Reduzido de 5 para 2
