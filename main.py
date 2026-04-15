@@ -282,7 +282,7 @@ else:
         st.rerun()
     st.stop()
 
-equipe_tecnica = df_usuarios[df_usuarios['papel'] != 'ADMIN'] if not df_usuarios.empty else pd.DataFrame()
+equipe_tecnica = df_usuarios[~df_usuarios['papel'].isin(['ADMIN', 'SECRETARIA'])] if not df_usuarios.empty else pd.DataFrame()
 
 # --- 9. BARRA LATERAL E DEFINIÇÃO DE MENU ---
 mostrar_logo_sidebar() 
@@ -3498,16 +3498,41 @@ elif menu == "📊 Painel da Secretaria":
     c4.metric("🎓 Egressos (Concluídos)", len(df_concluidos))
     
     st.divider()
-    st.subheader("🖨️ Estação de Impressão em Lote")
-    col_doc_sec, col_doc_lote = st.columns(2)
-    with col_doc_sec:
+    
+    col_alertas, col_print = st.columns([1.5, 1])
+    
+    with col_alertas:
+        st.subheader("🚨 Alertas da Secretaria")
+        
+        # Documentos Pendentes
+        df_pend_doc = df_ativos[~df_ativos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
+        if not df_pend_doc.empty:
+            with st.expander(f"📄 {len(df_pend_doc)} Catequizandos com Documentos Pendentes", expanded=True):
+                st.dataframe(df_pend_doc[['nome_completo', 'etapa', 'doc_em_falta']].rename(columns={'nome_completo': 'Catequizando', 'etapa': 'Turma', 'doc_em_falta': 'Faltando'}), use_container_width=True, hide_index=True)
+        else:
+            st.success("✅ Todos os catequizandos ativos estão com a documentação em dia!")
+            
+        # Fila de Espera
+        turmas_reais = df_turmas['nome_turma'].unique().tolist() if not df_turmas.empty else[]
+        df_sem_turma = df_ativos[(df_ativos['etapa'] == "CATEQUIZANDOS SEM TURMA") | (~df_ativos['etapa'].isin(turmas_reais))]
+        if not df_sem_turma.empty:
+            with st.expander(f"⏳ {len(df_sem_turma)} Catequizandos aguardando alocação em Turma"):
+                st.dataframe(df_sem_turma[['nome_completo', 'contato_principal']].rename(columns={'nome_completo': 'Catequizando', 'contato_principal': 'Contato'}), use_container_width=True, hide_index=True)
+                
+    with col_print:
+        st.subheader("🖨️ Central de Emissão")
+        st.markdown("Emissão de documentos oficiais e relatórios em lote.")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🏛️ Gerar Relatório Diocesano", use_container_width=True):
             st.session_state.pdf_diocesano = gerar_relatorio_diocesano_pdf(df_turmas, df_cat, df_usuarios)
         if "pdf_diocesano" in st.session_state:
             st.download_button("📥 Baixar Relatório Diocesano", st.session_state.pdf_diocesano, "Diocesano.pdf", use_container_width=True)
-    with col_doc_lote:
-        if st.button("🗂️ Imprimir Todas as Fichas (Lote)", use_container_width=True):
-            st.session_state.pdf_lote_f = gerar_fichas_paroquia_total(df_cat)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🗂️ Imprimir Fichas (Paróquia Inteira)", use_container_width=True, type="primary"):
+            with st.spinner("Gerando fichas (Isso pode levar alguns segundos)..."):
+                st.session_state.pdf_lote_f = gerar_fichas_paroquia_total(df_cat)
         if "pdf_lote_f" in st.session_state:
             st.download_button("📥 Baixar Fichas em Lote", st.session_state.pdf_lote_f, "Fichas_Lote.pdf", use_container_width=True)
 
@@ -3588,14 +3613,33 @@ elif menu == "🕊️ Acervo de Sacramentos":
                 st.warning("Catequizando não encontrado.")
 
     with col_hist:
-        st.markdown("#### 📜 Histórico de Eventos")
+        st.markdown("#### 📜 Livro de Registros (Cartório Oficial)")
         df_eventos = ler_aba("sacramentos_eventos")
-        if not df_eventos.empty:
-            df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
-            df_eventos = df_eventos.sort_values(by='data_dt', ascending=False)
-            st.dataframe(df_eventos[['tipo', 'data', 'turmas', 'catequista']], use_container_width=True, hide_index=True)
+        df_recebidos = ler_aba("sacramentos_recebidos")
+        
+        if not df_recebidos.empty and not df_eventos.empty:
+            # Mescla as informações para a secretaria ver o NOME da pessoa
+            df_eventos_min = df_eventos[['id_evento', 'turmas', 'catequista']]
+            df_livro = pd.merge(df_recebidos, df_eventos_min, on='id_evento', how='left')
+            
+            df_livro['data_dt'] = pd.to_datetime(df_livro['data'], errors='coerce')
+            df_livro = df_livro.sort_values(by='data_dt', ascending=False)
+            
+            # Renomeia as colunas para o padrão de Secretaria
+            df_livro_exibicao = df_livro[['nome', 'tipo', 'data', 'turmas', 'catequista']].rename(columns={
+                'nome': 'Catequizando', 'tipo': 'Sacramento', 'data': 'Data', 'turmas': 'Turma', 'catequista': 'Local / Celebrante'
+            })
+            
+            busca_livro = st.text_input("🔍 Buscar Certidão (Nome ou Sacramento):").upper()
+            if busca_livro:
+                df_livro_exibicao = df_livro_exibicao[
+                    df_livro_exibicao['Catequizando'].str.contains(busca_livro, na=False) | 
+                    df_livro_exibicao['Sacramento'].str.contains(busca_livro, na=False)
+                ]
+            
+            st.dataframe(df_livro_exibicao, use_container_width=True, hide_index=True)
         else:
-            st.info("Nenhum evento registrado no histórico.")
+            st.info("Nenhum sacramento registrado no histórico.")
 
 elif menu == "📖 Consulta de Encontros":
     st.title("📖 Consulta de Encontros (Diário)")
