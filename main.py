@@ -774,6 +774,36 @@ elif menu == "📚 Minha Turma":
         # Dispara o Pop-up
         exibir_assistente_pastoral(turma_ativa, aniversariantes_semana, status_chamada, faltosos_qtd, proximo_tema_str)
 
+    # --- ALERTA DE REUNIÃO DE PAIS ---
+    df_reunioes_agendadas = ler_aba("reunioes_pais")
+    if not df_reunioes_agendadas.empty:
+        reunioes_pendentes = df_reunioes_agendadas[
+            (df_reunioes_agendadas.iloc[:, 5] == "PENDENTE") & 
+            (df_reunioes_agendadas.iloc[:, 3].isin([turma_ativa.strip().upper(), "GERAL (TODAS)"]))
+        ]
+        
+        if not reunioes_pendentes.empty:
+            for _, reu in reunioes_pendentes.iterrows():
+                tema_reu = reu.iloc[1]
+                data_reu = reu.iloc[2]
+                local_reu = reu.iloc[4]
+                
+                st.markdown(f"""
+                    <div style='background-color:#e3f2fd; padding:15px; border-radius:10px; border-left:6px solid #1976d2; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                        <h4 style='margin:0; color:#1976d2;'>📢 Lembrete: Reunião de Pais Agendada!</h4>
+                        <p style='margin:5px 0 10px 0; color:#333; font-size:14px;'>
+                            <b>Tema:</b> {tema_reu} <br>
+                            <b>Data:</b> {data_reu} &nbsp;|&nbsp; <b>Local:</b> {local_reu}
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                import urllib.parse
+                msg_convite = f"Paz e Bem, famílias da turma {turma_ativa}! Teremos uma Reunião de Pais muito importante.\n\n📅 Data: {data_reu}\n📍 Local: {local_reu}\n📖 Tema: {tema_reu}\n\nContamos com a presença de um responsável por catequizando. Deus abençoe!"
+                link_wa_grupo = f"https://wa.me/?text={urllib.parse.quote(msg_convite)}"
+                
+                st.markdown(f"<a href='{link_wa_grupo}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:8px; font-size:14px; font-weight:bold; margin-top:-10px; margin-bottom:20px; width: 300px;'>📲 Enviar Convite no Grupo do WhatsApp</div></a>", unsafe_allow_html=True)
+
     # --- ALERTAS DE GESTÃO ---
     ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
     
@@ -3313,8 +3343,19 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     r_local = st.text_input("Local (Ex: Salão Paroquial)").upper()
                     if st.form_submit_button("📌 AGENDAR REUNIÃO"):
                         if r_tema:
-                            if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, r_data.strftime('%d/%m/%Y'), r_turma, r_local, "PENDENTE"]):
-                                st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                            df_reu_check = ler_aba("reunioes_pais")
+                            ja_existe = False
+                            if not df_reu_check.empty:
+                                data_str = r_data.strftime('%d/%m/%Y')
+                                duplicada = df_reu_check[(df_reu_check.iloc[:, 2] == data_str) & (df_reu_check.iloc[:, 3] == r_turma)]
+                                if not duplicada.empty:
+                                    ja_existe = True
+                            
+                            if ja_existe:
+                                st.error(f"⚠️ Já existe uma reunião agendada para a turma {r_turma} no dia {r_data.strftime('%d/%m/%Y')}.")
+                            else:
+                                if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, r_data.strftime('%d/%m/%Y'), r_turma, r_local, "PENDENTE"]):
+                                    st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
             with sub_r2:
                 df_reunioes_v = ler_aba("reunioes_pais")
