@@ -357,7 +357,7 @@ if menu == "🏠 Início / Dashboard":
         if planilha:
             try:
                 aba = planilha.worksheet("encontros")
-                linhas = [[str(data_rec), t, f"RECESSO: {motivo}", nome_coord, "Feriado/Recesso geral. Chamada não exigida."] for t in turmas_lista]
+                linhas = [[data_rec.strftime('%d/%m/%Y'), t, f"RECESSO: {motivo}", nome_coord, "Feriado/Recesso geral. Chamada não exigida."] for t in turmas_lista]
                 aba.append_rows(linhas)
                 st.cache_data.clear()
                 return True
@@ -456,7 +456,7 @@ if menu == "🏠 Início / Dashboard":
                 if not df_recessos.empty:
                     # Agrupa por data e motivo para não repetir a mesma data 15 vezes (1 por turma)
                     df_recs_grouped = df_recessos.groupby(['data', 'tema']).size().reset_index()
-                    df_recs_grouped['data_dt'] = pd.to_datetime(df_recs_grouped['data'], errors='coerce')
+                    df_recs_grouped['data_dt'] = pd.to_datetime(df_recs_grouped['data'], errors='coerce', dayfirst=True)
                     df_recs_grouped = df_recs_grouped.sort_values('data_dt', ascending=False)
                     
                     for idx, row in df_recs_grouped.iterrows():
@@ -493,7 +493,7 @@ if menu == "🏠 Início / Dashboard":
         
         if not df_enc_local.empty:
             # BLINDAGEM: Cria a coluna de data formatada antes de tentar filtrar
-            df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
+            df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
             
             df_enc_recente = df_enc_local[df_enc_local['data_dt'].dt.date >= limite_aud]
             recessos_recentes = df_enc_recente[df_enc_recente['tema'].str.contains("RECESSO|FERIADO", na=False, case=False)]
@@ -510,7 +510,7 @@ if menu == "🏠 Início / Dashboard":
         
         df_pres_recente = df_pres.copy()
         if not df_pres_recente.empty:
-            df_pres_recente['data_dt'] = pd.to_datetime(df_pres_recente['data_encontro'], errors='coerce')
+            df_pres_recente['data_dt'] = pd.to_datetime(df_pres_recente['data_encontro'], errors='coerce', dayfirst=True)
             df_recentes = df_pres_recente[df_pres_recente['data_dt'].dt.date >= limite_aud]
             total_faltosos = len(df_recentes[df_recentes['status'] == 'AUSENTE']) if not df_recentes.empty else 0
         else:
@@ -941,7 +941,7 @@ elif menu == "📚 Minha Turma":
             ultimo = df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()].copy()
             if not ultimo.empty:
                 # Converte para data real e filtra apenas encontros que já aconteceram (<= hoje)
-                ultimo['data_sort'] = pd.to_datetime(ultimo['data'], errors='coerce')
+                ultimo['data_sort'] = pd.to_datetime(ultimo['data'], errors='coerce', dayfirst=True)
                 hoje_str = pd.to_datetime(date.today())
                 ultimo_passado = ultimo[ultimo['data_sort'] <= hoje_str].sort_values('data_sort', ascending=False)
                 
@@ -1037,9 +1037,10 @@ elif menu == "📖 Diário de Encontros":
             data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
             
             # Verifica se já existe registro para esta data na aba presencas
+            df_pres_local['data_dt'] = pd.to_datetime(df_pres_local['data_encontro'], errors='coerce', dayfirst=True)
             ja_registrado = not df_pres_local[
                 (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & 
-                (df_pres_local['data_encontro'].astype(str) == str(data_e))
+                (df_pres_local['data_dt'].dt.date == data_e)
             ].empty
             
             if ja_registrado:
@@ -1054,7 +1055,7 @@ elif menu == "📖 Diário de Encontros":
                 if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
                     if tema_manual:
                         # Salva na aba encontros e marca no cronograma
-                        if salvar_encontro([str(data_e), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
+                        if salvar_encontro([data_e.strftime('%d/%m/%Y'), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
                             marcar_tema_realizado_cronograma(turma_focal, tema_manual)
                             st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
@@ -1094,7 +1095,7 @@ elif menu == "📖 Diário de Encontros":
         # Filtro robusto e normalizado
         df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
         # Ordena corretamente pelas datas
-        df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
+        df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
         hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data_sort', ascending=False)
         
         if not hist_turma.empty:
@@ -1322,15 +1323,15 @@ elif menu == "📝 Inscrever Catequizando":
                     obs_familia = f"CUIDADOR: {responsavel_nome} ({vinculo_resp}). TEL: {tel_responsavel}" if responsavel_nome else "Mora com os pais."
 
                 registro = [[
-                    novo_id, etapa_inscricao, nome, str(data_nasc), batizado, 
+                    novo_id, etapa_inscricao, nome, data_nasc.strftime('%d/%m/%Y'), batizado, 
                     contato, endereco, nome_mae, nome_pai, resp_final, 
                     doc_status_k, qual_grupo, "ATIVO", medicamento, tgo_final, 
                     estado_civil, sacramentos, prof_mae, tel_mae, prof_pai, 
                     tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo, 
                     tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia,
-                    dt_bat_hist if dt_bat_hist else "N/A",
-                    dt_euc_hist if dt_euc_hist else "N/A",
-                    dt_cri_hist if dt_cri_hist else "N/A",
+                    formatar_data_br(dt_bat_hist) if dt_bat_hist else "N/A",
+                    formatar_data_br(dt_euc_hist) if dt_euc_hist else "N/A",
+                    formatar_data_br(dt_cri_hist) if dt_cri_hist else "N/A",
                     paroq_hist if paroq_hist else "N/A"
                 ]]
 
@@ -1393,9 +1394,9 @@ elif menu == "📝 Inscrever Catequizando":
                                 t_csv = str(linha.get(col_etapa, 'CATEQUIZANDOS SEM TURMA')).upper().strip()
                                 t_final = t_csv if t_csv in turmas_cadastradas else "CATEQUIZANDOS SEM TURMA"
                                 
-                                registro = [
+                                registro =[
                                     f"CAT-CSV-{int(time.time()) + i}", t_final, str(linha.get(col_nome, 'SEM NOME')).upper(), 
-                                    str(linha.get('data_nascimento', '01/01/2000')), str(linha.get('batizado_sn', 'NÃO')).upper(), 
+                                    formatar_data_br(linha.get('data_nascimento', '01/01/2000')), str(linha.get('batizado_sn', 'NÃO')).upper(), 
                                     str(linha.get('contato_principal', 'N/A')), str(linha.get('endereco_completo', 'N/A')).upper(), 
                                     str(linha.get('nome_mae', 'N/A')).upper(), str(linha.get('nome_pai', 'N/A')).upper(), 
                                     str(linha.get('nome_responsavel', 'N/A')).upper(), str(linha.get('doc_em_falta', 'NADA')).upper(), 
@@ -1655,7 +1656,7 @@ elif menu == "👤 Perfil Individual":
                     if st.button("💾 SALVAR ALTERAÇÕES NO BANCO DE DADOS", use_container_width=True, type="primary"):
                         obs_final = f"EMERGÊNCIA: {ed_resp} - TEL: {ed_tel_resp}" if is_adulto else dados.get('obs_pastoral_familia', '')
                         lista_up =[
-                            dados['id_catequizando'], ed_etapa, ed_nome, str(ed_nasc), ed_batizado, 
+                            dados['id_catequizando'], ed_etapa, ed_nome, ed_nasc.strftime('%d/%m/%Y'), ed_batizado, 
                             ed_contato, ed_end, ed_mae, ed_pai, ed_resp, ed_doc_status_k, 
                             ed_qual_grupo, ed_status, ed_med, ed_tgo_final, ed_est_civil, 
                             ed_sac_final, ed_prof_m, ed_tel_m, ed_prof_p, ed_tel_p, 
@@ -1663,9 +1664,9 @@ elif menu == "👤 Perfil Individual":
                             ed_part_grupo, ed_qual_grupo, dados.get('tem_irmaos', 'NÃO'), 
                             dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), 
                             dados.get('local_encontro', 'N/A'), obs_final,
-                            ed_bat_hist if ed_bat_hist else "N/A",
-                            ed_euc_hist if ed_euc_hist else "N/A",
-                            ed_cri_hist if ed_cri_hist else "N/A",
+                            formatar_data_br(ed_bat_hist) if ed_bat_hist else "N/A",
+                            formatar_data_br(ed_euc_hist) if ed_euc_hist else "N/A",
+                            formatar_data_br(ed_cri_hist) if ed_cri_hist else "N/A",
                             ed_paroq_hist if ed_paroq_hist else "N/A"
                         ]
                         if atualizar_catequizando(dados['id_catequizando'], lista_up):
@@ -1694,7 +1695,7 @@ elif menu == "👤 Perfil Individual":
                         pres_aluno = pd.DataFrame()
                         
                     if not pres_aluno.empty:
-                        pres_aluno['data_dt'] = pd.to_datetime(pres_aluno.get('data_encontro', ''), errors='coerce')
+                        pres_aluno['data_dt'] = pd.to_datetime(pres_aluno.get('data_encontro', ''), errors='coerce', dayfirst=True)
                         pres_aluno = pres_aluno.sort_values('data_dt', ascending=False)
                         
                         for _, p in pres_aluno.iterrows():
@@ -2107,7 +2108,7 @@ elif menu == "🏫 Gestão de Turmas":
                     st.markdown("#### 📜 Histórico, Edição e Faltas (Diário)")
                     enc_t_rx = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()].copy()
                     if not enc_t_rx.empty:
-                        enc_t_rx['data_dt'] = pd.to_datetime(enc_t_rx['data'], errors='coerce')
+                        enc_t_rx['data_dt'] = pd.to_datetime(enc_t_rx['data'], errors='coerce', dayfirst=True)
                         enc_t_rx = enc_t_rx.sort_values(by='data_dt', ascending=False)
                         
                         for idx, row in enc_t_rx.iterrows():
@@ -2321,7 +2322,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
         
         if not df_recebidos.empty:
             try:
-                df_recebidos['data_dt'] = pd.to_datetime(df_recebidos['data'], errors='coerce')
+                df_recebidos['data_dt'] = pd.to_datetime(df_recebidos['data'], errors='coerce', dayfirst=True)
                 df_ano = df_recebidos[df_recebidos['data_dt'].dt.year == ano_atual]
                 bat_ano = len(df_ano[df_ano['tipo'].str.upper().str.contains('BATISMO')])
                 euc_ano = len(df_ano[df_ano['tipo'].str.upper().str.contains('EUCARISTIA')])
@@ -2478,12 +2479,12 @@ elif menu == "🕊️ Gestão de Sacramentos":
                     else:
                         with st.spinner("Registrando sacramentos e atualizando históricos..."):
                             id_ev = f"SAC-{int(time.time())}"
-                            lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, str(data_s)] for r in sel_ids]
+                            lista_p = [[id_ev, r['id_catequizando'], r['nome_completo'], tipo_s, data_s.strftime('%d/%m/%Y')] for r in sel_ids]
                             
                             local_str = "Paróquia de Fátima" if local_celebra == "Nesta Paróquia (Fátima)" else f"Outra Paróquia: {nome_outra_paroquia}"
                             nome_responsavel_registro = f"{st.session_state.usuario['nome']} ({local_str})"
                             
-                            if registrar_evento_sacramento_completo([id_ev, tipo_s, str(data_s), ", ".join(turmas_s), nome_responsavel_registro], lista_p, tipo_s):
+                            if registrar_evento_sacramento_completo([id_ev, tipo_s, data_s.strftime('%d/%m/%Y'), ", ".join(turmas_s), nome_responsavel_registro], lista_p, tipo_s):
                                 # Aplica as automações de saída
                                 for r in sel_ids:
                                     cid = r['id_catequizando']
@@ -2534,7 +2535,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                         if st.form_submit_button("💾 SALVAR REGISTRO AVULSO", use_container_width=True):
                             id_ev = f"IND-{int(time.time())}"
                             local_final = f"Avulso: {local_ind}" if local_ind else "Avulso"
-                            if registrar_evento_sacramento_completo([id_ev, tipo_s_ind, str(data_s_ind), dados_c['etapa'], f"{st.session_state.usuario['nome']} ({local_final})"], [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s_ind, str(data_s_ind)]], tipo_s_ind):
+                            if registrar_evento_sacramento_completo([id_ev, tipo_s_ind, data_s_ind.strftime('%d/%m/%Y'), dados_c['etapa'], f"{st.session_state.usuario['nome']} ({local_final})"], [[id_ev, dados_c['id_catequizando'], escolhido, tipo_s_ind, data_s_ind.strftime('%d/%m/%Y')]], tipo_s_ind):
                                 st.success("Registrado no acervo!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                 else:
                     st.warning("Catequizando não encontrado.")
@@ -2543,7 +2544,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.markdown("#### 📜 Histórico de Eventos")
             df_eventos = ler_aba("sacramentos_eventos")
             if not df_eventos.empty:
-                df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce')
+                df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce', dayfirst=True)
                 df_eventos = df_eventos.sort_values(by='data_dt', ascending=False)
                 st.dataframe(df_eventos[['tipo', 'data', 'turmas', 'catequista']], use_container_width=True, hide_index=True)
                 
@@ -2588,9 +2589,9 @@ elif menu == "🕊️ Gestão de Sacramentos":
                                     novos_p_lista =[]
                                     for nome in ed_participantes:
                                         id_c = df_cat[df_cat['nome_completo'] == nome].iloc[0]['id_catequizando']
-                                        novos_p_lista.append([id_para_editar, id_c, nome, tipo_atual, str(ed_data)])
+                                        novos_p_lista.append([id_para_editar, id_c, nome, tipo_atual, ed_data.strftime('%d/%m/%Y')])
                                     
-                                    novos_dados_ev =[id_para_editar, tipo_atual, str(ed_data), turmas_str, dados_atuais['catequista']]
+                                    novos_dados_ev =[id_para_editar, tipo_atual, ed_data.strftime('%d/%m/%Y'), turmas_str, dados_atuais['catequista']]
                                     
                                     if gerenciar_edicao_evento_sacramento(id_para_editar, novos_dados_ev, novos_p_lista, tipo_atual):
                                         st.success("✅ Evento atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
@@ -2638,9 +2639,10 @@ elif menu == "✅ Fazer Chamada":
     df_enc_local = ler_aba("encontros")
     df_cron_local = ler_aba("cronograma")
     
+    df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
     encontro_do_dia = df_enc_local[
         (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
-        (df_enc_local['data'].astype(str) == str(data_enc))
+        (df_enc_local['data_dt'].dt.date == data_enc)
     ]
 
     # --- 💌 ASSISTENTE DE CHAMADA (POP-UP INTELIGENTE) ---
@@ -2709,7 +2711,8 @@ elif menu == "✅ Fazer Chamada":
         if buffer_key not in st.session_state:
             buffer = {}
             # Carrega do banco se já existir
-            df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_encontro'].astype(str) == str(data_enc))]
+            df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
+            df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_dt'].dt.date == data_enc)]
             
             for _, row in lista_cat.iterrows():
                 id_cat = row['id_catequizando']
@@ -2745,7 +2748,7 @@ elif menu == "✅ Fazer Chamada":
                     if presente: contador_p += 1
                     else: contador_a += 1
 
-                    registros_presenca.append([str(data_enc), id_cat, row['nome_completo'], turma_sel, "PRESENTE" if presente else "AUSENTE", tema_dia, st.session_state.usuario['nome']])
+                    registros_presenca.append([data_enc.strftime('%d/%m/%Y'), id_cat, row['nome_completo'], turma_sel, "PRESENTE" if presente else "AUSENTE", tema_dia, st.session_state.usuario['nome']])
 
         st.markdown("---")
         st.markdown("### 📊 Resumo da Chamada")
@@ -2928,7 +2931,7 @@ elif menu == "👥 Gestão de Catequistas":
                 if st.form_submit_button("📌 AGENDAR FORMAÇÃO"):
                     if f_tema:
                         id_f = f"FOR-{int(time.time())}"
-                        if salvar_formacao([id_f, f_tema, str(f_data), f_formador, f_local, "PENDENTE"]):
+                        if salvar_formacao([id_f, f_tema, f_data.strftime('%d/%m/%Y'), f_formador, f_local, "PENDENTE"]):
                             st.success(f"Formação '{f_tema}' agendada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
         with sub_tab_valida:
@@ -2979,7 +2982,7 @@ elif menu == "👥 Gestão de Catequistas":
         with sub_tab_hist:
             if not df_formacoes.empty:
                 st.markdown("#### 🔍 Consultar e Corrigir")
-                df_formacoes['data_dt'] = pd.to_datetime(df_formacoes['data'], errors='coerce')
+                df_formacoes['data_dt'] = pd.to_datetime(df_formacoes['data'], errors='coerce', dayfirst=True)
                 anos = sorted(df_formacoes['data_dt'].dt.year.dropna().unique().astype(int), reverse=True)
                 ano_sel = st.selectbox("Filtrar por Ano:", ["TODOS"] + [str(a) for a in anos])
                 
@@ -3008,7 +3011,7 @@ elif menu == "👥 Gestão de Catequistas":
                             c_btn1, c_btn2 = st.columns([3, 1])
                             if c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
                                 from database import atualizar_formacao
-                                if atualizar_formacao(d_edit['id_formacao'], [d_edit['id_formacao'], ed_tema, str(ed_data), ed_formador, ed_local, ed_status]):
+                                if atualizar_formacao(d_edit['id_formacao'], [d_edit['id_formacao'], ed_tema, ed_data.strftime('%d/%m/%Y'), ed_formador, ed_local, ed_status]):
                                     st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                             
                             st.markdown("---")
@@ -3119,15 +3122,15 @@ elif menu == "👥 Gestão de Catequistas":
                                 dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                             if st.form_submit_button("💾 SALVAR ALTERAÇÕES E SINCRONIZAR", use_container_width=True):
-                                str_ini = str(dt_ini) if has_ini else ""
-                                str_bat = str(dt_bat) if has_bat else ""
-                                str_euc = str(dt_euc) if has_euc else ""
-                                str_cri = str(dt_cri) if has_cri else ""
-                                str_min = str(dt_min) if has_min else ""
+                                str_ini = dt_ini.strftime('%d/%m/%Y') if has_ini else ""
+                                str_bat = dt_bat.strftime('%d/%m/%Y') if has_bat else ""
+                                str_euc = dt_euc.strftime('%d/%m/%Y') if has_euc else ""
+                                str_cri = dt_cri.strftime('%d/%m/%Y') if has_cri else ""
+                                str_min = dt_min.strftime('%d/%m/%Y') if has_min else ""
 
                                 dados_up =[
                                     ed_nome, u['email'], ed_senha, ed_papel, ", ".join(ed_turmas), 
-                                    ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
+                                    ed_tel, ed_nasc.strftime('%d/%m/%Y'), str_ini, str_bat, str_euc, str_cri, str_min, 
                                     str(u.iloc[12]) if len(u) > 12 else "", ed_emergencia
                                 ]
                                 
@@ -3197,7 +3200,7 @@ elif menu == "👥 Gestão de Catequistas":
                         with st.spinner("Criando novo acesso..."):
                             novo_user_lista =[
                                 n_nome, n_email, n_senha, n_papel, ", ".join(n_turmas), 
-                                n_tel, str(n_nasc), "", "", "", "", "", "", n_emergencia
+                                n_tel, n_nasc.strftime('%d/%m/%Y'), "", "", "", "", "", "", n_emergencia
                             ]
                             from database import adicionar_novo_usuario
                             if adicionar_novo_usuario(novo_user_lista):
@@ -3259,7 +3262,7 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     r_local = st.text_input("Local (Ex: Salão Paroquial)").upper()
                     if st.form_submit_button("📌 AGENDAR REUNIÃO"):
                         if r_tema:
-                            if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, str(r_data), r_turma, r_local, "PENDENTE"]):
+                            if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, r_data.strftime('%d/%m/%Y'), r_turma, r_local, "PENDENTE"]):
                                 st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
             with sub_r2:
@@ -3310,12 +3313,12 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         d_edit = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_edit].iloc[0]
                         with st.form(f"form_edit_reu_{d_edit.iloc[0]}"):
                             ed_tema = st.text_input("Tema", value=d_edit.iloc[1]).upper()
-                            ed_data = st.date_input("Data", value=converter_para_data(d_edit.iloc[2]))
-                            ed_turma = st.selectbox("Turma", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
+                            ed_data = st.date_input("Data", value=converter_para_data(d_edit.iloc[2]), format="DD/MM/YYYY")
+                            ed_turma = st.selectbox("Turma",["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]))
                             ed_local = st.text_input("Local", value=d_edit.iloc[4]).upper()
-                            ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
+                            ed_status = st.selectbox("Status",["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
                             if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                                if atualizar_reuniao_pais(d_edit.iloc[0], [d_edit.iloc[0], ed_tema, str(ed_data), ed_turma, ed_local, ed_status]):
+                                if atualizar_reuniao_pais(d_edit.iloc[0],[d_edit.iloc[0], ed_tema, ed_data.strftime('%d/%m/%Y'), ed_turma, ed_local, ed_status]):
                                     st.success("Reunião atualizada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                     st.divider()
                     st.write("### 📜 Histórico Geral")
@@ -3654,7 +3657,7 @@ elif menu == "🕊️ Acervo de Sacramentos":
             df_eventos_min = df_eventos[['id_evento', 'turmas', 'catequista']]
             df_livro = pd.merge(df_recebidos, df_eventos_min, on='id_evento', how='left')
             
-            df_livro['data_dt'] = pd.to_datetime(df_livro['data'], errors='coerce')
+            df_livro['data_dt'] = pd.to_datetime(df_livro['data'], errors='coerce', dayfirst=True)
             df_livro = df_livro.sort_values(by='data_dt', ascending=False)
             
             # Renomeia as colunas para o padrão de Secretaria
@@ -3687,7 +3690,7 @@ elif menu == "📖 Consulta de Encontros":
         
         if not df_enc_local.empty:
             df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
-            df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce')
+            df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
             hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data_sort', ascending=False)
             
             if not hist_turma.empty:
@@ -3790,11 +3793,11 @@ elif menu == "⚙️ Meu Cadastro":
                     dt_min = st.date_input("Data Ministério", value=val_min if val_min else hoje, min_value=d_min, max_value=d_max, format="DD/MM/YYYY", disabled=not has_min)
 
                 if st.form_submit_button("💾 SALVAR MEUS DADOS", use_container_width=True, type="primary"):
-                    str_ini = str(dt_ini) if has_ini else ""
-                    str_bat = str(dt_bat) if has_bat else ""
-                    str_euc = str(dt_euc) if has_euc else ""
-                    str_cri = str(dt_cri) if has_cri else ""
-                    str_min = str(dt_min) if has_min else ""
+                    str_ini = dt_ini.strftime('%d/%m/%Y') if has_ini else ""
+                    str_bat = dt_bat.strftime('%d/%m/%Y') if has_bat else ""
+                    str_euc = dt_euc.strftime('%d/%m/%Y') if has_euc else ""
+                    str_cri = dt_cri.strftime('%d/%m/%Y') if has_cri else ""
+                    str_min = dt_min.strftime('%d/%m/%Y') if has_min else ""
 
                     # Preserva os dados restritos e de sessão
                     papel_atual = str(u.get('papel', 'CATEQUISTA'))
@@ -3803,7 +3806,7 @@ elif menu == "⚙️ Meu Cadastro":
 
                     dados_up =[
                         ed_nome, u['email'], ed_senha, papel_atual, turmas_atuais, 
-                        ed_tel, str(ed_nasc), str_ini, str_bat, str_euc, str_cri, str_min, 
+                        ed_tel, ed_nasc.strftime('%d/%m/%Y'), str_ini, str_bat, str_euc, str_cri, str_min, 
                         session_id_atual, ed_emergencia
                     ]
                     
