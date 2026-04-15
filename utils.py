@@ -387,16 +387,44 @@ def _desenhar_corpo_ficha(pdf, dados):
     # --- BUSCA INTELIGENTE DE DATAS DE SACRAMENTOS ---
     try:
         from database import ler_aba
+        def get_dado_seguro(dados, idx):
+            try:
+                if isinstance(dados, dict):
+                    keys = list(dados.keys())
+                    if len(keys) > idx: return str(dados[keys[idx]])
+                elif hasattr(dados, 'iloc'):
+                    if len(dados) > idx: return str(dados.iloc[idx])
+            except: pass
+            return "N/A"
+            
+        d_bat = get_dado_seguro(dados, 30)
+        d_euc = get_dado_seguro(dados, 31)
+        d_cri = get_dado_seguro(dados, 32)
+        paroq = get_dado_seguro(dados, 33)
+        
+        data_bat_pdf = d_bat if d_bat != "N/A" else "Pendente"
+        data_euc_pdf = d_euc if d_euc != "N/A" else "Pendente"
+        data_cri_pdf = d_cri if d_cri != "N/A" else "Pendente"
+        
         df_recebidos = ler_aba("sacramentos_recebidos")
-        data_bat_pdf, data_euc_pdf, data_cri_pdf = "---", "---", "---"
         id_cat = str(dados.get('id_catequizando', ''))
+        
         if not df_recebidos.empty and id_cat:
             rec_aluno = df_recebidos[df_recebidos.iloc[:, 1] == id_cat]
             for _, r in rec_aluno.iterrows():
                 if str(r.iloc[3]).upper() == 'BATISMO': data_bat_pdf = formatar_data_br(r.iloc[4])
                 if str(r.iloc[3]).upper() == 'EUCARISTIA': data_euc_pdf = formatar_data_br(r.iloc[4])
                 if str(r.iloc[3]).upper() == 'CRISMA': data_cri_pdf = formatar_data_br(r.iloc[4])
-    except:
+                
+        if data_bat_pdf == "Pendente" and str(dados.get('batizado_sn', '')).upper() == "SIM":
+            data_bat_pdf = "Sim (Sem data)"
+            
+        if paroq != "N/A":
+            if data_bat_pdf not in ["Pendente", "---", "Sim (Sem data)"]: data_bat_pdf += f" ({paroq})"
+            if data_euc_pdf not in ["Pendente", "---"]: data_euc_pdf += f" ({paroq})"
+            if data_cri_pdf not in["Pendente", "---"]: data_cri_pdf += f" ({paroq})"
+
+    except Exception as e:
         data_bat_pdf, data_euc_pdf, data_cri_pdf = "---", "---", "---"
 
     # --- SEÇÃO 3: VIDA ECLESIAL E DOCUMENTOS ---
