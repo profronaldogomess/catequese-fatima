@@ -1451,25 +1451,38 @@ elif menu == "👤 Perfil Individual":
                 obs_p = str(dados.get('obs_pastoral_familia', ''))
                 tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
                 
-                bat = "💧 Batizado" if dados['batizado_sn'] == "SIM" else "⚪ Sem Batismo"
-                euc = "🍞 Eucaristia" if "EUCARISTIA" in str(dados['sacramentos_ja_feitos']).upper() else "⚪ Sem Eucaristia"
-                cri = "🔥 Crisma" if "CRISMA" in str(dados['sacramentos_ja_feitos']).upper() else "⚪ Sem Crisma"
+                # --- BUSCA INTELIGENTE DE DATAS E FALTAS ---
+                df_recebidos = ler_aba("sacramentos_recebidos")
+                data_bat, data_euc, data_cri = "", "", ""
+                if not df_recebidos.empty:
+                    rec_aluno = df_recebidos[df_recebidos.iloc[:, 1] == id_sel]
+                    for _, r in rec_aluno.iterrows():
+                        if r.iloc[3].upper() == 'BATISMO': data_bat = f" ({formatar_data_br(r.iloc[4])})"
+                        if r.iloc[3].upper() == 'EUCARISTIA': data_euc = f" ({formatar_data_br(r.iloc[4])})"
+                        if r.iloc[3].upper() == 'CRISMA': data_cri = f" ({formatar_data_br(r.iloc[4])})"
+
+                qtd_faltas = len(df_pres[(df_pres['id_catequizando'] == id_sel) & (df_pres['status'] == 'AUSENTE')]) if not df_pres.empty else 0
+                alerta_falta = f"<span style='color:#e03d11; font-weight:bold;'>{qtd_faltas} Faltas</span>" if qtd_faltas >= 3 else f"{qtd_faltas} Faltas"
+                
+                bat = f"💧 Batizado{data_bat}" if dados['batizado_sn'] == "SIM" else "⚪ Sem Batismo"
+                euc = f"🍞 Eucaristia{data_euc}" if "EUCARISTIA" in str(dados['sacramentos_ja_feitos']).upper() else "⚪ Sem Eucaristia"
+                cri = f"🔥 Crisma{data_cri}" if "CRISMA" in str(dados['sacramentos_ja_feitos']).upper() else "⚪ Sem Crisma"
                 
                 status_color = "#2e7d32" if status_atual == "ATIVO" else "#e03d11" if status_atual in ["DESISTENTE", "INATIVO"] else "#ffa000"
                 
-                # --- O CARTÃO DE IDENTIDADE VISUAL ---
+                # --- O CARTÃO DE IDENTIDADE VISUAL 4.0 ---
                 st.markdown(f"""
                     <div style='background-color:#ffffff; padding:20px; border-radius:15px; border-left:10px solid {status_color}; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; margin-top: 10px;'>
                         <div style='display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;'>
                             <div style='flex: 1; min-width: 250px;'>
                                 <h2 style='margin:0; color:#417b99; font-size: 24px;'>👤 {nome_sel}</h2>
                                 <p style='margin:8px 0 0 0; font-size:15px; color:#555;'>
-                                    <b>Turma:</b> {dados['etapa']} &nbsp;|&nbsp; <b>Idade:</b> {idade_atual} anos &nbsp;|&nbsp; 
+                                    <b>Turma:</b> {dados['etapa']} &nbsp;|&nbsp; <b>Idade:</b> {idade_atual} anos &nbsp;|&nbsp; <b>Histórico:</b> {alerta_falta} &nbsp;|&nbsp; 
                                     <span style='background-color:{status_color}; color:white; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:bold;'>{status_atual}</span>
                                 </p>
                             </div>
                             <div style='text-align: right; flex: 1; min-width: 250px; margin-top: 10px;'>
-                                <p style='margin:0; font-size:14px; color:#666;'><b>Selos Sacramentais:</b><br>{bat} &nbsp;|&nbsp; {euc} &nbsp;|&nbsp; {cri}</p>
+                                <p style='margin:0; font-size:13px; color:#666;'><b>Selos Sacramentais:</b><br>{bat} <br> {euc} <br> {cri}</p>
                                 <div style='margin-top:8px; background-color:#fff5f5; padding:8px; border-radius:8px; display:inline-block; border: 1px solid #fbd5d5;'>
                                     <span style='color:#e03d11; font-size:13px;'><b>🚨 Emergência:</b> {dados['nome_responsavel']} ({tel_e})</span>
                                 </div>
