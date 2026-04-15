@@ -1503,16 +1503,54 @@ def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
     return finalizar_pdf(pdf)
 
 def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
-    """Gera uma lista de presença física simplificada: Catequizando + Assinatura."""
+    """Gera uma lista de presença física com cabeçalho oficial e espaço para assinatura."""
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("helvetica", "B", 14); pdf.cell(0, 7, limpar_texto("LISTA DE PRESENÇA - REUNIÃO DE PAIS"), ln=True, align='C')
-    pdf.ln(5); pdf.set_font("helvetica", "B", 10); pdf.cell(0, 5, limpar_texto(f"TEMA: {tema} | DATA: {formatar_data_br(data)} | TURMA: {turma}"), ln=True)
-    pdf.ln(5); pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255)
-    pdf.cell(10, 9, "Nº", border=1, fill=True, align='C'); pdf.cell(80, 9, "Nome do Catequizando", border=1, fill=True, align='C'); pdf.cell(100, 9, "Assinatura do Responsável", border=1, fill=True, align='C'); pdf.ln()
-    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
+    adicionar_cabecalho_diocesano(pdf, "LISTA DE PRESENÇA - REUNIÃO DE PAIS")
+    
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 6, limpar_texto(f"TEMA: {tema}"), ln=True)
+    pdf.cell(0, 6, limpar_texto(f"DATA: {formatar_data_br(data)}  |  LOCAL: {local}  |  TURMA: {turma}"), ln=True)
+    pdf.ln(4)
+    
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 9)
+    pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
+    pdf.cell(70, 8, "Nome do Catequizando", border=1, fill=True, align='C')
+    pdf.cell(110, 8, "Nome do Responsável e Assinatura", border=1, fill=True, align='C')
+    pdf.ln()
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 8)
     for i, fam in enumerate(lista_familias, 1):
-        pdf.cell(10, 9, str(i), border=1, align='C'); pdf.cell(80, 9, limpar_texto(fam['nome_cat'].upper()), border=1); pdf.cell(100, 9, "", border=1); pdf.ln()
+        nome_cat = limpar_texto(fam['nome_cat'].upper())
+        nome_resp = limpar_texto(fam['responsavel'].upper())
+        
+        y_start = pdf.get_y()
+        pdf.cell(10, 10, str(i), border=1, align='C')
+        pdf.cell(70, 10, nome_cat[:35], border=1)
+        
+        # Célula vazia para a assinatura
+        pdf.cell(110, 10, "", border=1)
+        
+        # Escreve o nome do responsável e desenha a linha dentro da célula
+        pdf.set_xy(92, y_start + 2)
+        pdf.set_font("helvetica", "I", 7)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(100, 3, f"Resp: {nome_resp[:45]}")
+        
+        pdf.set_xy(92, y_start + 7)
+        pdf.line(95, y_start + 8, 195, y_start + 8)
+        
+        pdf.set_xy(10, y_start + 10)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("helvetica", "", 8)
+        
+        if pdf.get_y() > 270:
+            pdf.add_page()
+            
     return finalizar_pdf(pdf)
 
 def obter_ultima_chamada_turma(df_pres, nome_turma):
