@@ -1249,13 +1249,22 @@ elif menu == "📝 Inscrever Catequizando":
             qtd_irmaos = fe2.number_input("Quantos?", min_value=0, step=1, key=f"qtd_irmaos_{fk}") if tem_irmaos == "SIM" else 0
             estado_civil, sacramentos = "N/A", "N/A"
 
-        part_grupo = st.radio("Participa (ou a família participa) de algum Grupo/Pastoral?", ["NÃO", "SIM"], horizontal=True, key=f"part_grupo_{fk}")
+        part_grupo = st.radio("Participa (ou a família participa) de algum Grupo/Pastoral?",["NÃO", "SIM"], horizontal=True, key=f"part_grupo_{fk}")
         qual_grupo = "N/A"
         if part_grupo == "SIM":
             qual_grupo = st.text_input("Qual grupo/pastoral e quem participa?", key=f"qual_grupo_{fk}").upper()
 
         st.divider()
-        st.subheader("🏥 4. Saúde e Documentação")
+        st.subheader("📜 4. Histórico de Sacramentos (Outras Paróquias)")
+        st.info("Preencha as datas abaixo se o catequizando já possuir sacramentos de outras paróquias (pode ser ano aproximado).")
+        c_hist1, c_hist2, c_hist3 = st.columns(3)
+        dt_bat_hist = c_hist1.text_input("Data do Batismo", placeholder="Ex: 15/04/2015", key=f"dt_bat_{fk}")
+        dt_euc_hist = c_hist2.text_input("Data da 1ª Eucaristia", placeholder="Ex: 20/11/2022", key=f"dt_euc_{fk}")
+        dt_cri_hist = c_hist3.text_input("Data da Crisma", placeholder="Ex: 10/12/2025", key=f"dt_cri_{fk}")
+        paroq_hist = st.text_input("Paróquia de Origem dos Sacramentos", placeholder="Ex: Paróquia São José - Ilhéus", key=f"paroq_hist_{fk}").upper()
+
+        st.divider()
+        st.subheader("🏥 5. Saúde e Documentação")
         s1, s2 = st.columns(2)
         
         tem_med = s1.radio("Toma algum medicamento ou tem alergia?",["NÃO", "SIM"], horizontal=True, key=f"tem_med_{fk}")
@@ -1318,7 +1327,11 @@ elif menu == "📝 Inscrever Catequizando":
                     doc_status_k, qual_grupo, "ATIVO", medicamento, tgo_final, 
                     estado_civil, sacramentos, prof_mae, tel_mae, prof_pai, 
                     tel_pai, est_civil_pais, sac_pais, part_grupo, qual_grupo, 
-                    tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia
+                    tem_irmaos, qtd_irmaos, turno, local_enc, obs_familia,
+                    dt_bat_hist if dt_bat_hist else "N/A",
+                    dt_euc_hist if dt_euc_hist else "N/A",
+                    dt_cri_hist if dt_cri_hist else "N/A",
+                    paroq_hist if paroq_hist else "N/A"
                 ]]
 
                 # 2. Verificar duplicidade
@@ -1395,7 +1408,8 @@ elif menu == "📝 Inscrever Catequizando":
                                     str(linha.get('participa_grupo', 'NÃO')).upper(), str(linha.get('qual_grupo', 'N/A')).upper(), 
                                     str(linha.get('tem_irmaos', 'NÃO')).upper(), linha.get('qtd_irmaos', 0), 
                                     str(linha.get('turno', 'N/A')).upper(), str(linha.get('local_encontro', 'N/A')).upper(), 
-                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}"
+                                    f"Importado via CSV em {date.today().strftime('%d/%m/%Y')}",
+                                    "N/A", "N/A", "N/A", "N/A" # Expansão das novas colunas históricas
                                 ]
                                 lista_final.append(registro)
                             
@@ -1476,9 +1490,17 @@ elif menu == "👤 Perfil Individual":
                 obs_p = str(dados.get('obs_pastoral_familia', ''))
                 tel_e = obs_p.split('TEL: ')[-1] if 'TEL: ' in obs_p else "Não informado"
                 
-                # --- BUSCA INTELIGENTE DE DATAS E FALTAS ---
+                # --- BUSCA HÍBRIDA DE DATAS (Passado + Presente) ---
+                v_bat_hist = str(dados.iloc[30]) if len(dados) > 30 else "N/A"
+                v_euc_hist = str(dados.iloc[31]) if len(dados) > 31 else "N/A"
+                v_cri_hist = str(dados.iloc[32]) if len(dados) > 32 else "N/A"
+                v_paroq_hist = str(dados.iloc[33]) if len(dados) > 33 else "N/A"
+
+                data_bat = f" ({v_bat_hist})" if v_bat_hist != "N/A" else ""
+                data_euc = f" ({v_euc_hist})" if v_euc_hist != "N/A" else ""
+                data_cri = f" ({v_cri_hist})" if v_cri_hist != "N/A" else ""
+
                 df_recebidos = ler_aba("sacramentos_recebidos")
-                data_bat, data_euc, data_cri = "", "", ""
                 if not df_recebidos.empty:
                     rec_aluno = df_recebidos[df_recebidos.iloc[:, 1] == id_sel]
                     for _, r in rec_aluno.iterrows():
@@ -1589,12 +1611,19 @@ elif menu == "👤 Perfil Individual":
                         ed_est_civil_pais = fe2.selectbox("Estado Civil dos Pais", opcoes_ecp, index=idx_ecp)
                         ed_est_civil = "N/A"
 
-                    st.markdown("#### 🕊️ Sacramentos Possuídos")
+                    st.markdown("#### 🕊️ Sacramentos Possuídos e Histórico")
                     sac_atuais = str(dados.get('sacramentos_ja_feitos', '')).upper()
                     opcoes_sac =["BATISMO", "EUCARISTIA", "CRISMA", "MATRIMÔNIO"]
                     default_sacs =[s.strip() for s in sac_atuais.split(',') if s.strip() in opcoes_sac]
                     ed_sacramentos = st.multiselect("Marque/Desmarque os sacramentos possuídos:", opcoes_sac, default=default_sacs)
                     ed_sac_final = ", ".join(ed_sacramentos)
+                    
+                    st.info("Caso os sacramentos tenham sido feitos em outra paróquia, preencha as datas abaixo:")
+                    c_h1, c_h2, c_h3 = st.columns(3)
+                    ed_bat_hist = c_h1.text_input("Data Batismo (Histórico)", value="" if v_bat_hist=="N/A" else v_bat_hist)
+                    ed_euc_hist = c_h2.text_input("Data Eucaristia (Histórico)", value="" if v_euc_hist=="N/A" else v_euc_hist)
+                    ed_cri_hist = c_h3.text_input("Data Crisma (Histórico)", value="" if v_cri_hist=="N/A" else v_cri_hist)
+                    ed_paroq_hist = st.text_input("Paróquia de Origem dos Sacramentos", value="" if v_paroq_hist=="N/A" else v_paroq_hist).upper()
 
                     st.divider()
 
@@ -1634,7 +1663,11 @@ elif menu == "👤 Perfil Individual":
                             ed_est_civil_pais, dados.get('sac_pais', 'N/A'), 
                             ed_part_grupo, ed_qual_grupo, dados.get('tem_irmaos', 'NÃO'), 
                             dados.get('qtd_irmaos', 0), dados.get('turno', 'N/A'), 
-                            dados.get('local_encontro', 'N/A'), obs_final
+                            dados.get('local_encontro', 'N/A'), obs_final,
+                            ed_bat_hist if ed_bat_hist else "N/A",
+                            ed_euc_hist if ed_euc_hist else "N/A",
+                            ed_cri_hist if ed_cri_hist else "N/A",
+                            ed_paroq_hist if ed_paroq_hist else "N/A"
                         ]
                         if atualizar_catequizando(dados['id_catequizando'], lista_up):
                             sincronizar_edicao_catequizando(dados['id_catequizando'], ed_nome, ed_etapa)
