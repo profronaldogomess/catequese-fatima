@@ -803,3 +803,107 @@ def excluir_encontro_cascata(turma, data_alvo, tema_alvo):
     except Exception as e:
         st.error(f"Erro na exclusão em cascata: {e}")
         return False
+    
+def gerenciar_edicao_evento_sacramento(id_evento, novos_dados_evento, lista_participantes_novos, tipo_sacramento):
+    """Atualiza o evento, apaga os alunos antigos, insere os novos e atualiza as fichas."""
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        # 1. Atualizar o evento em si
+        aba_ev = planilha.worksheet("sacramentos_eventos")
+        cel_ev = aba_ev.find(str(id_evento), in_column=1)
+        if cel_ev: aba_ev.update(f"A{cel_ev.row}:E{cel_ev.row}", [novos_dados_evento])
+        
+        # 2. Manipular a lista de recebidos
+        aba_rec = planilha.worksheet("sacramentos_recebidos")
+        dados_rec = aba_rec.get_all_values()
+        
+        old_ids = set()
+        linhas_del = []
+        for i, linha in enumerate(dados_rec):
+            if len(linha) >= 2 and str(linha[0]) == str(id_evento):
+                old_ids.add(linha[1])
+                linhas_del.append(i + 1)
+                
+        # Excluir antigas (Batch Update para não estourar API)
+        if linhas_del:
+            sheet_id = aba_rec.id
+            requests =[{"deleteDimension": {"range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": r - 1, "endIndex": r}}} for r in sorted(linhas_del, reverse=True)]
+            planilha.batch_update({"requests": requests})
+        
+        # Inserir novas
+        if lista_participantes_novos:
+            aba_rec.append_rows(lista_participantes_novos)
+            
+        new_ids = set([p[1] for p in lista_participantes_novos])
+        added_ids = new_ids - old_ids
+        removed_ids = old_ids - new_ids
+        
+        # 3. Atualizar Fichas dos Catequizandos (Selo Sacramental)
+        if added_ids or removed_ids:
+            aba_cat = planilha.worksheet("catequizandos")
+            headers =[h.lower() for h in aba_cat.row_values(1)]
+            col_id = headers.index("id_catequizando") + 1
+            col_bat = headers.index("batizado_sn") + 1
+            col_sac = headers.index("sacramentos_ja_feitos") + 1
+            
+            for cid in (added_ids | removed_ids):
+                cel_cat = aba_cat.find(str(cid), in_column=col_id)
+                if cel_cat:
+                    if cid in added_ids:
+                        if tipo_sacramento == "BATISMO": aba_cat.update_cell(cel_cat.row, col_bat, "SIM")
+                        else:
+                            val_atual = aba_cat.cell(cel_cat.row, col_sac).value or ""
+                            if tipo_sacramento not in val_atual.upper():
+                                novo_val = f"{val_atual}, {tipo_sacramento}".strip(", ")
+                                aba_cat.update_cell(cel_cat.row, col_sac, novo_val.upper())
+                    elif cid in removed_ids:
+                        if tipo_sacramento == "BATISMO": aba_cat.update_cell(cel_cat.row, col_bat, "NÃO")
+                        else:
+                            val_atual = aba_cat.cell(cel_cat.row, col_sac).value or ""
+                            lista_sac =[s.strip() for s in val_atual.split(",") if s.strip() and s.strip().upper() != tipo_sacramento]
+                            novo_val = ", ".join(lista_sac) if lista_sac else "N/A"
+                            aba_cat.update_cell(cel_cat.row, col_sac, novo_val.upper())
+        st.cache_data.clear(); return True
+    except Exception as e: st.error(f"Erro: {e}"); return False
+
+def excluir_evento_sacramento_cascata(id_evento, tipo_sacramento):
+    """Lixeira Mágica: Deleta evento, deleta alunos da lista e reverte o selo na ficha deles."""
+    planilha = conectar_google_sheets()
+    if not planilha: return False
+    try:
+        aba_ev = planilha.worksheet("sacramentos_eventos")
+        cel_ev = aba_ev.find(str(id_evento), in_column=1)
+        if cel_ev: aba_ev.delete_rows(cel_ev.row)
+        
+        aba_rec = planilha.worksheet("sacramentos_recebidos")
+        dados_rec = aba_rec.get_all_values()
+        old_ids = set()
+        linhas_del =[]
+        for i, linha in enumerate(dados_rec):
+            if len(linha) >= 2 and str(linha[0]) == str(id_evento):
+                old_ids.add(linha[1]); linhas_del.append(i + 1)
+                
+        if linhas_del:
+            sheet_id = aba_rec.id
+            requests =[{"deleteDimension": {"range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": r - 1, "endIndex": r}}} for r in sorted(linhas_del, reverse=True)]
+            planilha.batch_update({"requests": requests})
+        
+        if old_ids:
+            aba_cat = planilha.worksheet("catequizandos")
+            headers =[h.lower() for h in aba_cat.row_values(1)]
+            col_id = headers.index("id_catequizando") + 1
+            col_bat = headers.index("batizado_sn") + 1
+            col_sac = headers.index("sacramentos_ja_feitos") + 1
+            
+            for cid in old_ids:
+                cel_cat = aba_cat.find(str(cid), in_column=col_id)
+                if cel_cat:
+                    if tipo_sacramento == "BATISMO": aba_cat.update_cell(cel_cat.row, col_bat, "NÃO")
+                    else:
+                        val_atual = aba_cat.cell(cel_cat.row, col_sac).value or ""
+                        lista_sac =[s.strip() for s in val_atual.split(",") if s.strip() and s.strip().upper() != tipo_sacramento]
+                        novo_val = ", ".join(lista_sac) if lista_sac else "N/A"
+                        aba_cat.update_cell(cel_cat.row, col_sac, novo_val.upper())
+        st.cache_data.clear(); return True
+    except: return False
