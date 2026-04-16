@@ -373,14 +373,24 @@ if menu == "🏠 Início / Dashboard":
     # Helpers locais do Calendário Paroquial
     def registrar_recesso_lote(data_rec, motivo, turmas_lista, nome_coord):
         planilha = conectar_google_sheets()
-        if planilha:
-            try:
-                aba = planilha.worksheet("encontros")
-                linhas = [[data_rec.strftime('%d/%m/%Y'), t, f"RECESSO: {motivo}", nome_coord, "Feriado/Recesso geral. Chamada não exigida."] for t in turmas_lista]
-                aba.append_rows(linhas)
+        if not planilha: return False
+        try:
+            aba = planilha.worksheet("encontros")
+            data_str = data_rec.strftime('%d/%m/%Y')
+            dados_existentes = aba.get_all_values()
+            
+            # Evitar duplicar recesso para a mesma turma no mesmo dia
+            turmas_com_recesso = [l[1].strip().upper() for l in dados_existentes if len(l) > 2 and l[0] == data_str]
+            
+            novas_linhas = [[data_str, t, f"RECESSO: {motivo}", nome_coord, "Chamada Bloqueada"] 
+                            for t in turmas_lista if t.strip().upper() not in turmas_com_recesso]
+            
+            if novas_linhas:
+                aba.append_rows(novas_linhas)
                 st.cache_data.clear()
-                return True
-            except Exception as e: st.error(f"Erro: {e}"); return False
+            return True
+        except Exception as e: 
+            st.error(f"Erro no bloqueio: {e}"); return False
         return False
 
     def excluir_recesso_lote(data_alvo):
@@ -401,8 +411,8 @@ if menu == "🏠 Início / Dashboard":
             except Exception as e: st.error(f"Erro: {e}"); return False
         return False
 
-    tab_diaria, tab_global, tab_relatorios = st.tabs([
-        "☀️ Visão Diária", "🌍 Visão Global (Radar)", "🖨️ Analytics e Relatórios"
+    tab_diaria, tab_global, tab_relatorios, tab_calendario = st.tabs([
+        "☀️ Visão Diária", "🌍 Visão Global (Radar)", "🖨️ Analytics e Relatórios", "🗓️ Calendário e Bloqueios"
     ])
     
     df_enc_local = ler_aba("encontros")
@@ -690,6 +700,28 @@ if menu == "🏠 Início / Dashboard":
                 st.session_state.pdf_lote_f = gerar_fichas_paroquia_total(df_cat)
             if "pdf_lote_f" in st.session_state:
                 st.download_button("📥 Baixar Fichas", st.session_state.pdf_lote_f, "Fichas_Lote.pdf", use_container_width=True)
+
+    with tab_calendario:
+        st.subheader("🗓️ Governança de Calendário e Feriados")
+        import holidays
+        
+        hoje_ano = date.today().year
+        feriados_br = holidays.BR(state='BA', years=[hoje_ano, hoje_ano + 1])
+        
+        st.markdown("Abaixo, liste os próximos feriados. Clique em **BLOQUEAR** para evitar chamadas nessas datas.")
+        
+        lista_feriados = sorted([d for d in feriados_br.items() if d[0] >= date.today()])
+        
+        for data_f, nome_f in lista_feriados:
+            c1, c2 = st.columns([4, 1])
+            c1.markdown(f"**{formatar_data_br(data_f)}** - {nome_f}")
+            
+            # Botão de Bloqueio (Lança o "RECESSO" no banco)
+            if c2.button("🚫 BLOQUEAR", key=f"bloq_{data_f}"):
+                with st.spinner("Lançando recesso..."):
+                    turmas_todas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
+                    if registrar_recesso_lote(data_f, nome_f, turmas_todas, st.session_state.usuario['nome']):
+                        st.success("Bloqueado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
 
 
@@ -2686,6 +2718,9 @@ elif menu == "✅ Fazer Chamada":
 
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
+    elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
+        st.error(f"🚫 **CHAMADA BLOQUEADA:** A coordenação decretou recesso para o dia {data_enc.strftime('%d/%m/%Y')}.")
+        st.info("Nenhuma presença pode ser registrada em datas de recesso.")
     else:
         st.divider()
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
