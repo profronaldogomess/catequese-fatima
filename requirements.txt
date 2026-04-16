@@ -8,3 +8,4 @@ fpdf
 openpyxl
 extra-streamlit-components
 tenacity
+holidays
