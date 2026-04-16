@@ -12,6 +12,8 @@ import uuid
 from fpdf import FPDF
 import plotly.express as px
 import extra_streamlit_components as stx
+import holidays
+
 
 # --- CONFIGURAÇÃO DE AMBIENTE (MUDE PARA FALSE NA BRANCH MAIN) ---
 IS_HOMOLOGACAO = False 
@@ -286,7 +288,24 @@ equipe_tecnica = df_usuarios[~df_usuarios['papel'].isin(['ADMIN', 'SECRETARIA'])
 
 # --- 9. BARRA LATERAL E DEFINIÇÃO DE MENU ---
 mostrar_logo_sidebar() 
-st.sidebar.markdown(f"📅 **{date.today().strftime('%d/%m/%Y')}**")
+
+# Fuso Horário Blindado (UTC-3: Bahia/Brasília)
+hoje_br = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+st.sidebar.markdown(f"📅 **{hoje_br.strftime('%d/%m/%Y')}**")
+
+# Motor de Feriados (Brasil / Bahia)
+try:
+    feriados_ba = holidays.BR(state='BA', years=hoje_br.year)
+    nome_feriado = feriados_ba.get(hoje_br)
+    
+    if nome_feriado:
+        st.sidebar.markdown(f"""
+            <div style='background-color:#e03d11; color:white; padding:6px; border-radius:5px; text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                🔴 Feriado: {nome_feriado}
+            </div>
+        """, unsafe_allow_html=True)
+except ImportError:
+    pass # Se a biblioteca 'holidays' não estiver no requirements.txt, ignora silenciosamente para não quebrar o sistema
 
 if st.session_state.logado and st.session_state.usuario:
     nome_exibicao = st.session_state.usuario.get('nome', 'Usuário')
