@@ -1524,9 +1524,9 @@ def gerar_declaracao_pastoral_pdf(dados, tipo_doc, paroquia_destino="", data_ate
     
     # Lógica para Filiação (Mãe, Pai ou Cuidador)
     filiacao = ""
-    if nome_mae not in ["N/A", "", "NONE"] and nome_pai not in ["N/A", "", "NONE"]:
+    if nome_mae not in["N/A", "", "NONE"] and nome_pai not in ["N/A", "", "NONE"]:
         filiacao = f"{nome_mae} e {nome_pai}"
-    elif nome_mae not in ["N/A", "", "NONE"]:
+    elif nome_mae not in["N/A", "", "NONE"]:
         filiacao = f"{nome_mae}"
     elif nome_pai not in ["N/A", "", "NONE"]:
         filiacao = f"{nome_pai}"
