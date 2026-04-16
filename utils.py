@@ -1482,24 +1482,110 @@ def gerar_livro_sacramentos_pdf(df_livro):
             
     return finalizar_pdf(pdf)
 
-def gerar_declaracao_pastoral_pdf(dados, tipo, destino=""):
-    """Gera a Declaração oficial com cabeçalho centralizado e dados da Paróquia de Fátima."""
+def gerar_declaracao_pastoral_pdf(dados, tipo_doc, paroquia_destino="", data_atestado=""):
+    """Gera Documentos Oficiais: Atestado, Transferência ou Histórico."""
     pdf = FPDF()
     pdf.add_page()
-    if os.path.exists("logo.png"):
-        pdf.image("logo.png", (210-25)/2, 10, 25); pdf.ln(28)
-    else: pdf.ln(10)
-    pdf.set_font("helvetica", "B", 14); pdf.cell(0, 7, limpar_texto("PARÓQUIA DE NOSSA SENHORA DE FÁTIMA"), ln=True, align='C')
-    pdf.set_font("helvetica", "I", 9); pdf.cell(0, 5, limpar_texto("Av. Juracy Magalhães, 801 - Itabuna - BA | (73) 3212-2635"), ln=True, align='C')
-    pdf.ln(15); pdf.set_font("helvetica", "B", 20); pdf.cell(0, 15, limpar_texto("Declaração"), ln=True, align='C')
-    pdf.ln(10); pdf.set_font("helvetica", "", 12)
-    texto = f"Declaro que o(a) catequizando(a) {dados['nome_completo']}, nascido(a) em {formatar_data_br(dados['data_nascimento'])}, filho(a) de {dados['nome_pai']} e de {dados['nome_mae']}, encontra-se "
-    if "Transferência" in tipo: texto += f"TRANSFERIDO(A) da turma {dados.get('etapa','')} para a {destino.upper()}."
-    else: texto += f"regularmente INSCRITO(A) E EM CAMINHADA na turma {dados.get('etapa','')} da Paróquia de Fátima."
-    pdf.multi_cell(0, 9, limpar_texto(texto), align='J')
-    pdf.ln(20); y_ass = pdf.get_y()
-    pdf.line(20, y_ass, 95, y_ass); pdf.set_xy(20, y_ass + 2); pdf.set_font("helvetica", "B", 10); pdf.cell(75, 5, "Pároco / Vigário", align='C')
-    pdf.line(115, y_ass, 190, y_ass); pdf.set_xy(115, y_ass + 2); pdf.cell(75, 5, "Coordenação / Secretaria", align='C')
+    
+    # Cabeçalho Oficial
+    adicionar_cabecalho_diocesano(pdf)
+    
+    # Título do Documento
+    pdf.ln(10)
+    pdf.set_font("helvetica", "B", 16)
+    pdf.set_text_color(65, 123, 153) # Azul Paroquial
+    
+    if tipo_doc == "ATESTADO_PARTICIPACAO":
+        titulo = "Atestado de Participação"
+    elif tipo_doc == "TRANSFERENCIA_COM_DESTINO":
+        titulo = "Carta de Transferência Pastoral"
+    else:
+        titulo = "Declaração de Histórico Catequético"
+        
+    pdf.cell(0, 10, limpar_texto(titulo), ln=True, align='C')
+    pdf.ln(10)
+    
+    # Corpo do Texto
+    pdf.set_font("helvetica", "", 12)
+    pdf.set_text_color(0, 0, 0)
+    
+    # Extração de Dados Resiliente
+    nome_cat = str(dados.get('nome_completo', 'N/A')).upper()
+    data_nasc = formatar_data_br(dados.get('data_nascimento', 'N/A'))
+    nome_mae = str(dados.get('nome_mae', 'N/A')).upper()
+    nome_pai = str(dados.get('nome_pai', 'N/A')).upper()
+    etapa = str(dados.get('etapa', 'N/A')).upper()
+    turno_bd = str(dados.get('turno', 'N/A')).upper()
+    
+    turno_formatado = turno_bd
+    if "M" in turno_bd or "MANHÃ" in turno_bd: turno_formatado = "MANHÃ"
+    elif "T" in turno_bd or "TARDE" in turno_bd: turno_formatado = "TARDE"
+    elif "N" in turno_bd or "NOITE" in turno_bd: turno_formatado = "NOITE"
+    
+    # Lógica para Filiação (Mãe, Pai ou Cuidador)
+    filiacao = ""
+    if nome_mae not in ["N/A", "", "NONE"] and nome_pai not in ["N/A", "", "NONE"]:
+        filiacao = f"{nome_mae} e {nome_pai}"
+    elif nome_mae not in ["N/A", "", "NONE"]:
+        filiacao = f"{nome_mae}"
+    elif nome_pai not in ["N/A", "", "NONE"]:
+        filiacao = f"{nome_pai}"
+    else:
+        filiacao = str(dados.get('nome_responsavel', 'N/A')).upper()
+        
+    # Construção dos Textos Aprovados
+    if tipo_doc == "ATESTADO_PARTICIPACAO":
+        texto = (f"Declaramos para os devidos fins, a pedido da família, que o(a) catequizando(a) {nome_cat}, "
+                 f"nascido(a) em {data_nasc}, filho(a) de {filiacao}, está regularmente inscrito(a) e "
+                 f"frequenta ativamente o itinerário de Iniciação à Vida Cristã nesta Paróquia Nossa Senhora de Fátima, "
+                 f"na etapa {etapa}.\n\n"
+                 f"Atestamos ainda que o(a) mesmo(a) esteve presente em nossas atividades e encontros pastorais realizados "
+                 f"no dia {data_atestado} no período do turno da {turno_formatado}.\n\n"
+                 f"Por ser expressão da verdade, firmamos o presente documento.")
+                 
+    elif tipo_doc == "TRANSFERENCIA_COM_DESTINO":
+        texto = (f"Declaramos para os devidos fins e exigências pastorais que o(a) catequizando(a) {nome_cat}, "
+                 f"nascido(a) em {data_nasc}, filho(a) de {filiacao}, frequentou os encontros de "
+                 f"Iniciação à Vida Cristã nesta Paróquia Nossa Senhora de Fátima até a etapa {etapa}.\n\n"
+                 f"O(a) mesmo(a) encontra-se apto(a) para efetuar a sua inscrição e dar continuidade à sua preparação "
+                 f"para os sacramentos na {paroquia_destino.upper()}.\n\n"
+                 f"Temos a certeza de que será muito bem acolhido(a) em sua nova comunidade paroquial. "
+                 f"Rogamos a Deus e à Virgem de Fátima bênçãos sobre sua família.")
+                 
+    else: # DECLARACAO_HISTORICO
+        texto = (f"Declaramos para os devidos fins que o(a) catequizando(a) {nome_cat}, nascido(a) em {data_nasc}, "
+                 f"filho(a) de {filiacao}, participou ativamente dos encontros de Iniciação à Vida Cristã nesta "
+                 f"Paróquia Nossa Senhora de Fátima.\n\n"
+                 f"Atestamos que, durante sua caminhada em nossa comunidade, o(a) catequizando(a) concluiu com "
+                 f"aproveitamento pastoral a etapa {etapa}. Sendo assim, encontra-se apto(a) para prosseguir "
+                 f"em sua caminhada de fé e vivência comunitária.\n\n"
+                 f"Por ser verdade, firmamos a presente declaração.")
+
+    # Justifica o texto
+    pdf.multi_cell(0, 8, limpar_texto(texto), align='J')
+    
+    # Data por extenso (Força o Fuso Horário Local)
+    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3))
+    meses_br = {1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho",
+                7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"}
+    data_extenso = f"Itabuna (BA), {hoje.day:02d} de {meses_br[hoje.month]} de {hoje.year}."
+    
+    pdf.ln(15)
+    pdf.set_font("helvetica", "", 11)
+    pdf.cell(0, 10, limpar_texto(data_extenso), ln=True, align='R')
+    
+    # Assinaturas
+    pdf.ln(25)
+    y_ass = pdf.get_y()
+    pdf.line(20, y_ass, 95, y_ass)
+    pdf.set_xy(20, y_ass + 2)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.cell(75, 5, limpar_texto("Pároco / Vigário"), align='C')
+    
+    pdf.line(115, y_ass, 190, y_ass)
+    pdf.set_xy(115, y_ass + 2)
+    pdf.cell(75, 5, limpar_texto("Coordenação / Secretaria"), align='C')
+    
     return finalizar_pdf(pdf)
 
 def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
