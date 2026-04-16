@@ -1704,11 +1704,39 @@ elif menu == "👤 Perfil Individual":
                             st.session_state.pdf_catequizando = gerar_ficha_cadastral_catequizando(dados.to_dict())
                         if "pdf_catequizando" in st.session_state:
                             st.download_button("📥 BAIXAR FICHA PDF", st.session_state.pdf_catequizando, f"Ficha_{nome_sel}.pdf", "application/pdf", use_container_width=True)
+                    
                     with col_doc_b:
-                        if st.button("📜 Gerar Declaração de Inscrição", key="btn_decl_matr_perfil", use_container_width=True):
-                            st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), "Declaração de Inscrição / Vínculo Pastoral")
+                        st.markdown("**📜 Emitir Documento Oficial**")
+                        tipo_doc_perfil = st.selectbox("Selecione o documento:",[
+                            "Atestado de Participação (Para Escola)",
+                            "Carta de Transferência (Com Destino)",
+                            "Declaração de Histórico / Conclusão"
+                        ], key="sel_doc_perfil")
+                        
+                        param_data = ""
+                        param_dest = ""
+                        
+                        if tipo_doc_perfil == "Atestado de Participação (Para Escola)":
+                            data_atestado = st.date_input("Data da Presença na Catequese:", date.today(), format="DD/MM/YYYY")
+                            param_data = data_atestado.strftime('%d/%m/%Y')
+                        elif tipo_doc_perfil == "Carta de Transferência (Com Destino)":
+                            param_dest = st.text_input("Paróquia de Destino:", placeholder="Ex: Paróquia Santa Rita").upper()
+                        
+                        if st.button("📥 GERAR DOCUMENTO OFICIAL", key="btn_decl_matr_perfil", use_container_width=True, type="primary"):
+                            if tipo_doc_perfil == "Atestado de Participação (Para Escola)":
+                                t_cod = "ATESTADO_PARTICIPACAO"
+                            elif tipo_doc_perfil == "Carta de Transferência (Com Destino)":
+                                t_cod = "TRANSFERENCIA_COM_DESTINO"
+                            else:
+                                t_cod = "DECLARACAO_HISTORICO"
+                                
+                            if t_cod == "TRANSFERENCIA_COM_DESTINO" and not param_dest:
+                                st.error("⚠️ Informe o nome da Paróquia de Destino para gerar a transferência.")
+                            else:
+                                st.session_state.pdf_decl_matr = gerar_declaracao_pastoral_pdf(dados.to_dict(), t_cod, param_dest, param_data)
+                        
                         if "pdf_decl_matr" in st.session_state:
-                            st.download_button("📥 BAIXAR DECLARAÇÃO PDF", st.session_state.pdf_decl_matr, f"Declaracao_Inscricao_{nome_sel}.pdf", "application/pdf", use_container_width=True)
+                            st.download_button("💾 BAIXAR DOCUMENTO (PDF)", st.session_state.pdf_decl_matr, f"Documento_{nome_sel}.pdf", "application/pdf", use_container_width=True)
 
                 with sub_tab_hist:
                     st.markdown("#### 📜 Extrato de Caminhada (Presenças e Temas)")
@@ -1847,24 +1875,33 @@ elif menu == "👤 Perfil Individual":
             st.divider()
             
             if not df_saidas.empty:
-                st.markdown("#### 📄 Gerar Declaração Oficial (Transferência ou Matrícula)")
+                st.markdown("#### 📄 Gerar Documento Oficial (Transferência ou Histórico)")
                 sel_cat_ev = st.selectbox("Selecione o Catequizando para o Documento:", [""] + df_saidas['nome_completo'].tolist(), key="sel_ev_doc")
                 
                 if sel_cat_ev:
                     dados_ev = df_saidas[df_saidas['nome_completo'] == sel_cat_ev].iloc[0]
                     col_d1, col_d2 = st.columns(2)
-                    tipo_doc = col_d1.selectbox("Tipo de Documento:", ["Declaração de Transferência", "Declaração de Matrícula"])
+                    tipo_doc = col_d1.selectbox("Tipo de Documento:",[
+                        "Carta de Transferência (Com Destino)",
+                        "Declaração de Histórico / Conclusão"
+                    ])
+                    
                     paroquia_dest = ""
-                    if "Transferência" in tipo_doc:
+                    if tipo_doc == "Carta de Transferência (Com Destino)":
                         paroquia_dest = col_d2.text_input("Transferido para a Paróquia:", placeholder="Ex: Paróquia Santa Rita").upper()
 
-                    if st.button(f"📥 GERAR {tipo_doc.upper()}", use_container_width=True, type="primary"):
-                        with st.spinner("Renderizando documento oficial..."):
-                            pdf_ev_final = gerar_declaracao_pastoral_pdf(dados_ev.to_dict(), tipo_doc, paroquia_dest)
-                            st.session_state.pdf_declaracao_saida = pdf_ev_final
+                    if st.button(f"📥 GERAR DOCUMENTO", use_container_width=True, type="primary"):
+                        t_cod = "TRANSFERENCIA_COM_DESTINO" if tipo_doc == "Carta de Transferência (Com Destino)" else "DECLARACAO_HISTORICO"
+                        
+                        if t_cod == "TRANSFERENCIA_COM_DESTINO" and not paroquia_dest:
+                            st.error("⚠️ Informe o nome da Paróquia de Destino.")
+                        else:
+                            with st.spinner("Renderizando documento oficial..."):
+                                pdf_ev_final = gerar_declaracao_pastoral_pdf(dados_ev.to_dict(), t_cod, paroquia_dest, "")
+                                st.session_state.pdf_declaracao_saida = pdf_ev_final
                     
                     if "pdf_declaracao_saida" in st.session_state:
-                        st.download_button("💾 BAIXAR DECLARAÇÃO (PDF)", st.session_state.pdf_declaracao_saida, f"Declaracao_{sel_cat_ev}.pdf", use_container_width=True)
+                        st.download_button("💾 BAIXAR DOCUMENTO (PDF)", st.session_state.pdf_declaracao_saida, f"Documento_{sel_cat_ev}.pdf", "application/pdf", use_container_width=True)
                     
                     st.markdown("---")
                     if st.button(f"🔄 REATIVAR {sel_cat_ev} (Voltou para a Catequese)"):
