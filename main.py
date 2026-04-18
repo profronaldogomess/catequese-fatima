@@ -1279,8 +1279,128 @@ elif menu == "📖 Diário de Encontros":
     c_dash3.metric("📈 Frequência Média", f"{freq_media:.1f}%")
 
     st.divider()
-    st.subheader(f"📜 Linha do Tempo e Raio-X dos Encontros")
+elif menu == "📖 Diário de Encontros":
+    st.title("📖 Central de Itinerário e Encontros")
     
+    # --- CARREGAMENTO NORMALIZADO ---
+    df_cron_p = ler_aba("cronograma")
+    df_pres_local = ler_aba("presencas")
+    df_enc_local = ler_aba("encontros")
+    
+    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
+    if eh_gestor or vinculo_raw == "TODAS":
+        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else[]
+    else:
+        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
+
+    if not turmas_permitidas:
+        st.error("⚠️ Nenhuma turma vinculada."); st.stop()
+
+    turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
+    turma_norm = turma_focal.strip().upper()
+
+    # --- CÁLCULO DE MÉTRICAS (VISÃO GERAL) ---
+    qtd_realizados = 0
+    qtd_pendentes = 0
+    freq_media = 0.0
+    total_temas = 0
+    
+    if not df_cron_p.empty:
+        cron_t = df_cron_p[df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm]
+        total_temas = len(cron_t)
+        col_status = 'status' if 'status' in cron_t.columns else ('col_4' if 'col_4' in cron_t.columns else None)
+        if col_status:
+            qtd_pendentes = len(cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO'])
+            
+    if not df_enc_local.empty:
+        enc_t = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_norm]
+        qtd_realizados = len(enc_t)
+        
+    pres_t = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]
+    if not pres_t.empty:
+        pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
+        freq_media = pres_t['status_num'].mean() * 100
+
+    progresso_seguro = min((qtd_realizados / total_temas) if total_temas > 0 else 0.0, 1.0)
+
+    # --- PAINEL VISUAL NO TOPO ---
+    st.markdown("#### 📊 Visão Geral do Itinerário")
+    c_dash1, c_dash2, c_dash3 = st.columns(3)
+    c_dash1.metric("✅ Encontros Realizados", f"{qtd_realizados} de {total_temas}")
+    c_dash2.metric("📌 Temas Pendentes", qtd_pendentes)
+    c_dash3.metric("📈 Frequência Média", f"{freq_media:.1f}%")
+    
+    st.progress(progresso_seguro)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- GUIA METODOLÓGICO IVC ---
+    with st.expander("🕊️ Guia do Encontro Catequético (Metodologia IVC)", expanded=False):
+        st.markdown("""
+        **Como preparar um encontro inspirador e alinhado com as diretrizes da Igreja?**
+        A catequese não é uma sala de aula, é uma *experiência de fé*. Utilize o roteiro abaixo para padronizar e enriquecer seus encontros:
+
+        1. **Acolhida / Ambientação:** Como você vai receber a turma? Prepare um ambiente acolhedor (Bíblia em destaque, uma vela, um canto, oração inicial).
+        2. **Ver a Vida (Realidade):** Parta da vivência do catequizando. Como conectar o tema de hoje com o dia a dia e os desafios deles?
+        3. **Iluminar (Palavra de Deus):** Qual texto bíblico ou trecho do Catecismo ilumina essa realidade? A Palavra de Deus é o centro!
+        4. **Celebrar e Agir:** Qual o compromisso prático da semana? Faça uma atividade concreta ou uma celebração final que consolide o encontro.
+        """)
+
+    st.divider()
+
+    # --- COLUNAS DE AÇÃO ---
+    col_plan, col_reg = st.columns(2)
+
+    with col_plan:
+        st.subheader("📅 1. Planejar Temas")
+        with st.form(f"form_plan_{turma_focal}", clear_on_submit=True):
+            novo_tema = st.text_input("Título do Tema").upper()
+            
+            # TEMPLATE PADRONIZADO IVC
+            template_ivc = (
+                "🎯 Objetivo Geral:\n\n"
+                "🙏🏻 Acolhida / Ambientação:\n\n"
+                "🌱 Ver a Vida (Realidade):\n\n"
+                "📖 Iluminar (Palavra de Deus):\n\n"
+                "⚙️ Celebrar e Agir:\n"
+            )
+            
+            detalhes_tema = st.text_area("Roteiro do Encontro (Metodologia IVC)", value=template_ivc, height=250, help="Preencha os tópicos abaixo para garantir um encontro completo e fiel à Iniciação à Vida Cristã.")
+            
+            if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
+                if novo_tema:
+                    if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_focal, novo_tema, detalhes_tema, "PENDENTE"]):
+                        st.success("Tema planejado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+    with col_reg:
+        st.subheader("✅ 2. Registrar Encontro")
+        with st.form(f"form_reg_{turma_focal}", clear_on_submit=True):
+            data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
+            
+            # Verifica se já existe registro para esta data na aba presencas
+            df_pres_local['data_dt'] = pd.to_datetime(df_pres_local['data_encontro'], errors='coerce', dayfirst=True)
+            ja_registrado = not df_pres_local[
+                (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & 
+                (df_pres_local['data_dt'].dt.date == data_e)
+            ].empty
+            
+            if ja_registrado:
+                st.error(f"⚠️ Já existe um encontro registrado para {data_e.strftime('%d/%m/%Y')}. Edite-o na Linha do Tempo abaixo.")
+                st.form_submit_button("BLOQUEADO", disabled=True)
+            else:
+                temas_pendentes = [""] + df_cron_p[(df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm) & (df_cron_p.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
+                tema_selecionado = st.selectbox("Temas do Cronograma (Opcional):", temas_pendentes)
+                tema_manual = st.text_input("Título do Tema Ministrado (Obrigatório):", value=tema_selecionado).upper()
+                obs_e = st.text_area("Observações Pastorais (Relato de como foi o encontro)", height=105)
+                
+                if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
+                    if tema_manual:
+                        # Salva na aba encontros e marca no cronograma
+                        if salvar_encontro([data_e.strftime('%d/%m/%Y'), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
+                            marcar_tema_realizado_cronograma(turma_focal, tema_manual)
+                            st.success("Encontro registrado no Diário!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+    st.divider()
+    st.subheader(f"📜 Linha do Tempo e Raio-X dos Encontros")    
     if not df_enc_local.empty:
         # Filtro robusto e normalizado
         df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
