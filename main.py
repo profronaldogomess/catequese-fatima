@@ -903,37 +903,7 @@ elif menu == "📚 Minha Turma":
     else:
         minhas_pres = pd.DataFrame()
 
-    # --- 🕊️ VISÃO PASTORAL (POP-UP SÓBRIO E CORRIGIDO) ---
-    @st.dialog("🕊️ Visão Pastoral Diária")
-    def exibir_assistente_pastoral(turma, aniversariantes, status_chamada, faltosos, proximo_tema, chave_sessao):
-        st.markdown(f"### Paz e Bem, Catequista.")
-        st.write(f"Resumo da caminhada para a turma **{turma}**:")
-        
-        if aniversariantes:
-            st.info(f"**Aniversariantes da Semana:**\n" + "\n".join([f"• {n}" for n in aniversariantes]))
-        
-        if status_chamada == "PENDENTE":
-            st.error("**Atenção:** O diário do último encontro está pendente de preenchimento.")
-        elif faltosos > 0:
-            st.warning(f"**Cuidado Pastoral:** Tivemos **{faltosos} faltas** no último encontro. Lembre-se de buscar essas ovelhas.")
-        else:
-            st.success("**Frequência:** Excelente participação no último encontro.")
-            
-        if proximo_tema:
-            st.success(f"**Próximo Encontro:** O tema planejado é '{proximo_tema}'.")
-        else:
-            st.warning("**Planejamento:** O cronograma está sem próximos temas definidos.")
-            
-        st.markdown("---")
-        st.caption('"O catequista é um cristão que recebe o chamado de Deus para anunciar a Sua Palavra."')
-        
-        if st.button("✅ Ciente, iniciar missão", use_container_width=True):
-            st.session_state[chave_sessao] = True
-            st.rerun()
-
-    hoje_str = date.today().strftime('%Y-%m-%d')
-    key_assistente = f"assistente_visto_{turma_ativa}_{hoje_str}"
-    
+    # --- 🕊️ VISÃO PASTORAL DIÁRIA (CARD INLINE CLEAN - SEM POPUP) ---
     ultima_data_chamada, chamada_recente = obter_ultima_chamada_turma(minhas_pres, turma_ativa)
     limite_t = date.today() - timedelta(days=7)
     status_chamada = "PENDENTE" if (not ultima_data_chamada or ultima_data_chamada < limite_t) else "OK"
@@ -946,9 +916,25 @@ elif menu == "📚 Minha Turma":
         if col_status: proximo = proximo[proximo[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
         if not proximo.empty: proximo_tema_str = proximo.iloc[0]['titulo_tema']
 
-    if key_assistente not in st.session_state:
-        aniversariantes_semana = [r['nome_completo'] for _, r in meus_alunos.iterrows() if eh_aniversariante_da_semana(r['data_nascimento'], date.today())]
-        exibir_assistente_pastoral(turma_ativa, aniversariantes_semana, status_chamada, faltosos_qtd, proximo_tema_str, key_assistente)
+    aniversariantes_semana = [r['nome_completo'] for _, r in meus_alunos.iterrows() if eh_aniversariante_da_semana(r['data_nascimento'], date.today())]
+
+    with st.expander("🕊️ Visão Pastoral Diária (Assistente da Turma)", expanded=True):
+        if aniversariantes_semana:
+            st.info(f"**🎂 Aniversariantes da Semana:**\n" + "\n".join([f"• {n}" for n in aniversariantes_semana]))
+        
+        c_v1, c_v2 = st.columns(2)
+        with c_v1:
+            if status_chamada == "PENDENTE":
+                st.error("**Diário:** Pendente de preenchimento (Últimos 7 dias).")
+            elif faltosos_qtd > 0:
+                st.warning(f"**Atenção Pastoral:** {faltosos_qtd} faltas no último encontro.")
+            else:
+                st.success("**Diário:** Frequência excelente no último encontro!")
+        with c_v2:
+            if proximo_tema_str:
+                st.success(f"**Próximo Encontro:** {proximo_tema_str}")
+            else:
+                st.warning("**Planejamento:** Cronograma sem próximos temas.")
 
     # --- ALERTA DE REUNIÃO DE PAIS ---
     df_reunioes_agendadas = ler_aba("reunioes_pais")
@@ -2909,7 +2895,7 @@ elif menu == "✅ Fazer Chamada":
 
     # 1. DEFINIÇÃO DE PERMISSÕES
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if (eh_gestor or vinculo_raw == "TODAS") else [t.strip() for t in vinculo_raw.split(',') if t.strip()]
+    turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if (eh_gestor or vinculo_raw == "TODAS") else[t.strip() for t in vinculo_raw.split(',') if t.strip()]
     if not turmas_permitidas: st.error("❌ Nenhuma turma vinculada."); st.stop()
 
     # 2. INTERFACE DE TURMA E DATA
@@ -2917,7 +2903,7 @@ elif menu == "✅ Fazer Chamada":
     turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
     data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-# 3. MURAL DE ANIVERSARIANTES
+    # 3. MURAL DE ANIVERSARIANTES
     lista_cat = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
     aniversariantes =[]
     for _, row in lista_cat.iterrows():
@@ -2938,43 +2924,17 @@ elif menu == "✅ Fazer Chamada":
         (df_enc_local['data_dt'].dt.date == data_enc)
     ]
 
-    # --- 💌 ASSISTENTE DE CHAMADA (POP-UP INTELIGENTE) ---
-    @st.dialog("💡 Guia Rápido da Chamada")
-    def exibir_guia_chamada(turma, data_str, lista_niver, ja_existe, chave_sessao):
-        st.markdown(f"<h3 style='text-align: center; color: #417b99; margin-top: 0;'>Preparando a chamada...</h3>", unsafe_allow_html=True)
-        
-        if ja_existe:
-            st.error(f"⚠️ **ATENÇÃO:** Já existe uma chamada salva para o dia **{data_str}**. Se você continuar, estará **editando** o registro existente.")
-        
-        if lista_niver:
-            st.info(f"🎂 **Temos aniversariantes!** Não esqueça de parabenizar:\n" + "\n".join([f"• {n}" for n in lista_niver]))
-            
-        st.markdown("""
-        <div style='background-color: #f8f9f0; padding: 15px; border-radius: 10px; border-left: 5px solid #e03d11; margin-bottom: 15px;'>
-            <b style='color: #e03d11;'>📌 3 Passos para uma chamada perfeita:</b><br><br>
-            1️⃣ <b>Tema:</b> Selecione um tema planejado na listinha abaixo ou digite um novo se for um encontro extra.<br>
-            2️⃣ <b>Presenças:</b> Marque quem veio. O sistema salva suas marcações na tela mesmo se a internet oscilar!<br>
-            3️⃣ <b>Diário:</b> Após salvar a chamada, vá na aba <i>Diário de Encontros</i> para escrever como foi a dinâmica nas observações.
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("✅ Entendido! Iniciar Chamada", use_container_width=True, type="primary"):
-            # Agora usamos a chave exata passada de fora
-            st.session_state[chave_sessao] = True
-            st.rerun()
+    # --- TEMA E OBSERVAÇÕES INICIAIS ---
+    tema_dia = ""
+    obs_dia = ""
 
-    # Gatilho do Pop-up (Aparece 1x por Turma + Data)
-    key_guia = f"guia_chamada_{turma_sel}_{data_enc.strftime('%Y-%m-%d')}"
-    if key_guia not in st.session_state:
-        ja_tem_registro = not encontro_do_dia.empty
-        # Passamos a key_guia como o 5º argumento para garantir a sincronia perfeita
-        exibir_guia_chamada(turma_sel, data_enc.strftime('%d/%m/%Y'), aniversariantes, ja_tem_registro, key_guia)
-
-    if not encontro_do_dia.empty:
+    if not encontro_do_dia.empty and "RECESSO" not in str(encontro_do_dia.iloc[0]['tema']).upper():
         tema_dia = encontro_do_dia.iloc[0]['tema']
         st.success(f"📖 **Tema do Encontro já registrado no Diário:** {tema_dia}")
+    elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
+        pass # Será tratado no bloqueio abaixo
     else:
-        # Busca temas pendentes no cronograma para facilitar a vida do catequista
+        # Busca temas pendentes no cronograma
         lista_temas_pendentes = [""]
         if not df_cron_local.empty:
             col_status = 'status' if 'status' in df_cron_local.columns else ('col_4' if 'col_4' in df_cron_local.columns else None)
@@ -2996,6 +2956,7 @@ elif menu == "✅ Fazer Chamada":
 
         obs_dia = st.text_area("📝 Relato / Observações Pastorais (Opcional):", value=obs_planejada, height=100, help="O texto acima foi puxado do planejamento. Você pode editá-lo para registrar como foi a dinâmica real do encontro hoje.")
 
+    # --- TRAVA DE RECESSO E LISTA DE PRESENÇA ---
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
     elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
@@ -3010,19 +2971,15 @@ elif menu == "✅ Fazer Chamada":
         
         st.markdown("---")
         
-    # --- BUFFER DE CHAMADA (REATIVO) ---
-        # Criamos uma chave única que inclui a data para forçar a recarga ao mudar o date_input
+        # --- BUFFER DE CHAMADA (REATIVO) ---
         buffer_key = f"chamada_buffer_{turma_sel}_{data_enc}"
-        
         if buffer_key not in st.session_state:
             buffer = {}
-            # Carrega do banco se já existir
             df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
             df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_dt'].dt.date == data_enc)]
             
             for _, row in lista_cat.iterrows():
                 id_cat = row['id_catequizando']
-                # Verifica se o aluno estava presente no banco
                 foi_presente = False
                 if not df_pres_existente.empty:
                     aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == id_cat]
@@ -3037,7 +2994,6 @@ elif menu == "✅ Fazer Chamada":
         contador_a = 0
         
         st.markdown("### 📋 Lista de Presença")
-        # Cria um grid de 2 colunas para turmas grandes ficarem mais compactas
         cols_chamada = st.columns(2)
         
         for i, (_, row) in enumerate(lista_cat.iterrows()):
@@ -3063,11 +3019,8 @@ elif menu == "✅ Fazer Chamada":
         c_res2.metric("❌ Ausentes", contador_a)
 
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
-            # Salva presença e envia o relato preenchido para o Diário
             obs_final = obs_dia if obs_dia else "Registro via Chamada"
             if salvar_com_seguranca(salvar_presencas, registros_presenca, obs_final):
-                # A função salvar_presencas no database.py JÁ FAZ a criação do encontro 
-                # e a marcação no cronograma em cascata. Removemos a dupla escrita aqui.
                 st.success(f"✅ Chamada salva e Diário atualizado!"); st.balloons()
                 st.cache_data.clear(); time.sleep(1); st.rerun()
         
