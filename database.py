@@ -128,7 +128,7 @@ def salvar_lote_catequizandos(lista_de_listas):
         except Exception as e: st.error(f"Erro: {e}")
     return False
 
-def salvar_presencas(lista_presencas):
+def salvar_presencas(lista_presencas, obs_encontro="Registro via Chamada"):
     """Salva presenças e sincroniza em cascata com Diário e Cronograma."""
     planilha = conectar_google_sheets()
     if not planilha: return False
@@ -141,29 +141,15 @@ def salvar_presencas(lista_presencas):
         tema_alvo = str(lista_presencas[0][5]).strip().upper()
         catequista = str(lista_presencas[0][6]).strip()
 
-        # 1. Limpa presenças antigas do dia/turma (para reescrever as novas)
+        # 1. Limpa presenças antigas do dia/turma (Batch Update)
         dados = aba_pres.get_all_values()
         linhas_del =[i + 1 for i, linha in enumerate(dados) if len(linha) >= 4 and linha[0] == data_alvo and linha[3].strip().upper() == turma_alvo]
-        
         if linhas_del:
-            # BLINDAGEM ANTI-ERRO 429: Agrupa todas as exclusões em 1 único comando (Batch Update)
             sheet_id = aba_pres.id
-            requests =[]
-            for row_idx in sorted(linhas_del, reverse=True):
-                requests.append({
-                    "deleteDimension": {
-                        "range": {
-                            "sheetId": sheet_id,
-                            "dimension": "ROWS",
-                            "startIndex": row_idx - 1,
-                            "endIndex": row_idx
-                        }
-                    }
-                })
-            if requests:
-                planilha.batch_update({"requests": requests})
+            requests =[{"deleteDimension": {"range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": r - 1, "endIndex": r}}} for r in sorted(linhas_del, reverse=True)]
+            planilha.batch_update({"requests": requests})
         
-        # 2. Salva as novas presenças com o tema (novo ou editado)
+        # 2. Salva as novas presenças
         aba_pres.append_rows(lista_presencas)
         
         # 3. Sincronia em Cascata com a aba ENCONTROS (Diário)
@@ -175,26 +161,20 @@ def salvar_presencas(lista_presencas):
                 break
         
         if linha_existente:
-            # Se o encontro já existe, ATUALIZA o tema (modo edição pela chamada)
-            # NÃO tocamos na observação para preservar o que o catequista já digitou
             aba_enc.update_cell(linha_existente, 3, tema_alvo)
+            if obs_encontro and obs_encontro != "Registro via Chamada":
+                aba_enc.update_cell(linha_existente, 5, obs_encontro)
         else:
-            # Se não existe, CRIA um novo (modo criação pela chamada)
-            # --- INTELIGÊNCIA: HERDAR DESCRIÇÃO DO CRONOGRAMA ---
-            obs_padrao = "Registro automático via Chamada"
-            try:
-                aba_cron = planilha.worksheet("cronograma")
-                dados_cron = aba_cron.get_all_values()
-                for linha in dados_cron:
-                    # Procura a turma (col 2) e o tema (col 3)
-                    if len(linha) >= 4 and str(linha[1]).strip().upper() == turma_alvo and str(linha[2]).strip().upper() == tema_alvo:
-                        desc_planejada = str(linha[3]).strip() # Coluna 4 é a descricao_base
-                        if desc_planejada and desc_planejada.upper() not in["", "NAN", "N/A", "NONE"]:
-                            obs_padrao = desc_planejada
-                        break
-            except: pass
+            aba_enc.append_row([data_alvo, turma_alvo, tema_alvo, catequista, obs_encontro])
             
-            aba_enc.append_row([data_alvo, turma_alvo, tema_alvo, catequista, obs_padrao])
+        # 4. Sincronia em Cascata com a aba CRONOGRAMA
+        marcar_tema_realizado_cronograma(turma_alvo, tema_alvo)
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e: 
+        st.error(f"Erro na sincronia da chamada: {e}")
+        return False
             
         # 4. Sincronia em Cascata com a aba CRONOGRAMA
         marcar_tema_realizado_cronograma(turma_alvo, tema_alvo)
