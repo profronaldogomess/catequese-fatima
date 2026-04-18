@@ -943,6 +943,78 @@ elif menu == "📚 Minha Turma":
             else:
                 st.info("Nenhum registro de presença.")
 
+    st.divider()
+    
+    # --- 🎯 LINHA DO TEMPO DO ITINERÁRIO ---
+    st.markdown("#### 🎯 Linha do Tempo do Itinerário")
+    
+    c_hj, c_ult, c_prox = st.columns(3)
+    
+    # 1. Busca Encontro de HOJE
+    hoje_date = date.today()
+    df_enc_t['data_dt'] = pd.to_datetime(df_enc_t['data'], errors='coerce', dayfirst=True)
+    enc_hoje = df_enc_t[(df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_enc_t['data_dt'].dt.date == hoje_date)]
+    
+    with c_hj:
+        if not enc_hoje.empty:
+            tema_h = enc_hoje.iloc[0]['tema']
+            obs_h = enc_hoje.iloc[0].get('observacoes', 'Sem relato')
+            st.markdown(f"""
+                <div style='background-color:#e3f2fd; padding:15px; border-radius:10px; border-left:5px solid #1976d2; height: 100%;'>
+                    <b style='color:#1976d2;'>☀️ Ocorrendo Hoje</b><br>
+                    <b style='font-size:15px;'>{tema_h}</b><br>
+                    <span style='font-size:12px; color:#555;'>{obs_h[:100]}...</span>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div style='background-color:#f5f5f5; padding:15px; border-radius:10px; border-left:5px solid #9e9e9e; height: 100%;'>
+                    <b style='color:#9e9e9e;'>☀️ Hoje</b><br>
+                    <span style='font-size:13px; color:#666;'>Nenhum encontro registrado para a data de hoje.</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+    # 2. Busca ÚLTIMO Realizado (Antes de hoje)
+    enc_passado = df_enc_t[(df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_enc_t['data_dt'].dt.date < hoje_date)].sort_values('data_dt', ascending=False)
+    
+    with c_ult:
+        if not enc_passado.empty:
+            tema_u = enc_passado.iloc[0]['tema']
+            data_u = formatar_data_br(enc_passado.iloc[0]['data'])
+            st.markdown(f"""
+                <div style='background-color:#e8f5e9; padding:15px; border-radius:10px; border-left:5px solid #2e7d32; height: 100%;'>
+                    <b style='color:#2e7d32;'>🔙 Último Dado ({data_u})</b><br>
+                    <b style='font-size:15px;'>{tema_u}</b>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div style='background-color:#f5f5f5; padding:15px; border-radius:10px; border-left:5px solid #9e9e9e; height: 100%;'>
+                    <b style='color:#9e9e9e;'>🔙 Último Dado</b><br>
+                    <span style='font-size:13px; color:#666;'>Histórico vazio.</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+    # 3. Busca PRÓXIMO Planejado
+    with c_prox:
+        if proximo_tema_str:
+            desc_p = proximo.iloc[0].get('descricao_base', 'Sem descrição planejada')
+            if desc_p in["nan", "N/A", "None"]: desc_p = "Sem descrição planejada"
+            st.markdown(f"""
+                <div style='background-color:#fff8e1; padding:15px; border-radius:10px; border-left:5px solid #ffa000; height: 100%;'>
+                    <b style='color:#ffa000;'>🔜 Próximo Planejado</b><br>
+                    <b style='font-size:15px;'>{proximo_tema_str}</b><br>
+                    <span style='font-size:12px; color:#555;'>{desc_p[:100]}...</span>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div style='background-color:#ffebee; padding:15px; border-radius:10px; border-left:5px solid #f44336; height: 100%;'>
+                    <b style='color:#f44336;'>🔜 Próximo Planejado</b><br>
+                    <span style='font-size:13px; color:#666;'>Fim do cronograma! Cadastre novos temas.</span>
+                </div>
+            """, unsafe_allow_html=True)
+
 
 # ==============================================================================
 # PÁGINA: 📖 DIÁRIO DE ENCONTROS
@@ -2751,7 +2823,17 @@ elif menu == "✅ Fazer Chamada":
             lista_temas_pendentes += temas_turma['titulo_tema'].tolist()
             
         tema_selecionado = st.selectbox("📌 Selecione um Tema Planejado no Cronograma (Opcional):", lista_temas_pendentes, key="sel_tema_chamada", help="Se escolher um tema aqui, ele preencherá o campo abaixo automaticamente.")
-        tema_dia = st.text_input("📖 Digite o Tema do Encontro (Obrigatório):", value=tema_selecionado, key="txt_tema_chamada", help="Você pode digitar um tema livre caso tenha sido um encontro espontâneo.").upper()
+        tema_dia = st.text_input("📖 Título do Encontro (Obrigatório):", value=tema_selecionado, key="txt_tema_chamada", help="Você pode digitar um tema livre caso tenha sido um encontro espontâneo.").upper()
+
+        # ELO FORTE: Busca a descrição do cronograma para exibir ao catequista
+        obs_planejada = ""
+        if tema_selecionado and not df_cron_local.empty:
+            linha_cron = df_cron_local[(df_cron_local['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cron_local['titulo_tema'].astype(str).str.strip().str.upper() == tema_selecionado.strip().upper())]
+            if not linha_cron.empty:
+                desc_b = str(linha_cron.iloc[0].get('descricao_base', ''))
+                if desc_b not in ["nan", "N/A", "None", ""]: obs_planejada = desc_b
+
+        obs_dia = st.text_area("📝 Relato / Observações Pastorais (Opcional):", value=obs_planejada, height=100, help="O texto acima foi puxado do planejamento. Você pode editá-lo para registrar como foi a dinâmica real do encontro hoje.")
 
     if lista_cat.empty:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
@@ -2820,8 +2902,9 @@ elif menu == "✅ Fazer Chamada":
         c_res2.metric("❌ Ausentes", contador_a)
 
         if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
-            # Salva presença e garante registro no Diário
-            if salvar_com_seguranca(salvar_presencas, registros_presenca):
+            # Salva presença e envia o relato preenchido para o Diário
+            obs_final = obs_dia if obs_dia else "Registro via Chamada"
+            if salvar_com_seguranca(salvar_presencas, registros_presenca, obs_final):
                 # A função salvar_presencas no database.py JÁ FAZ a criação do encontro 
                 # e a marcação no cronograma em cascata. Removemos a dupla escrita aqui.
                 st.success(f"✅ Chamada salva e Diário atualizado!"); st.balloons()
