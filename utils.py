@@ -1482,6 +1482,65 @@ def gerar_livro_sacramentos_pdf(df_livro):
             
     return finalizar_pdf(pdf)
 
+def gerar_relatorio_frequencia_turma_pdf(nome_turma, df_alunos, df_presencas):
+    """Gera um relatório focado na contagem de faltas e frequência da turma."""
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, f"RELATÓRIO DE FREQUÊNCIA E FALTAS")
+    
+    pdf.set_font("helvetica", "B", 12)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 8, limpar_texto(f"Turma: {nome_turma}"), ln=True, align='C')
+    pdf.ln(5)
+    
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 9)
+    
+    pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
+    pdf.cell(100, 8, "Nome do Catequizando", border=1, fill=True)
+    pdf.cell(20, 8, "Faltas", border=1, fill=True, align='C')
+    pdf.cell(20, 8, "Presenças", border=1, fill=True, align='C')
+    pdf.cell(40, 8, "Frequência (%)", border=1, fill=True, align='C')
+    pdf.ln()
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 8)
+    
+    alunos_ordenados = df_alunos.sort_values('nome_completo')
+    
+    for i, (_, aluno) in enumerate(alunos_ordenados.iterrows(), 1):
+        id_cat = aluno['id_catequizando']
+        
+        if not df_presencas.empty:
+            pres_aluno = df_presencas[df_presencas['id_catequizando'] == id_cat]
+            faltas = len(pres_aluno[pres_aluno['status'] == 'AUSENTE'])
+            presencas = len(pres_aluno[pres_aluno['status'] == 'PRESENTE'])
+            total_aluno = faltas + presencas
+            freq = (presencas / total_aluno * 100) if total_aluno > 0 else 100.0
+        else:
+            faltas, presencas, freq = 0, 0, 100.0
+            
+        # Destaca em vermelho quem tem risco crítico de evasão (3+ faltas)
+        if faltas >= 3:
+            pdf.set_text_color(224, 61, 17) 
+            pdf.set_font("helvetica", "B", 8)
+        else:
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("helvetica", "", 8)
+
+        pdf.cell(10, 6, str(i), border=1, align='C')
+        pdf.cell(100, 6, limpar_texto(aluno['nome_completo'])[:48], border=1)
+        pdf.cell(20, 6, str(faltas), border=1, align='C')
+        pdf.cell(20, 6, str(presencas), border=1, align='C')
+        pdf.cell(40, 6, f"{freq:.1f}%", border=1, align='C')
+        pdf.ln()
+
+        if pdf.get_y() > 270:
+            pdf.add_page()
+            
+    return finalizar_pdf(pdf)
+
 def gerar_declaracao_pastoral_pdf(dados, tipo_doc, paroquia_destino="", data_atestado=""):
     """Gera Documentos Oficiais: Atestado, Transferência ou Histórico."""
     pdf = FPDF()
