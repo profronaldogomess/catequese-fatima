@@ -121,7 +121,7 @@ from utils import (
     processar_alertas_evasao, gerar_lista_secretaria_pdf, gerar_declaracao_pastoral_pdf,
     gerar_lista_assinatura_reuniao_pdf, gerar_relatorio_diocesano_pdf, 
     gerar_relatorio_pastoral_pdf, gerar_relatorio_local_turma_pdf,
-    gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes,gerar_pdf_auditoria_chamadas, obter_data_ultimo_sabado, obter_ultima_chamada_turma, gerar_livro_sacramentos_pdf
+    gerar_relatorio_sacramentos_tecnico_pdf,gerar_auditoria_chamadas_pendentes,gerar_pdf_auditoria_chamadas, obter_data_ultimo_sabado, obter_ultima_chamada_turma, gerar_livro_sacramentos_pdf, gerar_relatorio_frequencia_turma_pdf
 )
 from ai_engine import (
     gerar_analise_pastoral, gerar_mensagem_whatsapp, 
@@ -993,6 +993,12 @@ elif menu == "📚 Minha Turma":
         perc_pais = (pais_presentes / len(meus_alunos)) * 100
     c3.metric("Engajamento Familiar", f"{perc_pais:.0f}%")
 
+    # BOTÃO EVIDENTE LOGO NA FRENTE
+    if st.button("🖨️ Baixar Relatório de Faltas e Frequência da Turma (PDF)", use_container_width=True):
+        st.session_state[f"pdf_freq_minha_{turma_ativa}"] = gerar_relatorio_frequencia_turma_pdf(turma_ativa, meus_alunos, minhas_pres)
+    if f"pdf_freq_minha_{turma_ativa}" in st.session_state:
+        st.download_button("📥 Clique aqui para salvar o PDF de Faltas", st.session_state[f"pdf_freq_minha_{turma_ativa}"], f"Faltas_e_Frequencia_{turma_ativa}.pdf", "application/pdf", use_container_width=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
     c_alerta1, c_alerta2 = st.columns(2)
     
@@ -1331,6 +1337,14 @@ elif menu == "📖 Diário de Encontros":
     c_dash3.metric("📈 Frequência Média", f"{freq_media:.1f}%")
     
     st.progress(progresso_seguro)
+    
+    # BOTÃO EVIDENTE LOGO NA FRENTE
+    df_cat_diario = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_norm) & (df_cat['status'] == 'ATIVO')] if not df_cat.empty else pd.DataFrame()
+    if st.button("🖨️ Baixar Relatório de Faltas e Frequência da Turma (PDF)", use_container_width=True):
+        st.session_state[f"pdf_freq_diario_{turma_focal}"] = gerar_relatorio_frequencia_turma_pdf(turma_focal, df_cat_diario, pres_t)
+    if f"pdf_freq_diario_{turma_focal}" in st.session_state:
+        st.download_button("📥 Clique aqui para salvar o PDF de Faltas", st.session_state[f"pdf_freq_diario_{turma_focal}"], f"Faltas_e_Frequencia_{turma_focal}.pdf", "application/pdf", use_container_width=True)
+        
     st.markdown("<br>", unsafe_allow_html=True)
 
     # --- GUIA METODOLÓGICO IVC ---
