@@ -2918,11 +2918,13 @@ elif menu == "✅ Fazer Chamada":
     df_enc_local = ler_aba("encontros")
     df_cron_local = ler_aba("cronograma")
     
-    df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
-    encontro_do_dia = df_enc_local[
-        (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
-        (df_enc_local['data_dt'].dt.date == data_enc)
-    ]
+    encontro_do_dia = pd.DataFrame()
+    if not df_enc_local.empty and 'data' in df_enc_local.columns:
+        df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
+        encontro_do_dia = df_enc_local[
+            (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
+            (df_enc_local['data_dt'].dt.date == data_enc)
+        ]
 
     # --- TEMA E OBSERVAÇÕES INICIAIS ---
     tema_dia = ""
@@ -2975,8 +2977,11 @@ elif menu == "✅ Fazer Chamada":
         buffer_key = f"chamada_buffer_{turma_sel}_{data_enc}"
         if buffer_key not in st.session_state:
             buffer = {}
-            df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
-            df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_dt'].dt.date == data_enc)]
+            df_pres_existente = pd.DataFrame()
+            
+            if not df_pres.empty and 'data_encontro' in df_pres.columns:
+                df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
+                df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_dt'].dt.date == data_enc)]
             
             for _, row in lista_cat.iterrows():
                 id_cat = row['id_catequizando']
