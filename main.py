@@ -422,8 +422,8 @@ if menu == "🏠 Início / Dashboard":
     # HUB 1: VISÃO DIÁRIA
     # ==========================================================================
     with tab_diaria:
-        st.subheader("☀️ Bom dia, Coordenação!")
-        st.markdown("Acompanhe os eventos de hoje e gerencie o calendário da paróquia.")
+        st.subheader("🕊️ Paz e bem, Coordenação!")
+        st.markdown("Acompanhe os eventos e o planejamento dos catequistas em tempo real.")
         
         c_dia1, c_dia2 = st.columns([2, 1])
         
@@ -504,6 +504,152 @@ if menu == "🏠 Início / Dashboard":
                     st.info("Nenhum recesso registrado no sistema.")
             else:
                 st.info("Nenhum recesso registrado no sistema.")
+
+        # ==========================================================================
+        # NOVO: RADAR DE PLANEJAMENTO E ENCONTROS DA COORDENAÇÃO
+        # ==========================================================================
+        st.divider()
+        st.subheader("🎯 Radar de Planejamento e Encontros")
+        
+        hoje_br = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+        is_sabado = hoje_br.weekday() == 5
+        
+        if is_sabado:
+            st.info("🗓️ **Hoje é Sábado, dia de Catequese!** Acompanhe em tempo real quem já planejou e quem já realizou (registrou no diário) o encontro de hoje.")
+        else:
+            st.info("🗓️ **Visão da Semana:** Acompanhe abaixo como está o planejamento dos catequistas para o próximo encontro.")
+            
+        df_cron_t = ler_aba("cronograma")
+        df_enc_t = ler_aba("encontros")
+        
+        lista_realizados = []
+        lista_planejados = []
+        lista_sem_plan =[]
+        
+        if not df_turmas.empty:
+            for _, t in df_turmas.iterrows():
+                nome_t = str(t['nome_turma']).strip().upper()
+                cats_str = str(t.get('catequista_responsavel', 'Não informado'))
+                
+                # Check se já teve encontro hoje
+                enc_hoje = pd.DataFrame()
+                if not df_enc_t.empty:
+                    df_enc_t['data_dt'] = pd.to_datetime(df_enc_t['data'], errors='coerce', dayfirst=True)
+                    enc_hoje = df_enc_t[(df_enc_t['turma'].astype(str).str.strip().str.upper() == nome_t) & (df_enc_t['data_dt'].dt.date == hoje_br)]
+                
+                # Check próximo planejamento no cronograma
+                prox_tema, desc_tema = None, None
+                if not df_cron_t.empty:
+                    col_status = 'status' if 'status' in df_cron_t.columns else ('col_4' if 'col_4' in df_cron_t.columns else None)
+                    if col_status:
+                        cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == nome_t]
+                        pendentes = cron_turma[cron_turma[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+                        if not pendentes.empty:
+                            prox_tema = pendentes.iloc[0]['titulo_tema']
+                            desc_tema = pendentes.iloc[0].get('descricao_base', 'Sem descrição informada.')
+                            if pd.isna(desc_tema) or str(desc_tema).strip() == "": desc_tema = "Sem descrição informada."
+                
+                # Montar o objeto
+                dados_turma = {"turma": nome_t, "catequistas": cats_str, "tema": prox_tema, "desc": desc_tema}
+                
+                if not enc_hoje.empty:
+                    dados_turma["tema"] = enc_hoje.iloc[0]['tema']
+                    dados_turma["desc"] = enc_hoje.iloc[0].get('observacoes', 'Encontro realizado via chamada rápida (improviso/sem planejamento).')
+                    lista_realizados.append(dados_turma)
+                elif prox_tema:
+                    lista_planejados.append(dados_turma)
+                else:
+                    lista_sem_plan.append(dados_turma)
+        
+        # Função helper para o botão WhatsApp limpo e moderno
+        def botao_cobrar_catequista(cats_string, msg_padrao, label_btn="📲 Falar com Catequista"):
+            primeiro_cat = cats_string.split(',')[0].strip()
+            if not equipe_tecnica.empty:
+                cat_info = equipe_tecnica[equipe_tecnica['nome'].str.upper() == primeiro_cat.upper()]
+                if not cat_info.empty:
+                    tel = str(cat_info.iloc[0].get('telefone', ''))
+                    num_limpo = "".join(filter(str.isdigit, tel))
+                    if num_limpo:
+                        if num_limpo.startswith("0"): num_limpo = num_limpo[1:]
+                        if not num_limpo.startswith("55"): num_limpo = f"5573{num_limpo}" if len(num_limpo) <= 9 else f"55{num_limpo}"
+                        import urllib.parse
+                        link_wa = f"https://wa.me/{num_limpo}?text={urllib.parse.quote(msg_padrao)}"
+                        return f"<a href='{link_wa}' target='_blank' style='text-decoration:none;'><span style='border:1px solid #417b99; color:#417b99; padding:6px 12px; border-radius:5px; font-size:12px; font-weight:bold; transition:0.3s;'>{label_btn}</span></a>"
+            return "<span style='color:#999; font-size:12px;'>(Sem WhatsApp)</span>"
+
+        # ABAS VISUAIS
+        titulo_realizados = "🟢 Realizados Hoje" if is_sabado else "🟢 Realizados (Hoje)"
+        t_real, t_plan, t_sem = st.tabs([
+            f"{titulo_realizados} ({len(lista_realizados)})", 
+            f"🟡 Planejados ({len(lista_planejados)})", 
+            f"🔴 Sem Planejamento ({len(lista_sem_plan)})"
+        ])
+        
+        with t_real:
+            if not lista_realizados:
+                st.info("Nenhum encontro registrado no diário na data de hoje ainda.")
+            else:
+                for item in lista_realizados:
+                    st.markdown(f"""
+                        <div style='background-color:#e8f5e9; padding:15px; border-radius:8px; border-left:5px solid #2e7d32; margin-bottom:10px;'>
+                            <h4 style='margin:0; color:#2e7d32;'>{item['turma']}</h4>
+                            <b style='font-size:15px;'>Tema Dado: {item['tema']}</b><br>
+                            <span style='font-size:14px; color:#333;'>{item['desc']}</span><br>
+                            <small style='color:#666; margin-top:10px; display:block;'>👤 <b>Resp:</b> {item['catequistas']}</small>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+        with t_plan:
+            if not lista_planejados:
+                st.info("Nenhuma turma com planejamento futuro na fila.")
+            else:
+                for item in lista_planejados:
+                    msg_wa = f"Paz e Bem, {item['catequistas'].split(',')[0]}! Que ótimo tema você planejou para o próximo encontro da turma {item['turma']}: '{item['tema']}'. Boa catequese!"
+                    btn_wa = botao_cobrar_catequista(item['catequistas'], msg_wa, "💬 Incentivar")
+                    
+                    st.markdown(f"""
+                        <div style='background-color:#fff8e1; padding:15px; border-radius:8px; border-left:5px solid #ffa000; margin-bottom:10px;'>
+                            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                <h4 style='margin:0; color:#ffa000;'>{item['turma']}</h4>
+                                <div>{btn_wa}</div>
+                            </div>
+                            <b style='font-size:15px;'>Tema Planejado: {item['tema']}</b><br>
+                            <span style='font-size:14px; color:#333;'>{item['desc']}</span><br>
+                            <small style='color:#666; margin-top:10px; display:block;'>👤 <b>Resp:</b> {item['catequistas']}</small>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+        with t_sem:
+            if not lista_sem_plan:
+                st.success("Graças a Deus! Todas as turmas estão com planejamento em dia.")
+            else:
+                st.warning("As turmas abaixo não possuem temas pendentes no cronograma. O encontro ocorrerá no improviso se não for planejado.")
+                for idx, item in enumerate(lista_sem_plan):
+                    msg_wa = f"Paz e Bem, {item['catequistas'].split(',')[0]}! Notei que a turma {item['turma']} está sem planejamento para o próximo encontro no sistema. Precisa de ajuda? Deus abençoe."
+                    btn_wa = botao_cobrar_catequista(item['catequistas'], msg_wa, "📲 Cobrar Planejamento")
+                    
+                    st.markdown(f"""
+                        <div style='background-color:#ffebee; padding:15px; border-radius:8px; border-left:5px solid #f44336; margin-bottom:10px;'>
+                            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                <h4 style='margin:0; color:#f44336;'>{item['turma']}</h4>
+                                <div>{btn_wa}</div>
+                            </div>
+                            <span style='font-size:14px; color:#333;'>O cronograma está vazio ou os encontros se esgotaram.</span><br>
+                            <small style='color:#666; margin-top:10px; display:block;'>👤 <b>Resp:</b> {item['catequistas']}</small>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Cadastro Rápido para a Coordenação não perder tempo
+                    with st.expander(f"✏️ Inserir Tema Rápido para {item['turma']}"):
+                        with st.form(f"form_quick_plan_{idx}"):
+                            q_tema = st.text_input("Título do Tema").upper()
+                            q_desc = st.text_area("Descrição/Objetivo", height=80)
+                            if st.form_submit_button("💾 Salvar Planejamento Rápido", use_container_width=True):
+                                if q_tema:
+                                    if salvar_tema_cronograma([f"PLAN-{int(time.time())}", item['turma'], q_tema, q_desc, "PENDENTE"]):
+                                        st.success("Tema salvo com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                else:
+                                    st.error("Informe o título do tema.")
 
     # ==========================================================================
     # HUB 2: VISÃO GLOBAL (RADAR DE ATENÇÃO)
