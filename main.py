@@ -1174,120 +1174,6 @@ elif menu == "📚 Minha Turma":
 elif menu == "📖 Diário de Encontros":
     st.title("📖 Central de Itinerário e Encontros")
     
-    with st.expander("💡 COMO FUNCIONA O DIÁRIO?", expanded=False):
-        st.markdown("""
-        1. **PLANEJAR:** Adicione temas no Cronograma.
-        2. **REGISTRAR:** Use o formulário ao lado para registrar o encontro realizado.
-        3. **LINHA DO TEMPO:** Edite temas e relatos diretamente nos registros abaixo.
-        """)
-
-    # --- CARREGAMENTO NORMALIZADO ---
-    df_cron_p = ler_aba("cronograma")
-    df_pres_local = ler_aba("presencas")
-    df_enc_local = ler_aba("encontros") # <--- ESTA LINHA FALTAVA E CAUSOU O ERRO
-    
-    vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    if eh_gestor or vinculo_raw == "TODAS":
-        turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else []
-    else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
-
-    if not turmas_permitidas:
-        st.error("⚠️ Nenhuma turma vinculada."); st.stop()
-
-    turma_focal = st.selectbox("🔍 Selecione a Turma para Gerenciar:", turmas_permitidas)
-    turma_norm = turma_focal.strip().upper()
-
-    # --- BARRA DE PROGRESSO ---
-    if not df_cron_p.empty:
-        cron_turma = df_cron_p[df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm]
-        if not cron_turma.empty:
-            total_temas = len(cron_turma)
-            # Busca encontros realizados na aba presencas (fonte única)
-            encontros_realizados = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]['data_encontro'].unique()
-            realizados = len(encontros_realizados)
-            
-            # Trava de segurança: impede que o progresso passe de 1.0 (100%) e quebre o Streamlit
-            progresso_bruto = realizados / total_temas if total_temas > 0 else 0.0
-            progresso_seguro = min(progresso_bruto, 1.0)
-            
-            st.markdown(f"**Progresso do Itinerário: {realizados} encontros realizados (de {total_temas} planejados)**")
-            st.progress(progresso_seguro)
-
-    # --- COLUNAS DE AÇÃO ---
-    col_plan, col_reg = st.columns(2)
-
-    with col_plan:
-        st.subheader("📅 1. Planejar Temas")
-        with st.form(f"form_plan_{turma_focal}", clear_on_submit=True):
-            novo_tema = st.text_input("Título do Tema").upper()
-            detalhes_tema = st.text_area("Objetivo (Opcional)", height=100)
-            if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
-                if novo_tema:
-                    if salvar_tema_cronograma([f"PLAN-{int(time.time())}", turma_focal, novo_tema, detalhes_tema, "PENDENTE"]):
-                        st.success("Tema planejado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-    with col_reg:
-        st.subheader("✅ 2. Registrar Encontro")
-        with st.form(f"form_reg_{turma_focal}", clear_on_submit=True):
-            data_e = st.date_input("Data do Encontro", date.today(), format="DD/MM/YYYY")
-            
-            # Verifica se já existe registro para esta data na aba presencas
-            df_pres_local['data_dt'] = pd.to_datetime(df_pres_local['data_encontro'], errors='coerce', dayfirst=True)
-            ja_registrado = not df_pres_local[
-                (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & 
-                (df_pres_local['data_dt'].dt.date == data_e)
-            ].empty
-            
-            if ja_registrado:
-                st.error(f"⚠️ Já existe um encontro registrado para {data_e.strftime('%d/%m/%Y')}. Edite abaixo.")
-                st.form_submit_button("BLOQUEADO", disabled=True)
-            else:
-                temas_pendentes = [""] + df_cron_p[(df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm) & (df_cron_p.get('status', '') != 'REALIZADO')]['titulo_tema'].tolist()
-                tema_selecionado = st.selectbox("Temas do Cronograma:", temas_pendentes)
-                tema_manual = st.text_input("Título do Tema Ministrado:", value=tema_selecionado).upper()
-                obs_e = st.text_area("Observações Pastorais", height=68)
-                
-                if st.form_submit_button("💾 SALVAR NO DIÁRIO"):
-                    if tema_manual:
-                        # Salva na aba encontros e marca no cronograma
-                        if salvar_encontro([data_e.strftime('%d/%m/%Y'), turma_focal, tema_manual, st.session_state.usuario['nome'], obs_e]):
-                            marcar_tema_realizado_cronograma(turma_focal, tema_manual)
-                            st.success("Encontro registrado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-
-    st.divider()
-    
-    # --- MINI-DASHBOARD DO ITINERÁRIO ---
-    st.subheader(f"📊 Visão Geral do Itinerário: {turma_focal}")
-    
-    qtd_realizados = 0
-    qtd_pendentes = 0
-    freq_media = 0.0
-    
-    if not df_cron_p.empty:
-        cron_t = df_cron_p[df_cron_p['etapa'].astype(str).str.strip().str.upper() == turma_norm]
-        col_status = 'status' if 'status' in cron_t.columns else ('col_4' if 'col_4' in cron_t.columns else None)
-        if col_status:
-            qtd_pendentes = len(cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO'])
-            
-    if not df_enc_local.empty:
-        enc_t = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_norm]
-        qtd_realizados = len(enc_t)
-        
-    pres_t = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm]
-    if not pres_t.empty:
-        pres_t['status_num'] = pres_t['status'].apply(lambda x: 1 if x == 'PRESENTE' else 0)
-        freq_media = pres_t['status_num'].mean() * 100
-
-    c_dash1, c_dash2, c_dash3 = st.columns(3)
-    c_dash1.metric("✅ Encontros Realizados", qtd_realizados)
-    c_dash2.metric("📌 Temas Pendentes", qtd_pendentes)
-    c_dash3.metric("📈 Frequência Média", f"{freq_media:.1f}%")
-
-    st.divider()
-elif menu == "📖 Diário de Encontros":
-    st.title("📖 Central de Itinerário e Encontros")
-    
     # --- CARREGAMENTO NORMALIZADO ---
     df_cron_p = ler_aba("cronograma")
     df_pres_local = ler_aba("presencas")
@@ -1297,7 +1183,7 @@ elif menu == "📖 Diário de Encontros":
     if eh_gestor or vinculo_raw == "TODAS":
         turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if not df_turmas.empty else[]
     else:
-        turmas_permitidas = [t.strip() for t in vinculo_raw.split(',') if t.strip()]
+        turmas_permitidas =[t.strip() for t in vinculo_raw.split(',') if t.strip()]
 
     if not turmas_permitidas:
         st.error("⚠️ Nenhuma turma vinculada."); st.stop()
@@ -1319,6 +1205,7 @@ elif menu == "📖 Diário de Encontros":
             qtd_pendentes = len(cron_t[cron_t[col_status].astype(str).str.strip().str.upper() != 'REALIZADO'])
             
     if not df_enc_local.empty:
+        df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
         enc_t = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_norm]
         qtd_realizados = len(enc_t)
         
@@ -1338,9 +1225,9 @@ elif menu == "📖 Diário de Encontros":
     
     st.progress(progresso_seguro)
     
-    # BOTÃO EVIDENTE LOGO NA FRENTE
+    # BOTÃO DE RELATÓRIO DE FALTAS LOGO NA FRENTE
     df_cat_diario = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_norm) & (df_cat['status'] == 'ATIVO')] if not df_cat.empty else pd.DataFrame()
-    if st.button("🖨️ Baixar Relatório de Faltas e Frequência da Turma (PDF)", use_container_width=True):
+    if st.button("🖨️ Baixar Relatório de Faltas e Frequência da Turma (PDF)", use_container_width=True, type="primary"):
         st.session_state[f"pdf_freq_diario_{turma_focal}"] = gerar_relatorio_frequencia_turma_pdf(turma_focal, df_cat_diario, pres_t)
     if f"pdf_freq_diario_{turma_focal}" in st.session_state:
         st.download_button("📥 Clique aqui para salvar o PDF de Faltas", st.session_state[f"pdf_freq_diario_{turma_focal}"], f"Faltas_e_Frequencia_{turma_focal}.pdf", "application/pdf", use_container_width=True)
@@ -1414,11 +1301,10 @@ elif menu == "📖 Diário de Encontros":
                             st.success("Encontro registrado no Diário!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     st.divider()
-    st.subheader(f"📜 Linha do Tempo e Raio-X dos Encontros")    
+    st.subheader(f"📜 Linha do Tempo e Raio-X dos Encontros")
+    
     if not df_enc_local.empty:
-        # Filtro robusto e normalizado
         df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
-        # Ordena corretamente pelas datas
         df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
         hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data_sort', ascending=False)
         
@@ -1429,16 +1315,12 @@ elif menu == "📖 Diário de Encontros":
                 obs_d = row.get('observacoes', '')
                 cat_d = row.get('catequista', 'Não informado')
                 
-                # Buscar presenças exatas deste encontro
                 pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
                 qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE'])
                 qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
                 faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
                 
-                with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d}"):
-                    # --- RAIO-X DO ENCONTRO ---
-                    st.markdown(f"**👤 Catequista Responsável:** {cat_d}")
-                    
+                with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d} | 👤 Resp: {cat_d}"):
                     c_met1, c_met2 = st.columns(2)
                     c_met1.metric("✅ Presentes", qtd_pres)
                     c_met2.metric("❌ Ausentes", qtd_aus)
@@ -1451,7 +1333,6 @@ elif menu == "📖 Diário de Encontros":
                     st.markdown("---")
                     st.markdown("**✏️ Editar Registro do Encontro**")
                     
-                    # Adicionamos o 'idx' (índice da linha) para garantir unicidade absoluta da key
                     with st.form(f"edit_enc_{data_d}_{turma_focal}_{idx}"):
                         ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
                         ed_obs = st.text_area("Observações Pastorais / Relato:", value=obs_d, height=100)
@@ -1466,13 +1347,13 @@ elif menu == "📖 Diário de Encontros":
                         if btn_salvar:
                             with st.spinner("Sincronizando Diário, Presenças e Cronograma..."):
                                 if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
-                                    st.success("✅ Tudo atualizado com sucesso!"); time.sleep(1); st.rerun()
+                                    st.success("✅ Tudo atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                                     
                         if btn_excluir:
                             if confirma_del:
                                 with st.spinner("Excluindo encontro e revertendo cronograma..."):
                                     if excluir_encontro_cascata(turma_focal, data_d, tema_d):
-                                        st.success("✅ Encontro excluído com sucesso!"); time.sleep(1); st.rerun()
+                                        st.success("✅ Encontro excluído com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                             else:
                                 st.error("⚠️ Marque a caixa de confirmação abaixo para excluir o encontro.")
         else:
