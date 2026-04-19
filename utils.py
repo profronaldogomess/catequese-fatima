@@ -1483,57 +1483,56 @@ def gerar_livro_sacramentos_pdf(df_livro):
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_frequencia_turma_pdf(nome_turma, df_alunos, df_presencas):
-    """Gera o Dossiê de Frequência com Encontros Realizados, Estatísticas e Detalhamento de Faltas."""
+    """Gera o Dossiê de Frequência com Matemática Consistente para Entradas Tardias."""
     pdf = FPDF()
     pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, f"DOSSIÊ DE FREQUÊNCIA E HISTÓRICO DA TURMA")
+    adicionar_cabecalho_diocesano(pdf, limpar_texto("DOSSIE DE FREQUENCIA E HISTORICO DA TURMA"))
     
     pdf.set_font("helvetica", "B", 12)
     pdf.set_text_color(65, 123, 153)
     pdf.cell(0, 8, limpar_texto(f"Turma: {nome_turma}"), ln=True, align='C')
     pdf.ln(5)
     
-    # --- SESSÃO 1: ENCONTROS REALIZADOS ---
-    pdf.set_fill_color(240, 242, 246)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto("1. CRONOGRAMA DE ENCONTROS REALIZADOS (DIÁRIO)"), ln=True, fill=True)
-    pdf.set_font("helvetica", "", 8)
-    pdf.set_text_color(0, 0, 0)
-    
+    # --- MAPEAMENTO UNIVERSAL DE ENCONTROS DA TURMA ---
+    mapa_encontros = {}
     if not df_presencas.empty:
-        # Puxa as datas únicas dos encontros que tiveram chamada
         encontros_realizados = df_presencas.drop_duplicates(subset=['data_encontro']).copy()
         encontros_realizados['data_dt'] = pd.to_datetime(encontros_realizados['data_encontro'], errors='coerce', dayfirst=True)
         encontros_realizados = encontros_realizados.sort_values('data_dt')
         
         for _, enc in encontros_realizados.iterrows():
             dt_str = formatar_data_br(enc['data_encontro'])
-            tema_str = str(enc.get('tema_do_dia', 'Tema não registrado'))
-            pdf.cell(0, 5, limpar_texto(f"• {dt_str} - {tema_str}"), ln=True)
+            tema_str = str(enc.get('tema_do_dia', 'Tema nao registrado'))
+            mapa_encontros[dt_str] = tema_str
+            
+    total_encontros_turma = len(mapa_encontros)
+
+    # --- SESSÃO 1: ENCONTROS REALIZADOS ---
+    pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 8, limpar_texto(f"1. CRONOGRAMA DE ENCONTROS REALIZADOS ({total_encontros_turma} Encontros)"), ln=True, fill=True)
+    pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
+    
+    if mapa_encontros:
+        for dt_str, tema_str in mapa_encontros.items():
+            pdf.cell(0, 5, limpar_texto(f"- {dt_str} - {tema_str}"), ln=True)
     else:
-        pdf.cell(0, 5, limpar_texto("Nenhum encontro registrado com lista de presença no sistema."), ln=True)
+        pdf.cell(0, 5, limpar_texto("Nenhum encontro registrado com lista de presenca no sistema."), ln=True)
         
     pdf.ln(5)
     
     # --- SESSÃO 2: QUADRO GERAL DE FREQUÊNCIA ---
-    pdf.set_font("helvetica", "B", 10)
-    pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto("2. QUADRO GERAL DE FREQUÊNCIA"), ln=True, fill=True)
+    pdf.set_font("helvetica", "B", 10); pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 8, limpar_texto("2. QUADRO GERAL DE FREQUENCIA"), ln=True, fill=True)
     
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 8)
-    
-    pdf.cell(10, 7, "Nº", border=1, fill=True, align='C')
-    pdf.cell(110, 7, "Nome do Catequizando", border=1, fill=True)
-    pdf.cell(15, 7, "Faltas", border=1, fill=True, align='C')
-    pdf.cell(15, 7, "Pres.", border=1, fill=True, align='C')
-    pdf.cell(40, 7, "Frequência (%)", border=1, fill=True, align='C')
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 8)
+    pdf.cell(10, 7, limpar_texto("N"), border=1, fill=True, align='C')
+    pdf.cell(110, 7, limpar_texto("Nome do Catequizando"), border=1, fill=True)
+    pdf.cell(15, 7, limpar_texto("Faltas"), border=1, fill=True, align='C')
+    pdf.cell(15, 7, limpar_texto("Pres."), border=1, fill=True, align='C')
+    pdf.cell(40, 7, limpar_texto("Frequencia (%)"), border=1, fill=True, align='C')
     pdf.ln()
     
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 8)
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 8)
     
     alunos_ordenados = df_alunos.sort_values('nome_completo')
     detalhamento_faltas = {}
@@ -1542,121 +1541,60 @@ def gerar_relatorio_frequencia_turma_pdf(nome_turma, df_alunos, df_presencas):
         id_cat = aluno['id_catequizando']
         nome_c = limpar_texto(aluno['nome_completo'])
         
+        presencas = 0
+        datas_presente =[]
+        
+        # Descobre os dias exatos em que o aluno respondeu "PRESENTE"
         if not df_presencas.empty:
-            pres_aluno = df_presencas[df_presencas['id_catequizando'] == id_cat]
-            faltas_df = pres_aluno[pres_aluno['status'] == 'AUSENTE']
-            faltas = len(faltas_df)
-            presencas = len(pres_aluno[pres_aluno['status'] == 'PRESENTE'])
-            total_aluno = faltas + presencas
-            freq = (presencas / total_aluno * 100) if total_aluno > 0 else 100.0
+            pres_aluno = df_presencas[(df_presencas['id_catequizando'] == id_cat) & (df_presencas['status'] == 'PRESENTE')]
+            presencas = len(pres_aluno)
+            datas_presente = [formatar_data_br(d) for d in pres_aluno['data_encontro'].tolist()]
             
-            # Salva o detalhamento para a Sessão 3
-            if faltas > 0:
-                lista_f =[]
-                for _, f in faltas_df.iterrows():
-                    data_f = formatar_data_br(f['data_encontro'])
-                    tema_f = str(f.get('tema_do_dia', 'Sem tema'))
-                    lista_f.append(f"{data_f} ({tema_f})")
-                detalhamento_faltas[nome_c] = lista_f
-        else:
-            faltas, presencas, freq = 0, 0, 100.0
+        # A MATEMÁTICA PERFEITA: Se a turma teve 4 encontros e o aluno tem 1 presença, logo ele tem 3 faltas.
+        faltas = total_encontros_turma - presencas
+        freq = (presencas / total_encontros_turma * 100) if total_encontros_turma > 0 else 100.0
+        
+        if faltas > 0 and mapa_encontros:
+            lista_f =[]
+            # Descobre quais datas do mapa geral da turma ele NÃO estava presente
+            for dt_turma, tema_turma in mapa_encontros.items():
+                if dt_turma not in datas_presente:
+                    lista_f.append(f"{dt_turma} ({tema_turma})")
+            detalhamento_faltas[nome_c] = lista_f
             
         if faltas >= 3:
-            pdf.set_text_color(224, 61, 17) 
-            pdf.set_font("helvetica", "B", 8)
+            pdf.set_text_color(224, 61, 17); pdf.set_font("helvetica", "B", 8)
         else:
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("helvetica", "", 8)
+            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 8)
 
-        pdf.cell(10, 6, str(i), border=1, align='C')
-        pdf.cell(110, 6, nome_c[:55], border=1)
-        pdf.cell(15, 6, str(faltas), border=1, align='C')
-        pdf.cell(15, 6, str(presencas), border=1, align='C')
-        pdf.cell(40, 6, f"{freq:.1f}%", border=1, align='C')
+        pdf.cell(10, 6, limpar_texto(str(i)), border=1, align='C')
+        pdf.cell(110, 6, limpar_texto(nome_c)[:55], border=1)
+        pdf.cell(15, 6, limpar_texto(str(faltas)), border=1, align='C')
+        pdf.cell(15, 6, limpar_texto(str(presencas)), border=1, align='C')
+        pdf.cell(40, 6, limpar_texto(f"{freq:.1f}%"), border=1, align='C')
         pdf.ln()
 
-        if pdf.get_y() > 260:
-            pdf.add_page()
+        if pdf.get_y() > 260: pdf.add_page()
             
     # --- SESSÃO 3: DETALHAMENTO NOMINAL DE FALTAS ---
     if detalhamento_faltas:
         pdf.ln(5)
-        if pdf.get_y() > 240: pdf.add_page() # Garante que o título não fique sozinho no fim da página
+        if pdf.get_y() > 240: pdf.add_page() 
             
-        pdf.set_fill_color(240, 242, 246)
-        pdf.set_font("helvetica", "B", 10)
-        pdf.set_text_color(224, 61, 17)
+        pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(224, 61, 17)
         pdf.cell(0, 8, limpar_texto("3. DETALHAMENTO NOMINAL DE FALTAS (ACOMPANHAMENTO)"), ln=True, fill=True)
-        pdf.set_text_color(0, 0, 0)
-        pdf.ln(2)
+        pdf.set_text_color(0, 0, 0); pdf.ln(2)
         
         for nome, datas in detalhamento_faltas.items():
             pdf.set_font("helvetica", "B", 8)
-            pdf.cell(0, 5, f"{nome}:", ln=True)
+            pdf.cell(0, 5, limpar_texto(f"{nome}:"), ln=True)
             pdf.set_font("helvetica", "", 8)
             texto_faltas = "Faltou em: " + "; ".join(datas)
             pdf.multi_cell(0, 5, limpar_texto(texto_faltas))
             pdf.ln(2)
             
-            if pdf.get_y() > 270:
-                pdf.add_page()
+            if pdf.get_y() > 270: pdf.add_page()
                 
-    return finalizar_pdf(pdf)
-    pdf = FPDF()
-    pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, f"RELATÓRIO DE FREQUÊNCIA E FALTAS")
-    
-    pdf.set_font("helvetica", "B", 12)
-    pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto(f"Turma: {nome_turma}"), ln=True, align='C')
-    pdf.ln(5)
-    
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 9)
-    
-    pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
-    pdf.cell(100, 8, "Nome do Catequizando", border=1, fill=True)
-    pdf.cell(20, 8, "Faltas", border=1, fill=True, align='C')
-    pdf.cell(20, 8, "Presenças", border=1, fill=True, align='C')
-    pdf.cell(40, 8, "Frequência (%)", border=1, fill=True, align='C')
-    pdf.ln()
-    
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 8)
-    
-    alunos_ordenados = df_alunos.sort_values('nome_completo')
-    
-    for i, (_, aluno) in enumerate(alunos_ordenados.iterrows(), 1):
-        id_cat = aluno['id_catequizando']
-        
-        if not df_presencas.empty:
-            pres_aluno = df_presencas[df_presencas['id_catequizando'] == id_cat]
-            faltas = len(pres_aluno[pres_aluno['status'] == 'AUSENTE'])
-            presencas = len(pres_aluno[pres_aluno['status'] == 'PRESENTE'])
-            total_aluno = faltas + presencas
-            freq = (presencas / total_aluno * 100) if total_aluno > 0 else 100.0
-        else:
-            faltas, presencas, freq = 0, 0, 100.0
-            
-        # Destaca em vermelho quem tem risco crítico de evasão (3+ faltas)
-        if faltas >= 3:
-            pdf.set_text_color(224, 61, 17) 
-            pdf.set_font("helvetica", "B", 8)
-        else:
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("helvetica", "", 8)
-
-        pdf.cell(10, 6, str(i), border=1, align='C')
-        pdf.cell(100, 6, limpar_texto(aluno['nome_completo'])[:48], border=1)
-        pdf.cell(20, 6, str(faltas), border=1, align='C')
-        pdf.cell(20, 6, str(presencas), border=1, align='C')
-        pdf.cell(40, 6, f"{freq:.1f}%", border=1, align='C')
-        pdf.ln()
-
-        if pdf.get_y() > 270:
-            pdf.add_page()
-            
     return finalizar_pdf(pdf)
 
 def gerar_declaracao_pastoral_pdf(dados, tipo_doc, paroquia_destino="", data_atestado=""):
@@ -1872,38 +1810,41 @@ def obter_data_ultimo_sabado():
     return hoje - dt_module.timedelta(days=dias_atras)
 
 def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
-    """Gera Auditoria de Chamadas com Resumo Executivo e Detalhamento Real."""
+    """Gera Auditoria focada estritamente no Último Sábado ocorrido."""
     pdf = FPDF()
     pdf.add_page()
-    # Fuso horário para o cabeçalho
-    hoje_br = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
-    adicionar_cabecalho_diocesano(pdf, limpar_texto(f"AUDITORIA DE DIARIOS E CHAMADAS (Ultimos {dias_limite} dias)"))
     
-    limite = hoje_br - dt_module.timedelta(days=dias_limite)
+    # Descobre a data exata do último sábado
+    hoje_br_completo = dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)
+    hoje_br = hoje_br_completo.date()
+    dias_para_sabado = (hoje_br_completo.weekday() - 5) % 7
+    ultimo_sabado = hoje_br - dt_module.timedelta(days=dias_para_sabado)
     
-    # --- SESSÃO 1: RESUMO EXECUTIVO (TABELA BLINDADA) ---
+    adicionar_cabecalho_diocesano(pdf, limpar_texto(f"AUDITORIA DE DIARIOS E CHAMADAS (Base: Ultimo Sabado)"))
+    
+    # --- SESSÃO 1: RESUMO EXECUTIVO ---
     pdf.set_fill_color(240, 242, 246)
     pdf.set_font("helvetica", "B", 10)
     pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto(f"1. RESUMO EXECUTIVO DAS TURMAS (Data: {formatar_data_br(hoje_br)})"), ln=True, fill=True)
+    pdf.cell(0, 8, limpar_texto(f"1. RESUMO EXECUTIVO DAS TURMAS (Ultimo Sabado: {formatar_data_br(ultimo_sabado)})"), ln=True, fill=True)
     
     pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 8)
-    pdf.cell(60, 7, limpar_texto("Turma"), border=1, fill=True)
-    pdf.cell(25, 7, limpar_texto("Status"), border=1, fill=True, align='C')
-    pdf.cell(30, 7, limpar_texto("Ultima Chamada"), border=1, fill=True, align='C')
-    pdf.cell(75, 7, limpar_texto("Catequista(s)"), border=1, fill=True)
+    pdf.cell(50, 7, limpar_texto("Turma"), border=1, fill=True)
+    pdf.cell(20, 7, limpar_texto("Status"), border=1, fill=True, align='C')
+    pdf.cell(25, 7, limpar_texto("Ultima"), border=1, fill=True, align='C')
+    pdf.cell(95, 7, limpar_texto("Catequista(s)"), border=1, fill=True)
     pdf.ln()
     
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 7)
-    turmas_detalhes = []
+    turmas_detalhes =[]
     
     for _, t in df_turmas.iterrows():
         nome_t = str(t['nome_turma']).upper()
-        cats = str(t.get('catequista_responsavel', 'Nao informado'))
+        cats_bruto = str(t.get('catequista_responsavel', 'Nao informado'))
         ultima_data, chamada = obter_ultima_chamada_turma(df_pres, nome_t)
         
-        # Lógica de Status
-        if ultima_data and ultima_data >= limite:
+        # A regra de Ouro: Está em dia SOMENTE se a última chamada for igual ou maior que o último sábado
+        if ultima_data and ultima_data >= ultimo_sabado:
             status_resumo = "EM DIA"
             cor_status = (46, 125, 50) # Verde
         else:
@@ -1912,15 +1853,31 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
             
         data_str = formatar_data_br(ultima_data) if ultima_data else "---"
         
-        # Linha da Tabela (Sem MultiCell para evitar overlap)
-        pdf.set_font("helvetica", "", 7)
-        pdf.cell(60, 6, limpar_texto(nome_t)[:40], border=1)
+        # Lógica de Quebra de Linha para os Catequistas
+        cats_list = [c.strip() for c in cats_bruto.split(',') if c.strip()]
+        cats_formatado = "\n".join(cats_list)
+        linhas_altura = len(cats_list) if len(cats_list) > 0 else 1
+        h_row = max(7, linhas_altura * 4) # Calcula altura dinâmica
+        
+        # Guarda posição X, Y para não atropelar a linha
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        
+        if y_start + h_row > 270:
+            pdf.add_page()
+            y_start = pdf.get_y()
+            
+        pdf.cell(50, h_row, limpar_texto(nome_t)[:30], border=1)
         pdf.set_text_color(*cor_status); pdf.set_font("helvetica", "B", 7)
-        pdf.cell(25, 6, status_resumo, border=1, align='C')
+        pdf.cell(20, h_row, status_resumo, border=1, align='C')
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 7)
-        pdf.cell(30, 6, data_str, border=1, align='C')
-        pdf.cell(75, 6, limpar_texto(cats)[:55], border=1)
-        pdf.ln()
+        pdf.cell(25, h_row, data_str, border=1, align='C')
+        
+        # O MultiCell faz a quebra do texto. Dividimos a altura pelo nº de linhas para o FPDF entender
+        pdf.multi_cell(95, h_row / linhas_altura if linhas_altura > 1 else h_row, limpar_texto(cats_formatado), border=1)
+        
+        # Força o cursor para a próxima linha exata
+        pdf.set_xy(10, y_start + h_row)
         
         tema_dia = "Sem registro"
         if not chamada.empty:
@@ -1933,24 +1890,24 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     pdf.ln(5)
     if pdf.get_y() > 240: pdf.add_page()
     pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto("2. DETALHAMENTO DE FALTOSOS E RESGATE PASTORAL"), ln=True, fill=True)
+    pdf.cell(0, 8, limpar_texto("2. DETALHAMENTO DE FALTOSOS (Apenas turmas EM DIA)"), ln=True, fill=True)
     pdf.ln(2)
     
     for td in turmas_detalhes:
         if pdf.get_y() > 250: pdf.add_page()
         
-        # Cabeçalho da Turma com Cor de Status
         cor_bg = (65, 123, 153) if td['status'] == "EM DIA" else (224, 61, 17)
         pdf.set_fill_color(*cor_bg); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 9)
-        pdf.cell(0, 7, limpar_texto(f"TURMA: {td['nome']} | {td['status']} | Ultima: {formatar_data_br(td['data']) if td['data'] else '---'}"), border=1, ln=True, fill=True)
+        pdf.cell(0, 7, limpar_texto(f"TURMA: {td['nome']} | Status: {td['status']} | Ultima Chamada: {formatar_data_br(td['data']) if td['data'] else '---'}"), border=1, ln=True, fill=True)
         
         pdf.set_text_color(0, 0, 0)
-        if td['data']:
+        
+        # SÓ DETALHA SE ESTIVER EM DIA (Se foi feita a chamada do último sábado)
+        if td['status'] == "EM DIA":
             pdf.set_font("helvetica", "I", 8); pdf.set_fill_color(245, 245, 245)
-            pdf.cell(0, 6, limpar_texto(f"Tema registrado: {td['tema']}"), border=1, ln=True, fill=True)
+            pdf.cell(0, 6, limpar_texto(f"Tema do ultimo encontro: {td['tema']}"), border=1, ln=True, fill=True)
             
-        chamada = td['chamada']
-        if not chamada.empty:
+            chamada = td['chamada']
             faltosos = chamada[chamada['status'] == 'AUSENTE']
             if not faltosos.empty:
                 pdf.set_font("helvetica", "B", 8)
@@ -1962,10 +1919,10 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
                     contatos_str = "Sem contato"
                     if not cat_info.empty:
                         c = cat_info.iloc[0]
-                        list_c = []
+                        list_c =[]
                         if str(c.get('tel_mae','')).strip() not in ["N/A","","None"]: list_c.append(f"M:{c['tel_mae']}")
-                        if str(c.get('tel_pai','')).strip() not in ["N/A","","None"]: list_c.append(f"P:{c['tel_pai']}")
-                        if str(c.get('contato_principal','')).strip() not in ["N/A","","None"]: list_c.append(f"R:{c['contato_principal']}")
+                        if str(c.get('tel_pai','')).strip() not in["N/A","","None"]: list_c.append(f"P:{c['tel_pai']}")
+                        if str(c.get('contato_principal','')).strip() not in["N/A","","None"]: list_c.append(f"R:{c['contato_principal']}")
                         if list_c: contatos_str = " | ".join(list_c)
                     
                     pdf.cell(70, 6, limpar_texto(f['nome_catequizando'])[:45], border=1)
@@ -1973,7 +1930,10 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
             else:
                 pdf.set_font("helvetica", "", 8); pdf.cell(0, 6, limpar_texto("OK - Todos presentes no ultimo encontro."), border=1, ln=True)
         else:
-            pdf.set_font("helvetica", "I", 8); pdf.cell(0, 6, limpar_texto("Sem registros recentes ou diario atrasado."), border=1, ln=True)
+            # SE ESTIVER ATRASADA, OCULTA OS ALUNOS E MOSTRA O AVISO
+            pdf.set_font("helvetica", "I", 8)
+            pdf.cell(0, 6, limpar_texto("O diario esta atrasado. Realize a chamada do ultimo sabado para visualizar as faltas."), border=1, ln=True)
+            
         pdf.ln(3)
 
     return finalizar_pdf(pdf)
