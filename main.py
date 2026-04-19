@@ -1439,6 +1439,10 @@ elif menu == "📖 Diário de Encontros":
             df_enc_view['data_sort'] = pd.to_datetime(df_enc_view['data'], errors='coerce', dayfirst=True)
             hist_turma = df_enc_view[df_enc_view['turma_norm'] == turma_norm].sort_values(by='data_sort', ascending=False)
             
+            # BLINDAGEM DE DATAS: Normaliza a coluna de datas das presenças UMA VEZ fora do loop para ficar super rápido
+            if not df_pres_local.empty and 'data_encontro' in df_pres_local.columns:
+                df_pres_local['data_norm'] = df_pres_local['data_encontro'].apply(formatar_data_br)
+            
             if not hist_turma.empty:
                 # Paginação visual: Mostra os 5 primeiros, esconde o resto
                 top_5 = hist_turma.head(5)
@@ -1447,13 +1451,17 @@ elif menu == "📖 Diário de Encontros":
                 # --- RENDERIZA OS 5 PRIMEIROS ---
                 for idx, row in top_5.iterrows():
                     data_d = str(row['data'])
+                    data_d_formatada = formatar_data_br(data_d) # Força o padrão DD/MM/AAAA
                     tema_d = row.get('tema', 'Tema não registrado')
                     obs_d = row.get('observacoes', '')
                     cat_d = row.get('catequista', 'Não informado')
                     
-                    # BLINDAGEM: Verifica se df_pres_local não está vazio antes de filtrar
+                    # BLINDAGEM: Compara usando a data formatada (data_norm == data_d_formatada)
                     if not df_pres_local.empty and 'id_turma' in df_pres_local.columns:
-                        pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
+                        pres_e = df_pres_local[
+                            (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & 
+                            (df_pres_local['data_norm'] == data_d_formatada)
+                        ]
                     else:
                         pres_e = pd.DataFrame()
                         
@@ -1466,7 +1474,7 @@ elif menu == "📖 Diário de Encontros":
                     if qtd_pres == 0 and qtd_aus == 0 and "RECESSO" not in tema_d.upper():
                         alerta_chamada = " ⚠️ <span style='color:#e03d11; font-weight:bold;'>(CHAMADA PENDENTE)</span>"
                     
-                    with st.expander(f"{formatar_data_br(data_d)} | {tema_d}", expanded=bool(alerta_chamada)):
+                    with st.expander(f"{data_d_formatada} | {tema_d}", expanded=bool(alerta_chamada)):
                         st.markdown(f"**Catequista:** {cat_d}{alerta_chamada}", unsafe_allow_html=True)
                         
                         if alerta_chamada:
@@ -1513,13 +1521,17 @@ elif menu == "📖 Diário de Encontros":
                     with st.expander(f"📂 Ver Histórico Completo ({len(resto)} encontros mais antigos)"):
                         for idx, row in resto.iterrows():
                             data_d = str(row['data'])
+                            data_d_formatada = formatar_data_br(data_d) # Força o padrão DD/MM/AAAA
                             tema_d = row.get('tema', 'Tema não registrado')
                             obs_d = row.get('observacoes', '')
                             cat_d = row.get('catequista', 'Não informado')
                             
                             # BLINDAGEM
                             if not df_pres_local.empty and 'id_turma' in df_pres_local.columns:
-                                pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
+                                pres_e = df_pres_local[
+                                    (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & 
+                                    (df_pres_local['data_norm'] == data_d_formatada)
+                                ]
                             else:
                                 pres_e = pd.DataFrame()
                                 
@@ -1531,7 +1543,7 @@ elif menu == "📖 Diário de Encontros":
                                 alerta_chamada = " ⚠️ <span style='color:#e03d11; font-weight:bold;'>(CHAMADA PENDENTE)</span>"
                             
                             with st.container():
-                                st.markdown(f"**{formatar_data_br(data_d)} | {tema_d}**")
+                                st.markdown(f"**{data_d_formatada} | {tema_d}**")
                                 st.markdown(f"**Catequista:** {cat_d}{alerta_chamada}", unsafe_allow_html=True)
                                 
                                 if alerta_chamada:
