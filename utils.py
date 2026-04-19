@@ -1855,7 +1855,7 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     pdf = FPDF()
     pdf.add_page()
     hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
-    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA DE DIÁRIOS E CHAMADAS (Últimos {dias_limite} dias)")
+    adicionar_cabecalho_diocesano(pdf, limpar_texto(f"AUDITORIA DE DIARIOS E CHAMADAS (Ultimos {dias_limite} dias)"))
     
     limite = hoje - dt_module.timedelta(days=dias_limite)
     
@@ -1868,10 +1868,10 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     pdf.set_fill_color(65, 123, 153)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("helvetica", "B", 8)
-    pdf.cell(50, 7, "Turma", border=1, fill=True)
-    pdf.cell(25, 7, "Status", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Última Chamada", border=1, fill=True, align='C')
-    pdf.cell(90, 7, "Catequista(s)", border=1, fill=True)
+    pdf.cell(50, 7, limpar_texto("Turma"), border=1, fill=True)
+    pdf.cell(25, 7, limpar_texto("Status"), border=1, fill=True, align='C')
+    pdf.cell(25, 7, limpar_texto("Ultima Chamada"), border=1, fill=True, align='C')
+    pdf.cell(90, 7, limpar_texto("Catequista(s)"), border=1, fill=True)
     pdf.ln()
     
     pdf.set_text_color(0, 0, 0)
@@ -1879,30 +1879,28 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     
     turmas_detalhes =[]
     
-    # Pré-processamento
     for _, t in df_turmas.iterrows():
         nome_t = t['nome_turma']
-        cats = str(t.get('catequista_responsavel', 'Não informado'))
+        cats = str(t.get('catequista_responsavel', 'Nao informado'))
         ultima_data, chamada = obter_ultima_chamada_turma(df_pres, nome_t)
         
         if ultima_data and ultima_data >= limite:
             status_resumo = "EM DIA"
-            cor_status = (46, 125, 50) # Verde
+            cor_status = (46, 125, 50)
         elif ultima_data:
             status_resumo = "ATRASADA"
-            cor_status = (224, 61, 17) # Vermelho
+            cor_status = (224, 61, 17)
         else:
             status_resumo = "PENDENTE"
-            cor_status = (224, 61, 17) # Vermelho
+            cor_status = (224, 61, 17)
             
         data_str = formatar_data_br(ultima_data) if ultima_data else "---"
         
-        # Desenha linha do resumo
         pdf.cell(50, 6, limpar_texto(nome_t)[:25], border=1)
         pdf.set_text_color(*cor_status)
-        pdf.cell(25, 6, status_resumo, border=1, align='C')
+        pdf.cell(25, 6, limpar_texto(status_resumo), border=1, align='C')
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(25, 6, data_str, border=1, align='C')
+        pdf.cell(25, 6, limpar_texto(data_str), border=1, align='C')
         pdf.cell(90, 6, limpar_texto(cats)[:48], border=1)
         pdf.ln()
         
@@ -1929,30 +1927,28 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     for td in turmas_detalhes:
         if pdf.get_y() > 250: pdf.add_page()
         
-        # Cabeçalho da Turma
         cor_bg = (65, 123, 153) if td['status'] == "EM DIA" else (224, 61, 17)
         pdf.set_fill_color(*cor_bg)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("helvetica", "B", 9)
         
         data_exibicao = formatar_data_br(td['data']) if td['data'] else "Nenhuma"
-        pdf.cell(0, 7, limpar_texto(f"TURMA: {td['nome']} | Status: {td['status']} | Última Chamada: {data_exibicao}"), border=1, ln=True, fill=True)
+        pdf.cell(0, 7, limpar_texto(f"TURMA: {td['nome']} | Status: {td['status']} | Ultima Chamada: {data_exibicao}"), border=1, ln=True, fill=True)
         
         pdf.set_text_color(0, 0, 0)
         
         if td['data']:
             pdf.set_font("helvetica", "I", 8)
             pdf.set_fill_color(245, 245, 245)
-            # Removemos o emoji do livro para evitar quebra no latin-1
-            pdf.cell(0, 6, limpar_texto(f"Tema do último encontro: {td['tema']}"), border=1, ln=True, fill=True)
+            pdf.cell(0, 6, limpar_texto(f"Tema do ultimo encontro: {td['tema']}"), border=1, ln=True, fill=True)
             
         chamada = td['chamada']
         if not chamada.empty and td['data'] and td['data'] >= limite:
             faltosos = chamada[chamada['status'] == 'AUSENTE']
             if not faltosos.empty:
                 pdf.set_font("helvetica", "B", 8)
-                pdf.cell(70, 6, "Catequizando Faltoso", border=1)
-                pdf.cell(120, 6, "Contatos (Mãe / Pai / Resp.)", border=1, ln=True)
+                pdf.cell(70, 6, limpar_texto("Catequizando Faltoso"), border=1)
+                pdf.cell(120, 6, limpar_texto("Contatos (Mae / Pai / Resp.)"), border=1, ln=True)
                 
                 pdf.set_font("helvetica", "", 7)
                 for _, f in faltosos.iterrows():
@@ -1961,7 +1957,7 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
                     if not cat_info.empty:
                         c = cat_info.iloc[0]
                         lista_contatos =[]
-                        if str(c.get('tel_mae', '')).strip() not in["N/A", "", "None"]: lista_contatos.append(f"Mãe: {c['tel_mae']}")
+                        if str(c.get('tel_mae', '')).strip() not in["N/A", "", "None"]: lista_contatos.append(f"Mae: {c['tel_mae']}")
                         if str(c.get('tel_pai', '')).strip() not in["N/A", "", "None"]: lista_contatos.append(f"Pai: {c['tel_pai']}")
                         if str(c.get('contato_principal', '')).strip() not in ["N/A", "", "None"]: lista_contatos.append(f"Resp: {c['contato_principal']}")
                         contatos_str = " | ".join(lista_contatos) if lista_contatos else "Sem contato"
@@ -1970,15 +1966,12 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
                     pdf.cell(120, 6, limpar_texto(contatos_str)[:85], border=1, ln=True)
             else:
                 pdf.set_font("helvetica", "", 8)
-                # Envelopado no limpar_texto e sem emoji puro
-                pdf.cell(0, 6, limpar_texto("OK - Nenhuma falta registrada neste último encontro."), border=1, ln=True)
+                pdf.cell(0, 6, limpar_texto("Nenhuma falta registrada neste ultimo encontro."), border=1, ln=True)
         elif td['status'] == "ATRASADA":
             pdf.set_font("helvetica", "", 8)
-            # Envelopado no limpar_texto e sem emoji puro
-            pdf.cell(0, 6, limpar_texto("ATENCAO - O diario esta atrasado. Realize a chamada para visualizar os faltosos."), border=1, ln=True)
+            pdf.cell(0, 6, limpar_texto("O diario esta atrasado. Realize a chamada para visualizar os faltosos."), border=1, ln=True)
         else:
             pdf.set_font("helvetica", "", 8)
-            # Envelopado no limpar_texto e sem emoji puro
             pdf.cell(0, 6, limpar_texto("Sem registros desta turma no sistema."), border=1, ln=True)
             
         pdf.ln(3)
