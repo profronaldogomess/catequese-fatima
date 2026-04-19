@@ -175,15 +175,6 @@ def salvar_presencas(lista_presencas, obs_encontro="Registro via Chamada"):
     except Exception as e: 
         st.error(f"Erro na sincronia da chamada: {e}")
         return False
-            
-        # 4. Sincronia em Cascata com a aba CRONOGRAMA
-        marcar_tema_realizado_cronograma(turma_alvo, tema_alvo)
-        
-        st.cache_data.clear()
-        return True
-    except Exception as e: 
-        st.error(f"Erro na sincronia da chamada: {e}")
-        return False
 
 def salvar_encontro(dados_encontro):
     planilha = conectar_google_sheets()
@@ -577,18 +568,25 @@ def atualizar_encontro_existente(data_e, turma_e, novos_dados):
     return False
 
 def marcar_tema_realizado_cronograma(turma, tema):
-    """Em vez de excluir, marca como REALIZADO na Coluna E do cronograma."""
+    """Em vez de excluir, marca como REALIZADO na Coluna E do cronograma. Busca normalizada."""
     planilha = conectar_google_sheets()
     if planilha:
         try:
             aba = planilha.worksheet("cronograma")
-            celulas = aba.findall(str(tema))
-            for celula in celulas:
-                if aba.cell(celula.row, 2).value == turma:
-                    aba.update_cell(celula.row, 5, "REALIZADO")
-                    st.cache_data.clear()
-                    return True
-        except: pass
+            dados = aba.get_all_values()
+            turma_norm = str(turma).strip().upper()
+            tema_norm = str(tema).strip().upper()
+            
+            for i, linha in enumerate(dados):
+                if len(linha) >= 3:
+                    t_banco = str(linha[1]).strip().upper()
+                    tema_banco = str(linha[2]).strip().upper()
+                    if t_banco == turma_norm and tema_banco == tema_norm:
+                        aba.update_cell(i + 1, 5, "REALIZADO")
+                        st.cache_data.clear()
+                        return True
+        except Exception as e: 
+            pass
     return False
 
 def adicionar_novo_usuario(dados_usuario):
