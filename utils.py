@@ -1817,16 +1817,28 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     return finalizar_pdf(pdf)
 
 def obter_ultima_chamada_turma(df_pres, nome_turma):
-    """Retorna a data da última chamada registrada para a turma e o DataFrame correspondente."""
+    """Retorna a data da última chamada (limitada a hoje) e o DataFrame correspondente."""
     if df_pres.empty: return None, pd.DataFrame()
-    pres_t = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_turma.strip().upper()].copy()
+    
+    # 1. Normalização rigorosa da busca
+    nome_busca = str(nome_turma).strip().upper()
+    pres_t = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_busca].copy()
     if pres_t.empty: return None, pd.DataFrame()
     
+    # 2. Conversão e Limpeza de Datas
     pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], errors='coerce', dayfirst=True)
-    ultima_data = pres_t['data_dt'].max()
-    if pd.isna(ultima_data): return None, pd.DataFrame()
+    pres_t = pres_t.dropna(subset=['data_dt'])
     
+    # 3. Trava de Segurança: Ignorar datas futuras (erros de digitação/formato)
+    hoje_limite = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).replace(hour=23, minute=59, second=59)
+    pres_t = pres_t[pres_t['data_dt'] <= hoje_limite]
+    
+    if pres_t.empty: return None, pd.DataFrame()
+    
+    # 4. Pega a última data real
+    ultima_data = pres_t['data_dt'].max()
     chamada_recente = pres_t[pres_t['data_dt'] == ultima_data]
+    
     return ultima_data.date(), chamada_recente
 
 def gerar_auditoria_chamadas_pendentes(df_turmas, df_pres, dias_limite=7):
@@ -1880,7 +1892,7 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
     turmas_detalhes =[]
     
     for _, t in df_turmas.iterrows():
-        nome_t = t['nome_turma']
+        nome_t = str(t['nome_turma']).upper()
         cats = str(t.get('catequista_responsavel', 'Nao informado'))
         ultima_data, chamada = obter_ultima_chamada_turma(df_pres, nome_t)
         
@@ -1896,17 +1908,29 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
             
         data_str = formatar_data_br(ultima_data) if ultima_data else "---"
         
-        pdf.cell(50, 6, limpar_texto(nome_t)[:25], border=1)
+        # Desenha células sem truncar (ajustando larguras)
+        pdf.set_font("helvetica", "", 7) # Fonte levemente menor para caber tudo
+        pdf.cell(55, 6, limpar_texto(nome_t), border=1)
         pdf.set_text_color(*cor_status)
-        pdf.cell(25, 6, limpar_texto(status_resumo), border=1, align='C')
+        pdf.set_font("helvetica", "B", 7)
+        pdf.cell(20, 6, limpar_texto(status_resumo), border=1, align='C')
         pdf.set_text_color(0, 0, 0)
+        pdf.set_font("helvetica", "", 7)
         pdf.cell(25, 6, limpar_texto(data_str), border=1, align='C')
-        pdf.cell(90, 6, limpar_texto(cats)[:48], border=1)
-        pdf.ln()
         
+        # Posição atual para o multi_cell dos catequistas
+        curr_x = pdf.get_x()
+        curr_y = pdf.get_y()
+        pdf.multi_cell(90, 6, limpar_texto(cats), border=1)
+        pdf.set_xy(10, curr_y + 6) # Garante que a próxima linha comece no lugar certo
+        
+        # Busca o tema real do diário para este encontro específico
         tema_dia = "Sem registro"
-        if not chamada.empty and 'tema_do_dia' in chamada.columns:
-            tema_dia = str(chamada.iloc[0].get('tema_do_dia', 'Sem registro'))
+        if not chamada.empty:
+            # Pega o primeiro tema não vazio da lista de presenças
+            temas_validos = chamada['tema_do_dia'].dropna().unique()
+            if len(temas_validos) > 0:
+                tema_dia = str(temas_validos[0])
             
         turmas_detalhes.append({
             "nome": nome_t, "status": status_resumo, "data": ultima_data, 
