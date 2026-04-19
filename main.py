@@ -3963,7 +3963,7 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
 
             with sub_r2:
                 st.markdown("#### 🖨️ Emissão de Lista de Presença")
-                st.info("O PDF gerado já contém o nome do catequizando e um espaço para o responsável assinar ao lado.")
+                st.info("O PDF gerado será separado por turmas e conterá um espaço limpo para assinatura.")
                 df_reunioes_v = ler_aba("reunioes_pais")
                 if not df_reunioes_v.empty:
                     df_reunioes_v['data_norm'] = df_reunioes_v.iloc[:, 2].apply(formatar_data_br)
@@ -3975,17 +3975,16 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     
                     if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)", use_container_width=True, type="primary"):
                         t_alvo = str(dados_r.iloc[3])
-                        df_f_lista = df_cat[df_cat['status'] == 'ATIVO'].sort_values('nome_completo')
+                        df_f_lista = df_cat[df_cat['status'] == 'ATIVO'].sort_values(['etapa', 'nome_completo'])
                         
-                        # Lógica para ler múltiplas turmas
                         if "GERAL (TODAS)" not in t_alvo:
                             turmas_lista = [t.strip() for t in t_alvo.split(",")]
                             df_f_lista = df_f_lista[df_f_lista['etapa'].isin(turmas_lista)]
                         
                         lista_pdf = []
                         for _, r in df_f_lista.iterrows():
-                            resp = r['nome_mae'] if r['nome_mae'] not in ["N/A", ""] else (r['nome_pai'] if r['nome_pai'] not in ["N/A", ""] else r['nome_responsavel'])
-                            lista_pdf.append({'nome_cat': r['nome_completo'], 'responsavel': resp})
+                            # Passamos a 'etapa' para o PDF saber como agrupar
+                            lista_pdf.append({'nome_cat': r['nome_completo'], 'etapa': r['etapa']})
                             
                         pdf_out = gerar_lista_assinatura_reuniao_pdf(dados_r.iloc[1], dados_r['data_norm'], dados_r.iloc[4], t_alvo, lista_pdf)
                         st.download_button("📥 Baixar Lista Pronta para Impressão", pdf_out, f"Lista_Reuniao_{dados_r['data_norm'].replace('/','-')}.pdf", "application/pdf", use_container_width=True)
@@ -3993,7 +3992,7 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
 
             with sub_r3:
                 st.markdown("#### ✅ Validação de Presença (Pós-Reunião)")
-                st.markdown("Após a reunião, use a lista física assinada para dar baixa no sistema. Isso calculará o **Engajamento Familiar** da turma.")
+                st.markdown("Após a reunião, use a lista física assinada para dar baixa no sistema.")
                 if not df_reunioes_v.empty:
                     df_pendentes = df_reunioes_v[df_reunioes_v.iloc[:, 5] == "PENDENTE"]
                     if not df_pendentes.empty:
@@ -4005,9 +4004,8 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         id_reuniao = dados_r_pres.iloc[0]
                         t_alvo_pres = str(dados_r_pres.iloc[3])
 
-                        df_fam_pres = df_cat[df_cat['status'] == 'ATIVO'].sort_values('nome_completo')
+                        df_fam_pres = df_cat[df_cat['status'] == 'ATIVO'].sort_values(['etapa', 'nome_completo'])
                         
-                        # Lógica para ler múltiplas turmas
                         if "GERAL (TODAS)" not in t_alvo_pres:
                             turmas_lista = [t.strip() for t in t_alvo_pres.split(",")]
                             df_fam_pres = df_fam_pres[df_fam_pres['etapa'].isin(turmas_lista)]
@@ -4015,17 +4013,25 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         st.divider()
                         with st.form(f"form_pres_reu_{id_reuniao}"):
                             lista_presenca_reu = []
-                            cols_p = st.columns(2)
-                            for i, (_, r) in enumerate(df_fam_pres.iterrows()):
-                                resp = r['nome_mae'] if r['nome_mae'] not in ["N/A", ""] else (r['nome_pai'] if r['nome_pai'] not in ["N/A", ""] else r['nome_responsavel'])
-                                with cols_p[i % 2]:
-                                    with st.container(border=True):
-                                        col_n, col_c = st.columns([3, 1])
-                                        col_n.markdown(f"<span style='font-size:13px; font-weight:bold; color:#417b99;'>{r['nome_completo']}</span><br><span style='font-size:11px; color:#666;'>Resp: {resp}</span>", unsafe_allow_html=True)
-                                        presente = col_c.toggle("Sim", key=f"reu_p_{id_reuniao}_{r['id_catequizando']}")
-                                        lista_presenca_reu.append([id_reuniao, r['id_catequizando'], r['nome_completo'], t_alvo_pres, "PRESENTE" if presente else "AUSENTE", str(date.today())])
                             
-                            st.markdown("<br>", unsafe_allow_html=True)
+                            # Agrupamento Visual por Turma
+                            turmas_presentes = sorted(df_fam_pres['etapa'].unique().tolist())
+                            
+                            for t_nome in turmas_presentes:
+                                st.markdown(f"##### 📚 Turma: {t_nome}")
+                                alunos_da_turma = df_fam_pres[df_fam_pres['etapa'] == t_nome]
+                                
+                                cols_p = st.columns(2)
+                                for i, (_, r) in enumerate(alunos_da_turma.iterrows()):
+                                    resp = r['nome_mae'] if r['nome_mae'] not in ["N/A", ""] else (r['nome_pai'] if r['nome_pai'] not in ["N/A", ""] else r['nome_responsavel'])
+                                    with cols_p[i % 2]:
+                                        with st.container(border=True):
+                                            col_n, col_c = st.columns([3, 1])
+                                            col_n.markdown(f"<span style='font-size:13px; font-weight:bold; color:#417b99;'>{r['nome_completo']}</span><br><span style='font-size:11px; color:#666;'>Resp: {resp}</span>", unsafe_allow_html=True)
+                                            presente = col_c.toggle("Sim", key=f"reu_p_{id_reuniao}_{r['id_catequizando']}")
+                                            lista_presenca_reu.append([id_reuniao, r['id_catequizando'], r['nome_completo'], t_alvo_pres, "PRESENTE" if presente else "AUSENTE", str(date.today())])
+                                st.markdown("<br>", unsafe_allow_html=True)
+                            
                             if st.form_submit_button("💾 SALVAR PRESENÇAS E ATUALIZAR ENGAJAMENTO", use_container_width=True, type="primary"):
                                 if salvar_presenca_reuniao_pais(lista_presenca_reu):
                                     novos_dados_reu = list(dados_r_pres)
@@ -4040,7 +4046,15 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                 st.markdown("#### 📜 Histórico e Edição")
                 if not df_reunioes_v.empty:
                     df_view = df_reunioes_v.copy()
-                    df_view.columns = ['ID', 'Tema', 'Data', 'Turma', 'Local', 'Status', 'Público', 'Objetivo'][:len(df_view.columns)]
+                    
+                    # BLINDAGEM CONTRA VALUE ERROR: Preenche colunas faltantes se for reunião antiga
+                    while len(df_view.columns) < 8:
+                        df_view[f'col_extra_{len(df_view.columns)}'] = "N/A"
+                    
+                    # Pega exatamente as 8 primeiras colunas
+                    df_view = df_view.iloc[:, :8]
+                    df_view.columns = ['ID', 'Tema', 'Data', 'Turma', 'Local', 'Status', 'Público', 'Objetivo']
+                    
                     st.dataframe(df_view.drop(columns=['ID']), use_container_width=True, hide_index=True)
                     
                     st.divider()
@@ -4057,7 +4071,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                                 c_e1, c_e2 = st.columns(2)
                                 ed_data = c_e1.date_input("Data", value=converter_para_data(d_edit.iloc[2]), format="DD/MM/YYYY")
                                 
-                                # Edição também usa Multiselect
                                 turmas_atuais = [t.strip() for t in str(d_edit.iloc[3]).split(",") if t.strip()]
                                 ed_turmas = c_e2.multiselect("Turmas Alvo", opcoes_turmas, default=[t for t in turmas_atuais if t in opcoes_turmas])
                                 
