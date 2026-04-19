@@ -3057,7 +3057,12 @@ elif menu == "✅ Fazer Chamada":
 
     if not encontro_do_dia.empty and "RECESSO" not in str(encontro_do_dia.iloc[0]['tema']).upper():
         tema_dia = encontro_do_dia.iloc[0]['tema']
+        obs_existente = encontro_do_dia.iloc[0].get('observacoes', '')
+        if obs_existente in["nan", "N/A", "None", "Registro via Chamada"]: obs_existente = ""
+        
         st.success(f"📖 **Tema do Encontro já registrado no Diário:** {tema_dia}")
+        obs_dia = st.text_area("📝 Relato / Observações Pastorais (Edite se necessário):", value=obs_existente, height=100, help="Este encontro já existe no diário. Você pode complementar o relato aqui.")
+        
     elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
         pass # Será tratado no bloqueio abaixo
     else:
