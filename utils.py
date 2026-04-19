@@ -1483,113 +1483,93 @@ def gerar_livro_sacramentos_pdf(df_livro):
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_frequencia_turma_pdf(nome_turma, df_alunos, df_presencas):
-    """Gera o Dossiê de Frequência com Matemática Consistente para Entradas Tardias."""
+    """Gera o Dossiê com Justiça Matemática (Separa Faltas de Pendências de Nivelamento)."""
     pdf = FPDF()
     pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, limpar_texto("DOSSIE DE FREQUENCIA E HISTORICO DA TURMA"))
+    adicionar_cabecalho_diocesano(pdf, limpar_texto("DOSSIE DE FREQUENCIA E NIVELAMENTO DA TURMA"))
     
     pdf.set_font("helvetica", "B", 12)
     pdf.set_text_color(65, 123, 153)
     pdf.cell(0, 8, limpar_texto(f"Turma: {nome_turma}"), ln=True, align='C')
     pdf.ln(5)
     
-    # --- MAPEAMENTO UNIVERSAL DE ENCONTROS DA TURMA ---
-    mapa_encontros = {}
+    # --- MAPEAMENTO DOS TEMAS DA TURMA ---
+    temas_da_turma = set()
     if not df_presencas.empty:
-        encontros_realizados = df_presencas.drop_duplicates(subset=['data_encontro']).copy()
-        encontros_realizados['data_dt'] = pd.to_datetime(encontros_realizados['data_encontro'], errors='coerce', dayfirst=True)
-        encontros_realizados = encontros_realizados.sort_values('data_dt')
-        
-        for _, enc in encontros_realizados.iterrows():
-            dt_str = formatar_data_br(enc['data_encontro'])
-            tema_str = str(enc.get('tema_do_dia', 'Tema nao registrado'))
-            mapa_encontros[dt_str] = tema_str
+        # Pega todos os temas que a turma já teve (ignorando recessos)
+        validos = df_presencas[~df_presencas['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]
+        temas_da_turma = set(validos['tema_do_dia'].dropna().unique())
             
-    total_encontros_turma = len(mapa_encontros)
+    total_encontros_turma = len(temas_da_turma)
 
-    # --- SESSÃO 1: ENCONTROS REALIZADOS ---
     pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto(f"1. CRONOGRAMA DE ENCONTROS REALIZADOS ({total_encontros_turma} Encontros)"), ln=True, fill=True)
-    pdf.set_font("helvetica", "", 8); pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, limpar_texto(f"1. QUADRO DE FREQUENCIA E NIVELAMENTO ({total_encontros_turma} Encontros Oficiais)"), ln=True, fill=True)
     
-    if mapa_encontros:
-        for dt_str, tema_str in mapa_encontros.items():
-            pdf.cell(0, 5, limpar_texto(f"- {dt_str} - {tema_str}"), ln=True)
-    else:
-        pdf.cell(0, 5, limpar_texto("Nenhum encontro registrado com lista de presenca no sistema."), ln=True)
-        
-    pdf.ln(5)
-    
-    # --- SESSÃO 2: QUADRO GERAL DE FREQUÊNCIA ---
-    pdf.set_font("helvetica", "B", 10); pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto("2. QUADRO GERAL DE FREQUENCIA"), ln=True, fill=True)
-    
-    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 8)
-    pdf.cell(10, 7, limpar_texto("N"), border=1, fill=True, align='C')
-    pdf.cell(110, 7, limpar_texto("Nome do Catequizando"), border=1, fill=True)
-    pdf.cell(15, 7, limpar_texto("Faltas"), border=1, fill=True, align='C')
-    pdf.cell(15, 7, limpar_texto("Pres."), border=1, fill=True, align='C')
-    pdf.cell(40, 7, limpar_texto("Frequencia (%)"), border=1, fill=True, align='C')
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 7)
+    pdf.cell(8, 7, "N", border=1, fill=True, align='C')
+    pdf.cell(82, 7, limpar_texto("Nome do Catequizando"), border=1, fill=True)
+    pdf.cell(25, 7, limpar_texto("Presencas"), border=1, fill=True, align='C')
+    pdf.cell(25, 7, limpar_texto("Faltas Reais"), border=1, fill=True, align='C')
+    pdf.cell(25, 7, limpar_texto("Pendencias"), border=1, fill=True, align='C')
+    pdf.cell(25, 7, limpar_texto("Frequencia"), border=1, fill=True, align='C')
     pdf.ln()
     
-    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 8)
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 7)
     
     alunos_ordenados = df_alunos.sort_values('nome_completo')
-    detalhamento_faltas = {}
+    detalhamento_pendencias = {}
     
     for i, (_, aluno) in enumerate(alunos_ordenados.iterrows(), 1):
         id_cat = aluno['id_catequizando']
         nome_c = limpar_texto(aluno['nome_completo'])
         
-        presencas = 0
-        datas_presente =[]
+        presencas_aluno = set()
+        faltas_oficiais = 0
         
-        # Descobre os dias exatos em que o aluno respondeu "PRESENTE"
         if not df_presencas.empty:
-            pres_aluno = df_presencas[(df_presencas['id_catequizando'] == id_cat) & (df_presencas['status'] == 'PRESENTE')]
-            presencas = len(pres_aluno)
-            datas_presente = [formatar_data_br(d) for d in pres_aluno['data_encontro'].tolist()]
+            pres_aluno = df_presencas[df_presencas['id_catequizando'] == id_cat]
+            presencas_aluno = set(pres_aluno[pres_aluno['status'] == 'PRESENTE']['tema_do_dia'].dropna().unique())
+            faltas_oficiais = len(pres_aluno[pres_aluno['status'] == 'AUSENTE'])
             
-        # A MATEMÁTICA PERFEITA: Se a turma teve 4 encontros e o aluno tem 1 presença, logo ele tem 3 faltas.
-        faltas = total_encontros_turma - presencas
-        freq = (presencas / total_encontros_turma * 100) if total_encontros_turma > 0 else 100.0
+        # PENDÊNCIAS: Temas que a turma teve, mas o aluno NÃO tem presença (seja por falta ou entrada tardia)
+        temas_pendentes = temas_da_turma - presencas_aluno
+        qtd_pendentes = len(temas_pendentes)
         
-        if faltas > 0 and mapa_encontros:
-            lista_f =[]
-            # Descobre quais datas do mapa geral da turma ele NÃO estava presente
-            for dt_turma, tema_turma in mapa_encontros.items():
-                if dt_turma not in datas_presente:
-                    lista_f.append(f"{dt_turma} ({tema_turma})")
-            detalhamento_faltas[nome_c] = lista_f
+        freq = (len(presencas_aluno) / total_encontros_turma * 100) if total_encontros_turma > 0 else 100.0
+        
+        if qtd_pendentes > 0:
+            detalhamento_pendencias[nome_c] = list(temas_pendentes)
             
-        if faltas >= 3:
-            pdf.set_text_color(224, 61, 17); pdf.set_font("helvetica", "B", 8)
+        # Destaca em vermelho se tiver muitas pendências
+        if qtd_pendentes >= 3:
+            pdf.set_text_color(224, 61, 17); pdf.set_font("helvetica", "B", 7)
         else:
-            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 8)
+            pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 7)
 
-        pdf.cell(10, 6, limpar_texto(str(i)), border=1, align='C')
-        pdf.cell(110, 6, limpar_texto(nome_c)[:55], border=1)
-        pdf.cell(15, 6, limpar_texto(str(faltas)), border=1, align='C')
-        pdf.cell(15, 6, limpar_texto(str(presencas)), border=1, align='C')
-        pdf.cell(40, 6, limpar_texto(f"{freq:.1f}%"), border=1, align='C')
+        pdf.cell(8, 6, limpar_texto(str(i)), border=1, align='C')
+        pdf.cell(82, 6, limpar_texto(nome_c)[:45], border=1)
+        pdf.cell(25, 6, limpar_texto(str(len(presencas_aluno))), border=1, align='C')
+        pdf.cell(25, 6, limpar_texto(str(faltas_oficiais)), border=1, align='C')
+        pdf.cell(25, 6, limpar_texto(str(qtd_pendentes)), border=1, align='C')
+        pdf.cell(25, 6, limpar_texto(f"{freq:.1f}%"), border=1, align='C')
         pdf.ln()
 
         if pdf.get_y() > 260: pdf.add_page()
             
-    # --- SESSÃO 3: DETALHAMENTO NOMINAL DE FALTAS ---
-    if detalhamento_faltas:
+    # --- SESSÃO 2: DETALHAMENTO DE PENDÊNCIAS (NIVELAMENTO) ---
+    if detalhamento_pendencias:
         pdf.ln(5)
         if pdf.get_y() > 240: pdf.add_page() 
             
         pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(224, 61, 17)
-        pdf.cell(0, 8, limpar_texto("3. DETALHAMENTO NOMINAL DE FALTAS (ACOMPANHAMENTO)"), ln=True, fill=True)
+        pdf.cell(0, 8, limpar_texto("2. GUIA DE REPOSICAO (TEMAS QUE O ALUNO PRECISA RECUPERAR)"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0); pdf.ln(2)
         
-        for nome, datas in detalhamento_faltas.items():
+        for nome, temas in detalhamento_pendencias.items():
             pdf.set_font("helvetica", "B", 8)
             pdf.cell(0, 5, limpar_texto(f"{nome}:"), ln=True)
             pdf.set_font("helvetica", "", 8)
-            texto_faltas = "Faltou em: " + "; ".join(datas)
+            texto_faltas = "Deve repor os temas: " + " | ".join(temas)
             pdf.multi_cell(0, 5, limpar_texto(texto_faltas))
             pdf.ln(2)
             
