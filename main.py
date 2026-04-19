@@ -411,8 +411,8 @@ if menu == "🏠 Início / Dashboard":
             except Exception as e: st.error(f"Erro: {e}"); return False
         return False
 
-    tab_diaria, tab_global, tab_relatorios, tab_calendario = st.tabs([
-        "☀️ Visão Diária", "🌍 Visão Global (Radar)", "🖨️ Analytics e Relatórios", "🗓️ Calendário e Bloqueios"
+    tab_diaria, tab_global, tab_relatorios, tab_calendario, tab_recomposicao = st.tabs([
+        "☀️ Visão Diária", "🌍 Visão Global (Radar)", "🖨️ Analytics e Relatórios", "🗓️ Calendário e Bloqueios", "⚖️ Recomposição Pastoral"
     ])
     
     df_enc_local = ler_aba("encontros")
@@ -868,6 +868,59 @@ if menu == "🏠 Início / Dashboard":
                     turmas_todas = df_turmas['nome_turma'].tolist() if not df_turmas.empty else []
                     if registrar_recesso_lote(data_f, nome_f, turmas_todas, st.session_state.usuario['nome']):
                         st.success("Bloqueado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+    
+    with tab_recomposicao:
+        st.subheader("⚖️ Visão Global de Recomposição Pastoral")
+        st.markdown("Identifique quem entrou atrasado ou perdeu encontros cruciais. Cobre dos catequistas os encontros de nivelamento.")
+        
+        if not df_pres.empty and not df_cat.empty:
+            dados_recomposicao = []
+            alunos_ativos = df_cat[df_cat['status'] == 'ATIVO']
+            
+            # Escaneia todas as turmas para achar os devedores
+            for turma_rec in df_turmas['nome_turma'].unique():
+                turma_norm = str(turma_rec).strip().upper()
+                pres_turma = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_norm]
+                
+                if pres_turma.empty: continue
+                
+                temas_dados = set(pres_turma[~pres_turma['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]['tema_do_dia'].dropna().unique())
+                
+                alunos_da_turma = alunos_ativos[alunos_ativos['etapa'].astype(str).str.strip().str.upper() == turma_norm]
+                
+                for _, aluno in alunos_da_turma.iterrows():
+                    id_cat = aluno['id_catequizando']
+                    pres_aluno = pres_turma[pres_turma['id_catequizando'] == id_cat]
+                    temas_presente = set(pres_aluno[pres_aluno['status'] == 'PRESENTE']['tema_do_dia'].dropna().unique())
+                    faltas_reais = len(pres_aluno[pres_aluno['status'] == 'AUSENTE'])
+                    
+                    temas_devidos = temas_dados - temas_presente
+                    
+                    if temas_devidos:
+                        status_entrada = "🟢 Entrou Atrasado" if faltas_reais == 0 else "🔴 Acúmulo de Faltas"
+                        dados_recomposicao.append({
+                            "Turma": turma_norm,
+                            "Catequizando": aluno['nome_completo'],
+                            "Temas Devidos": " | ".join(temas_devidos),
+                            "Qtd. Pendências": len(temas_devidos),
+                            "Perfil": status_entrada
+                        })
+            
+            if dados_recomposicao:
+                df_recomposicao = pd.DataFrame(dados_recomposicao).sort_values(by=['Qtd. Pendências', 'Turma'], ascending=[False, True])
+                
+                c_rec1, c_rec2 = st.columns(2)
+                c_rec1.metric("Total de Alunos Precisando de Reposição", len(df_recomposicao))
+                
+                filtro_t_rec = st.selectbox("Filtrar Recomposição por Turma:", ["TODAS"] + sorted(df_recomposicao['Turma'].unique().tolist()))
+                if filtro_t_rec != "TODAS":
+                    df_recomposicao = df_recomposicao[df_recomposicao['Turma'] == filtro_t_rec]
+                
+                st.dataframe(df_recomposicao, use_container_width=True, hide_index=True)
+            else:
+                st.success("Glória a Deus! Não há nenhum catequizando devendo temas de reposição.")
+        else:
+            st.info("O sistema não possui dados de presença suficientes.")
 
 
 
@@ -1017,11 +1070,39 @@ elif menu == "📚 Minha Turma":
     df_pend_doc = meus_alunos[~meus_alunos['doc_em_falta'].isin(['COMPLETO', 'OK', 'NADA', 'NADA FALTANDO'])]
     df_sem_batismo = meus_alunos[meus_alunos['batizado_sn'] == 'NÃO']
 
-    if not risco_c and df_pend_doc.empty and df_sem_batismo.empty:
+    # Calcula Devedores de Nivelamento da Turma
+    devedores_nivelamento =[]
+    if not minhas_pres.empty and not meus_alunos.empty:
+        temas_dados = set(minhas_pres[~minhas_pres['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]['tema_do_dia'].dropna().unique())
+        for _, aluno in meus_alunos.iterrows():
+            id_cat = aluno['id_catequizando']
+            pres_aluno = minhas_pres[minhas_pres['id_catequizando'] == id_cat]
+            temas_presente = set(pres_aluno[pres_aluno['status'] == 'PRESENTE']['tema_do_dia'].dropna().unique())
+            temas_devidos = temas_dados - temas_presente
+            if temas_devidos:
+                devedores_nivelamento.append(f"**{aluno['nome_completo']}** (Falta repor: {len(temas_devidos)} temas)")
+
+    if not risco_c and df_pend_doc.empty and df_sem_batismo.empty and not devedores_nivelamento:
         st.success("Turma em caminhada estável. Nenhum alerta crítico.")
     else:
-        tab_risco, tab_doc, tab_sac = st.tabs([f"Risco de Evasão ({len(risco_c)})", f"Documentos ({len(df_pend_doc)})", f"Sacramentos ({len(df_sem_batismo)})"])
+        tab_risco, tab_doc, tab_sac, tab_niv = st.tabs([f"Risco de Evasão ({len(risco_c)})", f"Documentos ({len(df_pend_doc)})", f"Sacramentos ({len(df_sem_batismo)})", f"⚖️ Nivelamento ({len(devedores_nivelamento)})"])
         with tab_risco:
+            if risco_c:
+                for r in risco_c: st.markdown(f"• {r}")
+            else: st.write("Nenhum catequizando em risco.")
+        with tab_doc:
+            if not df_pend_doc.empty:
+                for n in df_pend_doc['nome_completo'].tolist(): st.markdown(f"• {n}")
+            else: st.write("Documentação em dia.")
+        with tab_sac:
+            if not df_sem_batismo.empty:
+                for n in df_sem_batismo['nome_completo'].tolist(): st.markdown(f"• {n}")
+            else: st.write("Todos batizados.")
+        with tab_niv:
+            if devedores_nivelamento:
+                st.info("💡 Estes alunos entraram atrasados ou faltaram muito. Use o **Modo Reposição** na tela de Chamada para quitar as pendências.")
+                for d in devedores_nivelamento: st.markdown(f"• {d}")
+            else: st.success("Ninguém devendo temas!")
             if risco_c:
                 for r in risco_c: st.markdown(f"• {r}")
             else: st.write("Nenhum catequizando em risco.")
@@ -2942,9 +3023,44 @@ elif menu == "✅ Fazer Chamada":
     turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
     data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
 
-    # 3. MURAL DE ANIVERSARIANTES
-    lista_cat = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
+    # 3. MODO DE REPOSIÇÃO E FILTRO DE ALUNOS
+    st.markdown("---")
+    modo_reposicao = st.toggle("🔄 Ativar Modo de Reposição / Encontro Extra", help="Use isso para dar presença a quem entrou atrasado na turma ou para quem vai repor uma falta durante a semana.")
+    
+    lista_cat_bruta = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
+    
+    tema_reposicao = ""
+    if modo_reposicao:
+        st.info("💡 **Modo Reposição:** Selecione qual tema antigo você está repondo hoje. A lista abaixo mostrará APENAS os alunos que estão devendo este tema.")
+        df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
+        pres_turma = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
+        
+        temas_ja_dados = pres_turma[~pres_turma['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]['tema_do_dia'].dropna().unique().tolist()
+        
+        if not temas_ja_dados:
+            st.warning("Não há temas passados para repor.")
+            lista_cat = pd.DataFrame()
+        else:
+            tema_reposicao = st.selectbox("Qual tema antigo está sendo reposto?", temas_ja_dados)
+            
+            # FILTRO MÁGICO: Acha quem NÃO tem PRESENTE neste tema
+            ids_presentes = pres_turma[(pres_turma['tema_do_dia'] == tema_reposicao) & (pres_turma['status'] == 'PRESENTE')]['id_catequizando'].tolist()
+            lista_cat = lista_cat_bruta[~lista_cat_bruta['id_catequizando'].isin(ids_presentes)]
+            
+            if lista_cat.empty:
+                st.success(f"Nenhum aluno está devendo o tema '{tema_reposicao}'.")
+    else:
+        lista_cat = lista_cat_bruta
+
+    # MURAL DE ANIVERSARIANTES
     aniversariantes =[]
+    for _, row in lista_cat_bruta.iterrows():
+        status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
+        if status_niver: aniversariantes.append(f"{status_niver}: {row['nome_completo']}")
+    
+    if aniversariantes and not modo_reposicao:
+        with st.expander("🎂 Aniversariantes do Encontro", expanded=True):
+            for niver in aniversariantes: st.info(niver)
     for _, row in lista_cat.iterrows():
         status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
         if status_niver: aniversariantes.append(f"{status_niver}: {row['nome_completo']}")
@@ -3062,12 +3178,36 @@ elif menu == "✅ Fazer Chamada":
         c_res1.metric("✅ Presentes", contador_p)
         c_res2.metric("❌ Ausentes", contador_a)
 
-        if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=not tema_dia):
-            obs_final = obs_dia if obs_dia else "Registro via Chamada"
-            if salvar_com_seguranca(salvar_presencas, registros_presenca, obs_final):
-                st.success(f"✅ Chamada salva e Diário atualizado!"); st.balloons()
-                st.cache_data.clear(); time.sleep(1); st.rerun()
+        # Desabilita o botão se não houver tema (no modo normal) ou se não houver tema selecionado (no reposição)
+        bloquear_btn = not tema_reposicao if modo_reposicao else not tema_dia
         
+        if st.button("🚀 FINALIZAR CHAMADA E SALVAR", use_container_width=True, type="primary", disabled=bloquear_btn):
+            
+            if modo_reposicao:
+                # No modo reposição, sobrescrevemos a lista de presenças para forçar o tema antigo
+                registros_presenca =[]
+                for _, row in lista_cat.iterrows():
+                    id_cat = row['id_catequizando']
+                    presente = st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat]
+                    if presente: # Na reposição, só salvamos quem VAI. Se não foi, continua devendo.
+                        registros_presenca.append([data_enc.strftime('%d/%m/%Y'), id_cat, row['nome_completo'], turma_sel, "PRESENTE", tema_reposicao, st.session_state.usuario['nome']])
+                
+                if registros_presenca:
+                    with st.spinner("Quitando pendências..."):
+                        # Injeta direto no banco de presenças (sem criar um novo encontro oficial no diário)
+                        planilha = conectar_google_sheets()
+                        planilha.worksheet("presencas").append_rows(registros_presenca)
+                        st.success(f"✅ Reposição salva! Os alunos presentes não devem mais o tema '{tema_reposicao}'."); st.balloons()
+                        st.cache_data.clear(); time.sleep(1.5); st.rerun()
+                else:
+                    st.error("Marque a presença de pelo menos um aluno para fazer a reposição.")
+                    
+            else:
+                # MODO NORMAL
+                obs_final = obs_dia if obs_dia else "Registro via Chamada"
+                if salvar_com_seguranca(salvar_presencas, registros_presenca, obs_final):
+                    st.success(f"✅ Chamada salva e Diário atualizado!"); st.balloons()
+                    st.cache_data.clear(); time.sleep(1); st.rerun()
         if not tema_dia:
             st.warning("⚠️ Preencha o Tema do Encontro para salvar.")
 
