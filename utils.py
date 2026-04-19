@@ -1562,7 +1562,7 @@ def gerar_relatorio_frequencia_turma_pdf(nome_turma, df_alunos, df_presencas):
         if pdf.get_y() > 240: pdf.add_page() 
             
         pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(224, 61, 17)
-        pdf.cell(0, 8, limpar_texto("2. GUIA DE REPOSICAO (TEMAS QUE O ALUNO PRECISA RECUPERAR)"), ln=True, fill=True)
+        pdf.cell(0, 8, limpar_texto("2. GUIA DE REPOSICAO (TEMAS QUE O CATEQUIZANDO PRECISA RECUPERAR)"), ln=True, fill=True)
         pdf.set_text_color(0, 0, 0); pdf.ln(2)
         
         for nome, temas in detalhamento_pendencias.items():
@@ -1910,7 +1910,7 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
             else:
                 pdf.set_font("helvetica", "", 8); pdf.cell(0, 6, limpar_texto("OK - Todos presentes no ultimo encontro."), border=1, ln=True)
         else:
-            # SE ESTIVER ATRASADA, OCULTA OS ALUNOS E MOSTRA O AVISO
+            # SE ESTIVER ATRASADA, OCULTA OS CATEQUIZANDOS E MOSTRA O AVISO
             pdf.set_font("helvetica", "I", 8)
             pdf.cell(0, 6, limpar_texto("O diario esta atrasado. Realize a chamada do ultimo sabado para visualizar as faltas."), border=1, ln=True)
             
