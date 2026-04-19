@@ -2365,8 +2365,8 @@ elif menu == "🏫 Gestão de Turmas":
                 st.divider()
                 
                 # --- SUB-ABAS DE GESTÃO DA TURMA ---
-                sub_edit, sub_plan, sub_hist, sub_doc = st.tabs([
-                    "✏️ Editar Turma", "📅 Planejar Temas", "📜 Diário e Faltas", "📄 Documentos e Auditoria"
+                sub_edit, sub_plan, sub_hist, sub_rec, sub_doc = st.tabs([
+                    "✏️ Editar Turma", "📅 Planejar Temas", "📜 Diário e Faltas", "⚖️ Recomposição", "📄 Documentos e Auditoria"
                 ])
                 
                 with sub_edit:
@@ -2401,20 +2401,6 @@ elif menu == "🏫 Gestão de Turmas":
                                 if atualizar_turma(info_t['id_turma'], lista_up):
                                     if en != nome_turma_original: sincronizar_renomeacao_turma_geral(nome_turma_original, en)
                                     sincronizar_logistica_turma_nos_catequizandos(en, et, el)
-                                    
-                                    planilha = conectar_google_sheets()
-                                    if planilha:
-                                        aba_u = planilha.worksheet("usuarios")
-                                        for _, cat_row in equipe_tecnica.iterrows():
-                                            c_nome = cat_row['nome']
-                                            cel_u = aba_u.find(c_nome, in_column=1)
-                                            if cel_u:
-                                                v_atual = aba_u.cell(cel_u.row, 5).value or ""
-                                                v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
-                                                if c_nome in ed_cats and en not in v_list:
-                                                    v_list.append(en); aba_u.update_cell(cel_u.row, 5, ", ".join(v_list))
-                                                elif c_nome not in ed_cats and en in v_list:
-                                                    v_list.remove(en); aba_u.update_cell(cel_u.row, 5, ", ".join(v_list))
                                     st.success(f"✅ Turma '{en}' atualizada!"); time.sleep(1); st.rerun()
 
                     with st.expander("🗑️ ZONA DE PERIGO: Excluir Turma"):
@@ -2425,19 +2411,6 @@ elif menu == "🏫 Gestão de Turmas":
                                 if not alunos_t_todos.empty:
                                     ids_para_mover = alunos_t_todos['id_catequizando'].tolist()
                                     mover_catequizandos_em_massa(ids_para_mover, "CATEQUIZANDOS SEM TURMA")
-                                
-                                planilha = conectar_google_sheets()
-                                if planilha:
-                                    aba_u = planilha.worksheet("usuarios")
-                                    for _, cat_row in equipe_tecnica.iterrows():
-                                        v_atual = str(cat_row.get('turma_vinculada', ''))
-                                        if t_alvo in v_atual:
-                                            v_list =[x.strip() for x in v_atual.split(',') if x.strip()]
-                                            if t_alvo in v_list:
-                                                v_list.remove(t_alvo)
-                                                celula_u = aba_u.find(cat_row['nome'], in_column=1)
-                                                if celula_u: aba_u.update_cell(celula_u.row, 5, ", ".join(v_list))
-                                
                                 if excluir_turma(info_t['id_turma']):
                                     from database import limpar_lixo_turma_excluida
                                     limpar_lixo_turma_excluida(t_alvo)
@@ -2445,9 +2418,7 @@ elif menu == "🏫 Gestão de Turmas":
 
                 with sub_plan:
                     st.markdown("#### 📅 Adicionar novo tema ao Cronograma")
-                    
                     template_ivc = ("🎯 Objetivo Geral:\n\n🙏🏻 Acolhida / Ambientação:\n\n🌱 Ver a Vida (Realidade):\n\n📖 Iluminar (Palavra de Deus):\n\n⚙️ Celebrar e Agir:\n")
-                    
                     with st.form(f"form_plan_rx_{t_alvo}", clear_on_submit=True):
                         novo_tema_rx = st.text_input("Título do Tema").upper()
                         desc_tema_rx = st.text_area("Roteiro do Encontro (Metodologia IVC)", value=template_ivc, height=200, help="Preencha o roteiro para garantir o padrão diocesano de Iniciação à Vida Cristã.")
@@ -2460,23 +2431,17 @@ elif menu == "🏫 Gestão de Turmas":
                     st.markdown("#### 📋 Temas Pendentes na Fila (Corrigir/Padronizar)")
                     cron_t_rx = df_cron_local[(df_cron_local['etapa'].astype(str).str.strip().str.upper() == t_alvo.strip().upper())]
                     col_status_rx = 'status' if 'status' in cron_t_rx.columns else ('col_4' if 'col_4' in cron_t_rx.columns else None)
-                    
                     if col_status_rx and not cron_t_rx.empty:
                         pendentes_rx = cron_t_rx[cron_t_rx[col_status_rx].astype(str).str.strip().str.upper() != 'REALIZADO']
                         if not pendentes_rx.empty:
                             tema_editar = st.selectbox("Selecione um planejamento antigo para padronizar ou excluir:", [""] + pendentes_rx['titulo_tema'].tolist())
-                            
                             if tema_editar:
                                 dado_tema = pendentes_rx[pendentes_rx['titulo_tema'] == tema_editar].iloc[0]
                                 with st.form(f"edit_pendente_{dado_tema['id_tema']}"):
-                                    st.info("Utilize este espaço para adaptar planejamentos antigos à nova padronização IVC.")
                                     ed_tit = st.text_input("Título", value=dado_tema['titulo_tema']).upper()
-                                    
                                     val_desc = str(dado_tema.get('descricao_base', ''))
                                     if val_desc in["", "nan", "N/A", "None"]: val_desc = template_ivc
-                                    
                                     ed_desc = st.text_area("Roteiro (Metodologia IVC)", value=val_desc, height=250)
-                                    
                                     col_b1, col_b2 = st.columns([3, 1])
                                     if col_b1.form_submit_button("💾 SALVAR PADRONIZAÇÃO", use_container_width=True, type="primary"):
                                         try:
@@ -2487,9 +2452,8 @@ elif menu == "🏫 Gestão de Turmas":
                                                 if celulas:
                                                     aba_cron.update_cell(celulas[0].row, 3, ed_tit)
                                                     aba_cron.update_cell(celulas[0].row, 4, ed_desc)
-                                                    st.success("Planejamento padronizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                                    st.success("Planejamento padronizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                                         except Exception as e: st.error(f"Erro ao salvar: {e}")
-                                                
                                     if col_b2.form_submit_button("🗑️ EXCLUIR TEMA", use_container_width=True):
                                         try:
                                             planilha = conectar_google_sheets()
@@ -2499,12 +2463,12 @@ elif menu == "🏫 Gestão de Turmas":
                                                 if celulas:
                                                     aba_cron.delete_rows(celulas[0].row)
                                                     st.success("Tema excluído do cronograma!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                                        except Exception as e: st.error(f"Erro ao excluir: {e}")
+                                        except Exception as e: st.error(f"Erro: {e}")
                         else: st.info("Nenhum tema pendente no momento.")
                     else: st.info("Nenhum tema cadastrado.")
 
                 with sub_hist:
-                    st.markdown("#### 📜 Histórico, Edição e Faltas (Diário)")
+                    st.markdown("#### 📜 Histórico e Diário")
                     enc_t_rx = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()].copy()
                     if not enc_t_rx.empty:
                         enc_t_rx['data_dt'] = pd.to_datetime(enc_t_rx['data'], errors='coerce', dayfirst=True)
@@ -2516,72 +2480,84 @@ elif menu == "🏫 Gestão de Turmas":
                             cat_e = row.get('catequista', 'Não informado')
                             obs_e = row.get('observacoes', '')
                             
-                            pres_e = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()) & (df_pres['data_encontro'].astype(str) == data_e)]
-                            qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE'])
-                            qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
-                            faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
-                            
                             with st.expander(f"📅 {formatar_data_br(data_e)} - {tema_e} | 👤 Resp: {cat_e}"):
-                                c_met1, c_met2 = st.columns(2)
-                                c_met1.metric("✅ Presentes", qtd_pres)
-                                c_met2.metric("❌ Ausentes", qtd_aus)
-                                
-                                if faltosos: st.error(f"**Faltosos neste dia:** {', '.join(faltosos)}")
-                                else: st.success("**Nenhuma falta registrada neste dia!**")
-                                
-                                st.markdown("---")
                                 st.markdown("**✏️ Editar Registro do Encontro**")
                                 with st.form(f"form_edit_rx_{data_e}_{idx}"):
                                     ed_tema_rx = st.text_input("Tema Ministrado:", value=tema_e).upper()
                                     ed_obs_rx = st.text_area("Observações / Relato:", value=obs_e, height=100)
-                                    
                                     c_btn1, c_btn2 = st.columns([3, 1])
-                                    btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
-                                    btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR ENCONTRO", use_container_width=True)
-                                    
-                                    st.markdown("---")
-                                    confirma_del = st.checkbox("⚠️ Confirmo a exclusão deste encontro e de todas as presenças do dia", key=f"chk_del_rx_{data_e}_{idx}")
-                                    
-                                    if btn_salvar:
-                                        with st.spinner("Atualizando diário..."):
-                                            if atualizar_encontro_global(t_alvo, data_e, ed_tema_rx, ed_obs_rx):
-                                                st.success("Atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                                    if btn_excluir:
+                                    if c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
+                                        if atualizar_encontro_global(t_alvo, data_e, ed_tema_rx, ed_obs_rx):
+                                            st.success("Atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                    confirma_del = st.checkbox("⚠️ Confirmo a exclusão", key=f"chk_del_rx_{data_e}_{idx}")
+                                    if c_btn2.form_submit_button("🗑️ EXCLUIR", use_container_width=True):
                                         if confirma_del:
-                                            with st.spinner("Excluindo encontro e revertendo cronograma..."):
-                                                if excluir_encontro_cascata(t_alvo, data_e, tema_e):
-                                                    st.success("Encontro excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                                        else: st.error("⚠️ Marque a caixa de confirmação para excluir.")
-                    else:
-                        st.info("Nenhum encontro registrado para esta turma.")
+                                            if excluir_encontro_cascata(t_alvo, data_e, tema_e):
+                                                st.success("Encontro excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        else: st.error("Marque a caixa de confirmação.")
+                    else: st.info("Nenhum encontro registrado.")
+
+                with sub_rec:
+                    st.markdown("#### ⚖️ Recomposição de Encontros (Nivelamento)")
+                    temas_dados_rec = set(pres_t[~pres_t['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]['tema_do_dia'].dropna().unique()) if not pres_t.empty else set()
+                    dados_rec_local =[]
+                    
+                    for _, aluno in alunos_t.iterrows():
+                        id_cat = aluno['id_catequizando']
+                        pres_aluno = pres_t[pres_t['id_catequizando'] == id_cat] if not pres_t.empty else pd.DataFrame()
+                        temas_presente = set(pres_aluno[pres_aluno['status'] == 'PRESENTE']['tema_do_dia'].dropna().unique()) if not pres_aluno.empty else set()
+                        temas_devidos = temas_dados_rec - temas_presente
+                        
+                        if temas_devidos:
+                            dados_rec_local.append({
+                                "Catequizando": aluno['nome_completo'],
+                                "Faltas Reais": len(pres_aluno[pres_aluno['status'] == 'AUSENTE']) if not pres_aluno.empty else 0,
+                                "Qtd. Pendências": len(temas_devidos),
+                                "Temas a Repor": " | ".join(temas_devidos)
+                            })
+                            
+                        if dados_rec_local:
+                            st.dataframe(pd.DataFrame(dados_rec_local).sort_values(by=['Qtd. Pendências'], ascending=False), use_container_width=True, hide_index=True)
+                        else:
+                            st.success("✅ Nenhum catequizando desta turma possui pendências de nivelamento.")
 
                 with sub_doc:
                     st.markdown("#### 📄 Documentação e Auditoria")
                     col_doc1, col_doc2 = st.columns(2)
                     with col_doc1:
-                        if st.button(f"✨ GERAR AUDITORIA PASTORAL: {t_alvo}", use_container_width=True, key="btn_auditoria_turma"):
-                            with st.spinner("Analisando prontidão da turma..."):
+                        if st.button(f"✨ GERAR AUDITORIA PASTORAL DETALHADA", use_container_width=True, key="btn_auditoria_turma", type="primary"):
+                            with st.spinner("Compilando diário, cronograma e nivelamento em PDF..."):
                                 sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
                                 batizados = len(alunos_t) - sem_batismo
                                 tgo_c = len(alunos_t[alunos_t['tgo_sn'] != 'NÃO'])
                                 saude_c = len(alunos_t[alunos_t['toma_medicamento_sn'] != 'NÃO'])
-                                
-                                lista_geral =[]
-                                for _, r in alunos_t.iterrows():
-                                    f = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-                                    has_euc = "SIM" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "NÃO"
-                                    lista_geral.append({'nome': r['nome_completo'], 'faltas': f, 'batismo': r['batizado_sn'], 'eucaristia': has_euc, 'status': r['status']})
 
                                 resumo_ia = f"Turma {t_alvo}: {len(alunos_t)} catequizandos. Freq: {freq_global}%. Pais: {perc_pais}%. Batizados: {batizados}. Pendentes Batismo: {sem_batismo}. TGO: {tgo_c}."
                                 parecer_ia = analisar_turma_local(t_alvo, resumo_ia)
 
+                                metricas_dict = {
+                                    'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 
+                                    'freq_global': freq_global, 'idade_media': idade_media_val, 
+                                    'engaj_pais': perc_pais, 'progresso_it': progresso, 
+                                    'batizados': batizados, 'pend_batismo': sem_batismo, 
+                                    'tgo': tgo_c, 'saude': saude_c
+                                }
+
+                                enc_t_pdf = df_enc_local[df_enc_local['turma'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()]
+                                cron_t_pdf = df_cron_local[df_cron_local['etapa'].astype(str).str.strip().str.upper() == t_alvo.strip().upper()]
+
                                 st.session_state[f"pdf_auditoria_{t_alvo}"] = gerar_relatorio_local_turma_pdf(
-                                    t_alvo, 
-                                    {'qtd_catequistas': qtd_cats_real, 'qtd_cat': len(alunos_t), 'freq_global': freq_global, 'idade_media': idade_media_val, 'engaj_pais': perc_pais, 'progresso_it': progresso, 'batizados': batizados, 'pend_batismo': sem_batismo, 'tgo': tgo_c, 'saude': saude_c}, 
-                                    {'geral': lista_geral}, parecer_ia
+                                    t_alvo, metricas_dict, alunos_t, pres_t, enc_t_pdf, cron_t_pdf, parecer_ia
                                 )
                         if f"pdf_auditoria_{t_alvo}" in st.session_state:
-                            st.download_button(label=f"📥 BAIXAR AUDITORIA: {t_alvo}", data=st.session_state[f"pdf_auditoria_{t_alvo}"], file_name=f"Auditoria_{t_alvo}.pdf", mime="application/pdf", use_container_width=True)
+                            st.download_button(label=f"📥 BAIXAR DOSSIÊ DA TURMA (PDF)", data=st.session_state[f"pdf_auditoria_{t_alvo}"], file_name=f"Auditoria_{t_alvo}.pdf", mime="application/pdf", use_container_width=True)
+                    
+                    with col_doc2:
+                        if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
+                            with st.spinner("Gerando fichas individuais..."):
+                                st.session_state[f"pdf_fichas_{t_alvo}"] = gerar_fichas_turma_completa(t_alvo, alunos_t)
+                        if f"pdf_fichas_{t_alvo}" in st.session_state:
+                            st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
                     
                     with col_doc2:
                         if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
