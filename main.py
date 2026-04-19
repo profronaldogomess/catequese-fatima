@@ -1387,10 +1387,12 @@ elif menu == "📖 Diário de Encontros":
                 qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
                 faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
                 
-                with st.expander(f"📅 {formatar_data_br(data_d)} - {tema_d} | 👤 Resp: {cat_d}"):
+                # Visual mais limpo: Data e Tema no título, métricas compactas dentro
+                with st.expander(f"{formatar_data_br(data_d)} | {tema_d}"):
+                    st.caption(f"Catequista: {cat_d}")
                     c_met1, c_met2 = st.columns(2)
-                    c_met1.metric("✅ Presentes", qtd_pres)
-                    c_met2.metric("❌ Ausentes", qtd_aus)
+                    c_met1.metric("Presentes", qtd_pres)
+                    c_met2.metric("Ausentes", qtd_aus)
                     
                     if faltosos:
                         st.error(f"**Faltosos neste dia:** {', '.join(faltosos)}")
@@ -1415,7 +1417,15 @@ elif menu == "📖 Diário de Encontros":
                             with st.spinner("Sincronizando Diário, Presenças e Cronograma..."):
                                 if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
                                     st.success("✅ Tudo atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                                    
+
+                        # Botão de Upgrade IVC (Aparece apenas se o relato for curto/antigo)
+                        if len(obs_d) < 50:
+                            if st.button("✨ Converter para Roteiro IVC", key=f"upg_{data_d}_{idx}"):
+                                template_ivc = ("🎯 Objetivo Geral:\n\n🙏🏻 Acolhida / Ambientação:\n\n🌱 Ver a Vida (Realidade):\n\n📖 Iluminar (Palavra de Deus):\n\n⚙️ Celebrar e Agir:\n")
+                                # Atualiza o campo de observação com o template
+                                if atualizar_encontro_global(turma_focal, data_d, tema_d, template_ivc):
+                                    st.success("Template IVC aplicado! Agora edite o relato."); st.rerun()     
+                                           
                         if btn_excluir:
                             if confirma_del:
                                 with st.spinner("Excluindo encontro e revertendo cronograma..."):
@@ -4130,8 +4140,14 @@ elif menu == "📖 Consulta de Encontros":
         
         if not df_enc_local.empty:
             df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
+            # Ordena corretamente pelas datas
             df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
-            hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_focal.strip().upper()].sort_values(by='data_sort', ascending=False)
+            
+            # FILTRO CIRÚRGICO: Mostra apenas encontros passados ou de hoje
+            hist_turma = df_enc_local[
+                (df_enc_local['turma_norm'] == turma_focal.strip().upper()) & 
+                (df_enc_local['data_sort'] <= pd.to_datetime(date.today()))
+            ].sort_values(by='data_sort', ascending=False)
             
             if not hist_turma.empty:
                 for idx, row in hist_turma.iterrows():
