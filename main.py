@@ -993,10 +993,13 @@ elif menu == "📚 Minha Turma":
     # --- ALERTA DE REUNIÃO DE PAIS (INTEGRADO E MODERNO) ---
     df_reunioes_agendadas = ler_aba("reunioes_pais")
     if not df_reunioes_agendadas.empty:
+        # Lógica Inteligente: Verifica se a turma ativa está DENTRO da string de turmas alvo, ou se é GERAL
         reunioes_pendentes = df_reunioes_agendadas[
             (df_reunioes_agendadas.iloc[:, 5] == "PENDENTE") & 
-            (df_reunioes_agendadas.iloc[:, 3].isin([turma_ativa.strip().upper(), "GERAL (TODAS)"]))
+            (df_reunioes_agendadas.iloc[:, 3].str.contains(turma_ativa.strip().upper(), na=False, regex=False) | 
+             df_reunioes_agendadas.iloc[:, 3].str.contains("GERAL (TODAS)", na=False, regex=False))
         ]
+        
         if not reunioes_pendentes.empty:
             for _, reu in reunioes_pendentes.iterrows():
                 # Extrai os novos campos com segurança (caso existam reuniões antigas no banco)
@@ -3920,41 +3923,49 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     
                     c_r1, c_r2 = st.columns(2)
                     r_data = c_r1.date_input("Data Prevista", value=date.today(), format="DD/MM/YYYY")
-                    r_turma = c_r2.selectbox("Turma Alvo", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
+                    
+                    # AGORA É MULTISELECT (Permite escolher várias turmas)
+                    opcoes_turmas = ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
+                    r_turmas = c_r2.multiselect("Turmas Alvo (Pode escolher mais de uma)", opcoes_turmas)
                     
                     c_r3, c_r4 = st.columns(2)
                     r_local = c_r3.text_input("Local (Ex: Salão Paroquial)").upper()
                     r_publico = c_r4.selectbox("Público Alvo", ["PAIS E RESPONSÁVEIS", "CATEQUIZANDOS E PAIS", "APENAS MÃES", "APENAS PAIS"])
                     
                     if st.form_submit_button("📌 AGENDAR REUNIÃO E NOTIFICAR CATEQUISTAS", type="primary", use_container_width=True):
-                        if r_tema and r_objetivo:
+                        if r_tema and r_objetivo and r_turmas:
+                            r_turma_str = ", ".join(r_turmas) # Converte a lista em texto separado por vírgula
+                            
                             df_reu_check = ler_aba("reunioes_pais")
                             ja_existe = False
                             data_str = r_data.strftime('%d/%m/%Y')
                             
                             if not df_reu_check.empty:
-                                # Blindagem de data na verificação
                                 df_reu_check['data_norm'] = df_reu_check.iloc[:, 2].apply(formatar_data_br)
-                                duplicada = df_reu_check[(df_reu_check['data_norm'] == data_str) & (df_reu_check.iloc[:, 3] == r_turma)]
-                                if not duplicada.empty:
-                                    ja_existe = True
+                                reunioes_do_dia = df_reu_check[df_reu_check['data_norm'] == data_str]
+                                
+                                # Verifica se alguma das turmas selecionadas já tem reunião nesse dia
+                                for _, r_dia in reunioes_do_dia.iterrows():
+                                    turmas_do_dia = [t.strip() for t in str(r_dia.iloc[3]).split(",")]
+                                    for t_sel in r_turmas:
+                                        if t_sel in turmas_do_dia or t_sel == "GERAL (TODAS)" or "GERAL (TODAS)" in turmas_do_dia:
+                                            ja_existe = True
+                                            break
                             
                             if ja_existe:
-                                st.error(f"⚠️ Já existe uma reunião agendada para a turma {r_turma} no dia {data_str}.")
+                                st.error(f"⚠️ Já existe uma reunião agendada conflitante no dia {data_str} para uma das turmas selecionadas.")
                             else:
-                                # Salvando com as novas colunas (Público e Objetivo)
-                                dados_salvar = [f"REU-{int(time.time())}", r_tema, data_str, r_turma, r_local, "PENDENTE", r_publico, r_objetivo]
+                                dados_salvar = [f"REU-{int(time.time())}", r_tema, data_str, r_turma_str, r_local, "PENDENTE", r_publico, r_objetivo]
                                 if salvar_reuniao_pais(dados_salvar):
                                     st.success("✅ Reunião agendada! O aviso já está aparecendo no painel dos catequistas."); st.balloons(); st.cache_data.clear(); time.sleep(2); st.rerun()
                         else:
-                            st.warning("⚠️ Preencha o Tema e o Objetivo da reunião.")
+                            st.warning("⚠️ Preencha o Tema, o Objetivo e selecione ao menos uma Turma.")
 
             with sub_r2:
                 st.markdown("#### 🖨️ Emissão de Lista de Presença")
                 st.info("O PDF gerado já contém o nome do catequizando e um espaço para o responsável assinar ao lado.")
                 df_reunioes_v = ler_aba("reunioes_pais")
                 if not df_reunioes_v.empty:
-                    # Formata a lista para o selectbox ficar bonito
                     df_reunioes_v['data_norm'] = df_reunioes_v.iloc[:, 2].apply(formatar_data_br)
                     opcoes_reu = [f"{r.iloc[1]} - {r['data_norm']} ({r.iloc[3]})" for _, r in df_reunioes_v.iterrows()]
                     
@@ -3963,11 +3974,14 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                     dados_r = df_reunioes_v.iloc[idx_sel]
                     
                     if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)", use_container_width=True, type="primary"):
-                        t_alvo = dados_r.iloc[3]
+                        t_alvo = str(dados_r.iloc[3])
                         df_f_lista = df_cat[df_cat['status'] == 'ATIVO'].sort_values('nome_completo')
-                        if t_alvo != "GERAL (TODAS)": df_f_lista = df_f_lista[df_f_lista['etapa'] == t_alvo]
                         
-                        # Puxa o nome do responsável correto (Mãe, Pai ou Cuidador)
+                        # Lógica para ler múltiplas turmas
+                        if "GERAL (TODAS)" not in t_alvo:
+                            turmas_lista = [t.strip() for t in t_alvo.split(",")]
+                            df_f_lista = df_f_lista[df_f_lista['etapa'].isin(turmas_lista)]
+                        
                         lista_pdf = []
                         for _, r in df_f_lista.iterrows():
                             resp = r['nome_mae'] if r['nome_mae'] not in ["N/A", ""] else (r['nome_pai'] if r['nome_pai'] not in ["N/A", ""] else r['nome_responsavel'])
@@ -3989,10 +4003,14 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                         dados_r_pres = df_pendentes.iloc[idx_pres]
                         
                         id_reuniao = dados_r_pres.iloc[0]
-                        t_alvo_pres = dados_r_pres.iloc[3]
+                        t_alvo_pres = str(dados_r_pres.iloc[3])
 
                         df_fam_pres = df_cat[df_cat['status'] == 'ATIVO'].sort_values('nome_completo')
-                        if t_alvo_pres != "GERAL (TODAS)": df_fam_pres = df_fam_pres[df_fam_pres['etapa'] == t_alvo_pres]
+                        
+                        # Lógica para ler múltiplas turmas
+                        if "GERAL (TODAS)" not in t_alvo_pres:
+                            turmas_lista = [t.strip() for t in t_alvo_pres.split(",")]
+                            df_fam_pres = df_fam_pres[df_fam_pres['etapa'].isin(turmas_lista)]
                         
                         st.divider()
                         with st.form(f"form_pres_reu_{id_reuniao}"):
@@ -4021,7 +4039,6 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
             with sub_r4:
                 st.markdown("#### 📜 Histórico e Edição")
                 if not df_reunioes_v.empty:
-                    # Exibe tabela limpa
                     df_view = df_reunioes_v.copy()
                     df_view.columns = ['ID', 'Tema', 'Data', 'Turma', 'Local', 'Status', 'Público', 'Objetivo'][:len(df_view.columns)]
                     st.dataframe(df_view.drop(columns=['ID']), use_container_width=True, hide_index=True)
@@ -4039,7 +4056,10 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                                 
                                 c_e1, c_e2 = st.columns(2)
                                 ed_data = c_e1.date_input("Data", value=converter_para_data(d_edit.iloc[2]), format="DD/MM/YYYY")
-                                ed_turma = c_e2.selectbox("Turma", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []), index=0)
+                                
+                                # Edição também usa Multiselect
+                                turmas_atuais = [t.strip() for t in str(d_edit.iloc[3]).split(",") if t.strip()]
+                                ed_turmas = c_e2.multiselect("Turmas Alvo", opcoes_turmas, default=[t for t in turmas_atuais if t in opcoes_turmas])
                                 
                                 c_e3, c_e4 = st.columns(2)
                                 ed_local = c_e3.text_input("Local", value=d_edit.iloc[4]).upper()
@@ -4048,7 +4068,8 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
                                 ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
                                 
                                 if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
-                                    dados_up = [d_edit.iloc[0], ed_tema, ed_data.strftime('%d/%m/%Y'), ed_turma, ed_local, ed_status, ed_pub, ed_obj]
+                                    ed_turma_str = ", ".join(ed_turmas)
+                                    dados_up = [d_edit.iloc[0], ed_tema, ed_data.strftime('%d/%m/%Y'), ed_turma_str, ed_local, ed_status, ed_pub, ed_obj]
                                     if atualizar_reuniao_pais(d_edit.iloc[0], dados_up):
                                         st.success("✅ Reunião atualizada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
