@@ -1096,14 +1096,14 @@ def gerar_relatorio_pastoral_pdf(df_turmas, df_cat, df_pres, df_pres_reuniao):
 
     return finalizar_pdf(pdf)
 
-def gerar_relatorio_local_turma_pdf(nome_turma, metricas, listas, analise_ia):
+def gerar_relatorio_local_turma_pdf(nome_turma, metricas, df_alunos, df_presencas, df_encontros, df_cronograma, analise_ia):
     """
-    Dossiê Completo de Prontidão e Inclusão.
-    Integra Sacramentos, Família, Saúde e Itinerário.
+    Dossiê Completo de Prontidão, Inclusão, Planejamento, Diário e Nivelamento.
+    Gera múltiplas páginas detalhando o itinerário real da turma.
     """
     pdf = FPDF()
     pdf.add_page()
-    adicionar_cabecalho_diocesano(pdf, f"AUDITORIA PASTORAL: {nome_turma}")
+    adicionar_cabecalho_diocesano(pdf, limpar_texto(f"AUDITORIA PASTORAL COMPLETA: {nome_turma}"))
     
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
 
@@ -1112,68 +1112,152 @@ def gerar_relatorio_local_turma_pdf(nome_turma, metricas, listas, analise_ia):
     pdf.cell(190, 8, limpar_texto("1. INDICADORES DE DESEMPENHO E ENGAJAMENTO"), ln=True, fill=True, align='C')
     
     pdf.set_text_color(0, 0, 0); y = pdf.get_y() + 2
-    # Linha 1 de Boxes
     desenhar_campo_box(pdf, "Catequistas", str(metricas.get('qtd_catequistas', 0)), 10, y, 45)
     desenhar_campo_box(pdf, "Catequizandos", str(metricas.get('qtd_cat', 0)), 58, y, 45)
-    desenhar_campo_box(pdf, "Frequência", f"{metricas.get('freq_global', 0)}%", 106, y, 45)
-    desenhar_campo_box(pdf, "Idade Média", f"{metricas.get('idade_media', 0)}a", 154, y, 46)
+    desenhar_campo_box(pdf, "Frequencia", f"{metricas.get('freq_global', 0)}%", 106, y, 45)
+    desenhar_campo_box(pdf, "Idade Media", f"{metricas.get('idade_media', 0)}a", 154, y, 46)
     
     y += 14
-    # Linha 2 de Boxes (Novos Indicadores)
     desenhar_campo_box(pdf, "Engajamento Pais", f"{metricas.get('engaj_pais', 0)}%", 10, y, 93)
-    desenhar_campo_box(pdf, "Progresso Itinerário", f"{metricas.get('progresso_it', 0)}%", 107, y, 93)
+    desenhar_campo_box(pdf, "Progresso Itinerario", f"{metricas.get('progresso_it', 0)}%", 107, y, 93)
     
     pdf.ln(22)
 
     # --- 2. DIAGNÓSTICO SACRAMENTAL E SAÚDE ---
     pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("2. PRONTIDÃO SACRAMENTAL E CUIDADO (RESUMO)"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("2. PRONTIDAO SACRAMENTAL E CUIDADO (RESUMO)"), ln=True, fill=True, align='C')
     
     pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
     col_sac = f"Batizados: {metricas.get('batizados', 0)} | Pendentes: {metricas.get('pend_batismo', 0)}"
-    col_sau = f"Inclusão (TGO): {metricas.get('tgo', 0)} | Alerta Médico: {metricas.get('saude', 0)}"
+    col_sau = f"Inclusao (TGO): {metricas.get('tgo', 0)} | Alerta Medico: {metricas.get('saude', 0)}"
     
     pdf.set_fill_color(*CINZA_F)
     pdf.cell(95, 8, limpar_texto(f" SACRAMENTOS: {col_sac}"), border=1, fill=True)
-    pdf.cell(95, 8, limpar_texto(f" SAÚDE/INCLUSÃO: {col_sau}"), border=1, fill=True, ln=True)
+    pdf.cell(95, 8, limpar_texto(f" SAUDE/INCLUSAO: {col_sau}"), border=1, fill=True, ln=True)
     
     pdf.ln(4)
-
-    # --- 3. LISTA NOMINAL DETALHADA ---
-    pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("3. RELAÇÃO NOMINAL E SITUAÇÃO INDIVIDUAL"), ln=True, fill=True, align='C')
     
-    pdf.set_font("helvetica", "B", 8); pdf.set_text_color(0, 0, 0); pdf.set_fill_color(*CINZA_F)
-    pdf.cell(80, 7, "Nome do Catequizando", border=1, fill=True)
-    pdf.cell(25, 7, "Batismo", border=1, fill=True, align='C')
-    pdf.cell(25, 7, "Eucaristia", border=1, fill=True, align='C')
-    pdf.cell(30, 7, "Faltas", border=1, fill=True, align='C')
-    pdf.cell(30, 7, "Status", border=1, fill=True, align='C'); pdf.ln()
+    # --- 3. ITINERÁRIO DETALHADO (DIÁRIO E CRONOGRAMA) ---
+    pdf.add_page()
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("3. ITINERARIO DETALHADO DA TURMA"), ln=True, fill=True, align='C')
+    pdf.ln(3)
+
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "B", 9)
+    pdf.cell(190, 6, limpar_texto("ENCONTROS JA REALIZADOS E REGISTRADOS NO DIARIO:"), ln=True)
+    pdf.set_font("helvetica", "", 8)
+    
+    if not df_encontros.empty:
+        df_encontros['data_dt'] = pd.to_datetime(df_encontros['data'], errors='coerce', dayfirst=True)
+        df_enc_sort = df_encontros.sort_values('data_dt', ascending=True)
+        for _, enc in df_enc_sort.iterrows():
+            dt_str = formatar_data_br(enc['data'])
+            tema = enc.get('tema', 'Sem tema')
+            obs = enc.get('observacoes', 'Sem relato')
+            pdf.set_font("helvetica", "B", 8)
+            pdf.cell(0, 5, limpar_texto(f"Data: {dt_str} | Tema Dado: {tema}"), ln=True)
+            pdf.set_font("helvetica", "", 8)
+            pdf.multi_cell(0, 5, limpar_texto(f"Relato Pastoral: {obs}"))
+            pdf.ln(2)
+            if pdf.get_y() > 270: pdf.add_page()
+    else:
+        pdf.cell(0, 5, limpar_texto("Nenhum encontro realizado."), ln=True)
+
+    pdf.ln(3)
+    if pdf.get_y() > 250: pdf.add_page()
+    
+    pdf.set_font("helvetica", "B", 9)
+    pdf.cell(190, 6, limpar_texto("PROXIMOS ENCONTROS PLANEJADOS (CRONOGRAMA):"), ln=True)
+    pdf.set_font("helvetica", "", 8)
+    
+    col_status = 'status' if 'status' in df_cronograma.columns else ('col_4' if 'col_4' in df_cronograma.columns else None)
+    if col_status and not df_cronograma.empty:
+        pendentes = df_cronograma[df_cronograma[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+        if not pendentes.empty:
+            for _, plan in pendentes.iterrows():
+                tema_p = plan.get('titulo_tema', 'Sem tema')
+                desc_p = plan.get('descricao_base', 'Sem descricao')
+                pdf.set_font("helvetica", "B", 8)
+                pdf.cell(0, 5, limpar_texto(f"Tema Planejado: {tema_p}"), ln=True)
+                pdf.set_font("helvetica", "", 8)
+                pdf.multi_cell(0, 5, limpar_texto(f"Roteiro IVC: {desc_p}"))
+                pdf.ln(2)
+                if pdf.get_y() > 270: pdf.add_page()
+        else:
+            pdf.cell(0, 5, limpar_texto("Nenhum planejamento futuro pendente."), ln=True)
+
+    # --- 4. RELAÇÃO NOMINAL E RECOMPOSIÇÃO ---
+    pdf.add_page()
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("4. MATRICULAS E PENDENCIAS DE NIVELAMENTO"), ln=True, fill=True, align='C')
+    pdf.ln(3)
+
+    temas_dados = set()
+    if not df_presencas.empty:
+        validos = df_presencas[~df_presencas['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]
+        temas_dados = set(validos['tema_do_dia'].dropna().unique())
+    
+    pdf.set_fill_color(*CINZA_F); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8)
+    pdf.cell(80, 7, limpar_texto("Catequizando"), border=1, fill=True)
+    pdf.cell(25, 7, limpar_texto("Presencas"), border=1, fill=True, align='C')
+    pdf.cell(25, 7, limpar_texto("Faltas Reais"), border=1, fill=True, align='C')
+    pdf.cell(30, 7, limpar_texto("Pend. Nivelar"), border=1, fill=True, align='C')
+    pdf.cell(30, 7, limpar_texto("Status"), border=1, fill=True, align='C')
+    pdf.ln()
 
     pdf.set_font("helvetica", "", 8)
-    for cat in listas.get('geral', []):
-        # Alerta visual para muitas faltas
-        if cat.get('faltas', 0) >= 3: pdf.set_text_color(*LARANJA_P)
-        else: pdf.set_text_color(0, 0, 0)
-        
-        pdf.cell(80, 6, limpar_texto(cat['nome']), border=1)
-        pdf.cell(25, 6, limpar_texto(cat.get('batismo', 'N/A')), border=1, align='C')
-        pdf.cell(25, 6, limpar_texto(cat.get('eucaristia', 'N/A')), border=1, align='C')
-        pdf.cell(30, 6, f"{cat.get('faltas', 0)} faltas", border=1, align='C')
-        pdf.cell(30, 6, limpar_texto(cat.get('status', 'ATIVO')), border=1, align='C'); pdf.ln()
-        
-        if pdf.get_y() > 260: pdf.add_page()
-
-    # --- 4. PARECER TÉCNICO (IA) ---
-    pdf.set_text_color(0, 0, 0); pdf.ln(5)
-    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 8, limpar_texto("4. PARECER TÉCNICO E ORIENTAÇÃO PASTORAL (IA)"), ln=True, fill=True, align='C')
-    pdf.ln(2); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
+    detalhes_pendencias = {}
     
-    # Se a IA falhar, gera um parecer técnico padrão baseado nos dados
-    if "indisponível" in analise_ia.lower():
-        analise_ia = f"Dossiê técnico da turma {nome_turma}. Frequência de {metricas.get('freq_global')}% com {metricas.get('pend_batismo')} pendências de batismo. Recomenda-se acompanhamento das famílias com baixa participação."
+    for _, aluno in df_alunos.sort_values('nome_completo').iterrows():
+        id_cat = aluno['id_catequizando']
+        nome_c = limpar_texto(aluno['nome_completo'])
         
+        presencas_aluno = set()
+        faltas_reais = 0
+        if not df_presencas.empty:
+            p_al = df_presencas[df_presencas['id_catequizando'] == id_cat]
+            presencas_aluno = set(p_al[p_al['status'] == 'PRESENTE']['tema_do_dia'].dropna().unique())
+            faltas_reais = len(p_al[p_al['status'] == 'AUSENTE'])
+            
+        temas_devidos = temas_dados - presencas_aluno
+        qtd_pendentes = len(temas_devidos)
+        
+        if qtd_pendentes > 0:
+            detalhes_pendencias[nome_c] = list(temas_devidos)
+            
+        if qtd_pendentes >= 3: pdf.set_text_color(*LARANJA_P)
+        else: pdf.set_text_color(0, 0, 0)
+            
+        pdf.cell(80, 6, nome_c[:45], border=1)
+        pdf.cell(25, 6, str(len(presencas_aluno)), border=1, align='C')
+        pdf.cell(25, 6, str(faltas_reais), border=1, align='C')
+        pdf.cell(30, 6, str(qtd_pendentes), border=1, align='C')
+        pdf.cell(30, 6, limpar_texto(aluno['status']), border=1, align='C')
+        pdf.ln()
+        if pdf.get_y() > 270: pdf.add_page()
+
+    if detalhes_pendencias:
+        pdf.ln(5)
+        if pdf.get_y() > 250: pdf.add_page()
+        pdf.set_font("helvetica", "B", 9); pdf.set_text_color(*LARANJA_P)
+        pdf.cell(0, 6, limpar_texto("GUIA DE REPOSICAO (TEMAS QUE CADA ALUNO DEVE):"), ln=True)
+        pdf.set_text_color(0, 0, 0)
+        for n, devidos in detalhes_pendencias.items():
+            pdf.set_font("helvetica", "B", 8)
+            pdf.cell(0, 5, limpar_texto(f"{n}:"), ln=True)
+            pdf.set_font("helvetica", "", 8)
+            pdf.multi_cell(0, 5, limpar_texto("Deve repor: " + " | ".join(devidos)))
+            pdf.ln(1)
+            if pdf.get_y() > 270: pdf.add_page()
+
+    # --- 5. PARECER TÉCNICO ---
+    if pdf.get_y() > 240: pdf.add_page()
+    else: pdf.ln(5)
+    
+    pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
+    pdf.cell(190, 8, limpar_texto("5. PARECER TECNICO E ORIENTACAO PASTORAL (IA)"), ln=True, fill=True, align='C')
+    pdf.ln(3); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 10)
     pdf.multi_cell(190, 6, limpar_texto(analise_ia))
     
     return finalizar_pdf(pdf)
