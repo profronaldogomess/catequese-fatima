@@ -990,7 +990,7 @@ elif menu == "📚 Minha Turma":
             else:
                 st.warning("**Planejamento:** Cronograma sem próximos temas.")
 
-    # --- ALERTA DE REUNIÃO DE PAIS ---
+    # --- ALERTA DE REUNIÃO DE PAIS (INTEGRADO E MODERNO) ---
     df_reunioes_agendadas = ler_aba("reunioes_pais")
     if not df_reunioes_agendadas.empty:
         reunioes_pendentes = df_reunioes_agendadas[
@@ -999,19 +999,34 @@ elif menu == "📚 Minha Turma":
         ]
         if not reunioes_pendentes.empty:
             for _, reu in reunioes_pendentes.iterrows():
+                # Extrai os novos campos com segurança (caso existam reuniões antigas no banco)
+                tema_r = reu.iloc[1]
+                data_r = formatar_data_br(reu.iloc[2])
+                local_r = reu.iloc[4]
+                publico_r = reu.iloc[6] if len(reu) > 6 else "PAIS E RESPONSÁVEIS"
+                objetivo_r = reu.iloc[7] if len(reu) > 7 else "Acompanhamento da caminhada catequética."
+                
                 st.markdown(f"""
-                    <div style='background-color:#e3f2fd; padding:15px; border-radius:10px; border-left:6px solid #1976d2; margin-bottom:15px;'>
-                        <h4 style='margin:0; color:#1976d2;'>📢 Lembrete: Reunião de Pais Agendada!</h4>
-                        <p style='margin:5px 0 10px 0; color:#333; font-size:14px;'>
-                            <b>Tema:</b> {reu.iloc[1]} <br>
-                            <b>Data:</b> {reu.iloc[2]} &nbsp;|&nbsp; <b>Local:</b> {reu.iloc[4]}
+                    <div style='background-color:#f0f7ff; padding:20px; border-radius:12px; border: 1px solid #b6d4fe; border-left:8px solid #0d6efd; margin-bottom:20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                            <h3 style='margin:0; color:#0d6efd; font-size: 20px;'>📢 Convocação: Encontro com as Famílias</h3>
+                            <span style='background-color:#0d6efd; color:white; padding:4px 12px; border-radius:15px; font-size:12px; font-weight:bold;'>{publico_r}</span>
+                        </div>
+                        <hr style='border-color: #cfe2ff; margin: 10px 0;'>
+                        <p style='margin:0; color:#333; font-size:15px;'>
+                            <b>📖 Tema Central:</b> {tema_r} <br>
+                            <b>🎯 Objetivo:</b> {objetivo_r}
                         </p>
+                        <div style='margin-top: 12px; background-color: #ffffff; padding: 10px; border-radius: 8px; display: inline-block; border: 1px solid #e2e8f0;'>
+                            <span style='color:#0d6efd; font-weight:bold;'>📅 {data_r}</span> &nbsp;|&nbsp; <span style='color:#666;'>📍 {local_r}</span>
+                        </div>
                     </div>
                 """, unsafe_allow_html=True)
+                
                 import urllib.parse
-                msg_convite = f"Paz e Bem, famílias da turma {turma_ativa}! Teremos uma Reunião de Pais muito importante.\n\n📅 Data: {reu.iloc[2]}\n📍 Local: {reu.iloc[4]}\n📖 Tema: {reu.iloc[1]}\n\nContamos com a presença de um responsável por catequizando. Deus abençoe!"
+                msg_convite = f"Paz e Bem, famílias da turma {turma_ativa}! Teremos um encontro muito importante.\n\n🎯 Objetivo: {objetivo_r}\n👥 Público: {publico_r}\n📅 Data: {data_r}\n📍 Local: {local_r}\n\nContamos com a presença de vocês. Deus abençoe!"
                 link_wa_grupo = f"https://wa.me/?text={urllib.parse.quote(msg_convite)}"
-                st.markdown(f"<a href='{link_wa_grupo}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:10px; border-radius:8px; font-size:14px; font-weight:bold; margin-top:-10px; margin-bottom:20px; width: 300px;'>📲 Enviar Convite no Grupo do WhatsApp</div></a>", unsafe_allow_html=True)
+                st.markdown(f"<a href='{link_wa_grupo}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-size:14px; font-weight:bold; margin-top:-10px; margin-bottom:25px; width: 100%; transition: 0.3s; box-shadow: 0 2px 4px rgba(37, 211, 102, 0.3);'>📲 Enviar Convite Oficial no Grupo da Turma</div></a>", unsafe_allow_html=True)
 
     # --- PAINEL DE INDICADORES (CLEAN) ---
     st.markdown("#### 📊 Indicadores da Caminhada")
@@ -3891,91 +3906,151 @@ elif menu == "👨‍👩‍👧‍👦 Gestão Familiar":
 
         with tab_reunioes:
             st.subheader("📅 Ciclo de Encontros com as Famílias")
+            st.markdown("Agende reuniões, gere listas de presença em PDF e acompanhe o engajamento dos pais.")
+            
             sub_r1, sub_r2, sub_r3, sub_r4 = st.tabs([
-                "➕ Agendar", "📄 Lista Física (PDF)", "✅ Validar Presença (Digital)", "📜 Histórico e Edição"
+                "➕ Agendar Nova Reunião", "📄 Gerar Lista Física (PDF)", "✅ Validar Presença (Digital)", "📜 Histórico e Edição"
             ])
             
             with sub_r1:
+                st.markdown("#### 📝 Formulário de Agendamento")
                 with st.form("form_plan_reuniao", clear_on_submit=True):
-                    r_tema = st.text_input("Tema da Reunião").upper()
+                    r_tema = st.text_input("Tema Principal da Reunião (Ex: Apresentação do Itinerário)").upper()
+                    r_objetivo = st.text_area("Objetivo do Encontro (O que será discutido?)", height=100).upper()
+                    
                     c_r1, c_r2 = st.columns(2)
                     r_data = c_r1.date_input("Data Prevista", value=date.today(), format="DD/MM/YYYY")
                     r_turma = c_r2.selectbox("Turma Alvo", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []))
-                    r_local = st.text_input("Local (Ex: Salão Paroquial)").upper()
-                    if st.form_submit_button("📌 AGENDAR REUNIÃO"):
-                        if r_tema:
+                    
+                    c_r3, c_r4 = st.columns(2)
+                    r_local = c_r3.text_input("Local (Ex: Salão Paroquial)").upper()
+                    r_publico = c_r4.selectbox("Público Alvo", ["PAIS E RESPONSÁVEIS", "CATEQUIZANDOS E PAIS", "APENAS MÃES", "APENAS PAIS"])
+                    
+                    if st.form_submit_button("📌 AGENDAR REUNIÃO E NOTIFICAR CATEQUISTAS", type="primary", use_container_width=True):
+                        if r_tema and r_objetivo:
                             df_reu_check = ler_aba("reunioes_pais")
                             ja_existe = False
+                            data_str = r_data.strftime('%d/%m/%Y')
+                            
                             if not df_reu_check.empty:
-                                data_str = r_data.strftime('%d/%m/%Y')
-                                duplicada = df_reu_check[(df_reu_check.iloc[:, 2] == data_str) & (df_reu_check.iloc[:, 3] == r_turma)]
+                                # Blindagem de data na verificação
+                                df_reu_check['data_norm'] = df_reu_check.iloc[:, 2].apply(formatar_data_br)
+                                duplicada = df_reu_check[(df_reu_check['data_norm'] == data_str) & (df_reu_check.iloc[:, 3] == r_turma)]
                                 if not duplicada.empty:
                                     ja_existe = True
                             
                             if ja_existe:
-                                st.error(f"⚠️ Já existe uma reunião agendada para a turma {r_turma} no dia {r_data.strftime('%d/%m/%Y')}.")
+                                st.error(f"⚠️ Já existe uma reunião agendada para a turma {r_turma} no dia {data_str}.")
                             else:
-                                if salvar_reuniao_pais([f"REU-{int(time.time())}", r_tema, r_data.strftime('%d/%m/%Y'), r_turma, r_local, "PENDENTE"]):
-                                    st.success("Reunião agendada com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                # Salvando com as novas colunas (Público e Objetivo)
+                                dados_salvar = [f"REU-{int(time.time())}", r_tema, data_str, r_turma, r_local, "PENDENTE", r_publico, r_objetivo]
+                                if salvar_reuniao_pais(dados_salvar):
+                                    st.success("✅ Reunião agendada! O aviso já está aparecendo no painel dos catequistas."); st.balloons(); st.cache_data.clear(); time.sleep(2); st.rerun()
+                        else:
+                            st.warning("⚠️ Preencha o Tema e o Objetivo da reunião.")
 
             with sub_r2:
+                st.markdown("#### 🖨️ Emissão de Lista de Presença")
+                st.info("O PDF gerado já contém o nome do catequizando e um espaço para o responsável assinar ao lado.")
                 df_reunioes_v = ler_aba("reunioes_pais")
                 if not df_reunioes_v.empty:
-                    sel_r_pdf = st.selectbox("Selecione a Reunião para gerar PDF:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pdf")
-                    dados_r = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_pdf].iloc[0]
-                    if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)"):
+                    # Formata a lista para o selectbox ficar bonito
+                    df_reunioes_v['data_norm'] = df_reunioes_v.iloc[:, 2].apply(formatar_data_br)
+                    opcoes_reu = [f"{r.iloc[1]} - {r['data_norm']} ({r.iloc[3]})" for _, r in df_reunioes_v.iterrows()]
+                    
+                    sel_r_pdf_label = st.selectbox("Selecione a Reunião:", opcoes_reu, key="sel_r_pdf")
+                    idx_sel = opcoes_reu.index(sel_r_pdf_label)
+                    dados_r = df_reunioes_v.iloc[idx_sel]
+                    
+                    if st.button("📄 GERAR LISTA DE ASSINATURA (PDF)", use_container_width=True, type="primary"):
                         t_alvo = dados_r.iloc[3]
-                        df_f_lista = df_cat[df_cat['status'] == 'ATIVO']
+                        df_f_lista = df_cat[df_cat['status'] == 'ATIVO'].sort_values('nome_completo')
                         if t_alvo != "GERAL (TODAS)": df_f_lista = df_f_lista[df_f_lista['etapa'] == t_alvo]
-                        lista_pdf = [{'nome_cat': r['nome_completo'], 'responsavel': r['nome_responsavel']} for _, r in df_f_lista.iterrows()]
-                        pdf_out = gerar_lista_assinatura_reuniao_pdf(dados_r.iloc[1], dados_r.iloc[2], dados_r.iloc[4], t_alvo, lista_pdf)
-                        st.download_button("📥 Baixar Lista para Impressão", pdf_out, f"Lista_{sel_r_pdf}.pdf")
+                        
+                        # Puxa o nome do responsável correto (Mãe, Pai ou Cuidador)
+                        lista_pdf = []
+                        for _, r in df_f_lista.iterrows():
+                            resp = r['nome_mae'] if r['nome_mae'] not in ["N/A", ""] else (r['nome_pai'] if r['nome_pai'] not in ["N/A", ""] else r['nome_responsavel'])
+                            lista_pdf.append({'nome_cat': r['nome_completo'], 'responsavel': resp})
+                            
+                        pdf_out = gerar_lista_assinatura_reuniao_pdf(dados_r.iloc[1], dados_r['data_norm'], dados_r.iloc[4], t_alvo, lista_pdf)
+                        st.download_button("📥 Baixar Lista Pronta para Impressão", pdf_out, f"Lista_Reuniao_{dados_r['data_norm'].replace('/','-')}.pdf", "application/pdf", use_container_width=True)
                 else: st.info("Nenhuma reunião agendada.")
 
             with sub_r3:
+                st.markdown("#### ✅ Validação de Presença (Pós-Reunião)")
+                st.markdown("Após a reunião, use a lista física assinada para dar baixa no sistema. Isso calculará o **Engajamento Familiar** da turma.")
                 if not df_reunioes_v.empty:
-                    sel_r_pres = st.selectbox("Selecione a Reunião para Chamada Digital:", df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_pres")
-                    dados_r_pres = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_pres].iloc[0]
-                    id_reuniao = dados_r_pres.iloc[0]
-                    t_alvo_pres = dados_r_pres.iloc[3]
-
-                    df_fam_pres = df_cat[df_cat['status'] == 'ATIVO']
-                    if t_alvo_pres != "GERAL (TODAS)": df_fam_pres = df_fam_pres[df_fam_pres['etapa'] == t_alvo_pres]
-                    
-                    st.info(f"📋 Registrando presença para: {sel_r_pres}")
-                    with st.form(f"form_pres_reu_{id_reuniao}"):
-                        lista_presenca_reu = []
-                        for _, r in df_fam_pres.sort_values('nome_completo').iterrows():
-                            col_n, col_c = st.columns([3, 1])
-                            col_n.write(f"**{r['nome_completo']}** (Resp: {r['nome_responsavel']})")
-                            presente = col_c.toggle("Presente", key=f"reu_p_{id_reuniao}_{r['id_catequizando']}")
-                            lista_presenca_reu.append([id_reuniao, r['id_catequizando'], r['nome_completo'], t_alvo_pres, "PRESENTE" if presente else "AUSENTE", str(date.today())])
+                    df_pendentes = df_reunioes_v[df_reunioes_v.iloc[:, 5] == "PENDENTE"]
+                    if not df_pendentes.empty:
+                        opcoes_pres = [f"{r.iloc[1]} - {r['data_norm']} ({r.iloc[3]})" for _, r in df_pendentes.iterrows()]
+                        sel_r_pres_label = st.selectbox("Selecione a Reunião para dar baixa:", opcoes_pres, key="sel_r_pres")
+                        idx_pres = opcoes_pres.index(sel_r_pres_label)
+                        dados_r_pres = df_pendentes.iloc[idx_pres]
                         
-                        if st.form_submit_button("💾 SALVAR PRESENÇAS NO BANCO"):
-                            if salvar_presenca_reuniao_pais(lista_presenca_reu):
-                                novos_dados_reu = list(dados_r_pres); novos_dados_reu[5] = "CONCLUIDA"
-                                atualizar_reuniao_pais(id_reuniao, novos_dados_reu)
-                                st.success("Presenças registradas!"); st.balloons(); time.sleep(1); st.rerun()
-                else: st.info("Nenhuma reunião para validar.")
+                        id_reuniao = dados_r_pres.iloc[0]
+                        t_alvo_pres = dados_r_pres.iloc[3]
+
+                        df_fam_pres = df_cat[df_cat['status'] == 'ATIVO'].sort_values('nome_completo')
+                        if t_alvo_pres != "GERAL (TODAS)": df_fam_pres = df_fam_pres[df_fam_pres['etapa'] == t_alvo_pres]
+                        
+                        st.divider()
+                        with st.form(f"form_pres_reu_{id_reuniao}"):
+                            lista_presenca_reu = []
+                            cols_p = st.columns(2)
+                            for i, (_, r) in enumerate(df_fam_pres.iterrows()):
+                                resp = r['nome_mae'] if r['nome_mae'] not in ["N/A", ""] else (r['nome_pai'] if r['nome_pai'] not in ["N/A", ""] else r['nome_responsavel'])
+                                with cols_p[i % 2]:
+                                    with st.container(border=True):
+                                        col_n, col_c = st.columns([3, 1])
+                                        col_n.markdown(f"<span style='font-size:13px; font-weight:bold; color:#417b99;'>{r['nome_completo']}</span><br><span style='font-size:11px; color:#666;'>Resp: {resp}</span>", unsafe_allow_html=True)
+                                        presente = col_c.toggle("Sim", key=f"reu_p_{id_reuniao}_{r['id_catequizando']}")
+                                        lista_presenca_reu.append([id_reuniao, r['id_catequizando'], r['nome_completo'], t_alvo_pres, "PRESENTE" if presente else "AUSENTE", str(date.today())])
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.form_submit_button("💾 SALVAR PRESENÇAS E ATUALIZAR ENGAJAMENTO", use_container_width=True, type="primary"):
+                                if salvar_presenca_reuniao_pais(lista_presenca_reu):
+                                    novos_dados_reu = list(dados_r_pres)
+                                    novos_dados_reu[5] = "CONCLUIDA"
+                                    atualizar_reuniao_pais(id_reuniao, novos_dados_reu)
+                                    st.success("✅ Presenças registradas! O engajamento da turma foi atualizado."); st.balloons(); time.sleep(2); st.rerun()
+                    else:
+                        st.success("✅ Todas as reuniões agendadas já tiveram suas presenças validadas.")
+                else: st.info("Nenhuma reunião agendada.")
 
             with sub_r4:
+                st.markdown("#### 📜 Histórico e Edição")
                 if not df_reunioes_v.empty:
-                    st.write("### ✏️ Editar Dados da Reunião")
-                    sel_r_edit = st.selectbox("Selecione para alterar:", [""] + df_reunioes_v.iloc[:, 1].tolist(), key="sel_r_edit")
-                    if sel_r_edit:
-                        d_edit = df_reunioes_v[df_reunioes_v.iloc[:, 1] == sel_r_edit].iloc[0]
-                        with st.form(f"form_edit_reu_{d_edit.iloc[0]}"):
-                            ed_tema = st.text_input("Tema", value=d_edit.iloc[1]).upper()
-                            ed_data = st.date_input("Data", value=converter_para_data(d_edit.iloc[2]), format="DD/MM/YYYY")
-                            ed_turma = st.selectbox("Turma",["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else[]))
-                            ed_local = st.text_input("Local", value=d_edit.iloc[4]).upper()
-                            ed_status = st.selectbox("Status",["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
-                            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                                if atualizar_reuniao_pais(d_edit.iloc[0],[d_edit.iloc[0], ed_tema, ed_data.strftime('%d/%m/%Y'), ed_turma, ed_local, ed_status]):
-                                    st.success("Reunião atualizada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                    # Exibe tabela limpa
+                    df_view = df_reunioes_v.copy()
+                    df_view.columns = ['ID', 'Tema', 'Data', 'Turma', 'Local', 'Status', 'Público', 'Objetivo'][:len(df_view.columns)]
+                    st.dataframe(df_view.drop(columns=['ID']), use_container_width=True, hide_index=True)
+                    
                     st.divider()
-                    st.write("### 📜 Histórico Geral")
-                    st.dataframe(df_reunioes_v, use_container_width=True, hide_index=True)
+                    with st.expander("✏️ Editar Dados de uma Reunião"):
+                        sel_r_edit_label = st.selectbox("Selecione para alterar:", [""] + opcoes_reu, key="sel_r_edit")
+                        if sel_r_edit_label:
+                            idx_edit = opcoes_reu.index(sel_r_edit_label)
+                            d_edit = df_reunioes_v.iloc[idx_edit]
+                            
+                            with st.form(f"form_edit_reu_{d_edit.iloc[0]}"):
+                                ed_tema = st.text_input("Tema", value=d_edit.iloc[1]).upper()
+                                ed_obj = st.text_area("Objetivo", value=d_edit.iloc[7] if len(d_edit) > 7 else "").upper()
+                                
+                                c_e1, c_e2 = st.columns(2)
+                                ed_data = c_e1.date_input("Data", value=converter_para_data(d_edit.iloc[2]), format="DD/MM/YYYY")
+                                ed_turma = c_e2.selectbox("Turma", ["GERAL (TODAS)"] + (df_turmas['nome_turma'].tolist() if not df_turmas.empty else []), index=0)
+                                
+                                c_e3, c_e4 = st.columns(2)
+                                ed_local = c_e3.text_input("Local", value=d_edit.iloc[4]).upper()
+                                ed_pub = c_e4.selectbox("Público Alvo", ["PAIS E RESPONSÁVEIS", "CATEQUIZANDOS E PAIS", "APENAS MÃES", "APENAS PAIS"], index=0)
+                                
+                                ed_status = st.selectbox("Status", ["PENDENTE", "CONCLUIDA"], index=0 if d_edit.iloc[5] == "PENDENTE" else 1)
+                                
+                                if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
+                                    dados_up = [d_edit.iloc[0], ed_tema, ed_data.strftime('%d/%m/%Y'), ed_turma, ed_local, ed_status, ed_pub, ed_obj]
+                                    if atualizar_reuniao_pais(d_edit.iloc[0], dados_up):
+                                        st.success("✅ Reunião atualizada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
         with tab_censo:
             st.subheader("📊 Diagnóstico da Igreja Doméstica")
