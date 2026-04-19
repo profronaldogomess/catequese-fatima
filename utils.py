@@ -1483,7 +1483,125 @@ def gerar_livro_sacramentos_pdf(df_livro):
     return finalizar_pdf(pdf)
 
 def gerar_relatorio_frequencia_turma_pdf(nome_turma, df_alunos, df_presencas):
-    """Gera um relatório focado na contagem de faltas e frequência da turma."""
+    """Gera o Dossiê de Frequência com Encontros Realizados, Estatísticas e Detalhamento de Faltas."""
+    pdf = FPDF()
+    pdf.add_page()
+    adicionar_cabecalho_diocesano(pdf, f"DOSSIÊ DE FREQUÊNCIA E HISTÓRICO DA TURMA")
+    
+    pdf.set_font("helvetica", "B", 12)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 8, limpar_texto(f"Turma: {nome_turma}"), ln=True, align='C')
+    pdf.ln(5)
+    
+    # --- SESSÃO 1: ENCONTROS REALIZADOS ---
+    pdf.set_fill_color(240, 242, 246)
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 8, limpar_texto("1. CRONOGRAMA DE ENCONTROS REALIZADOS (DIÁRIO)"), ln=True, fill=True)
+    pdf.set_font("helvetica", "", 8)
+    pdf.set_text_color(0, 0, 0)
+    
+    if not df_presencas.empty:
+        # Puxa as datas únicas dos encontros que tiveram chamada
+        encontros_realizados = df_presencas.drop_duplicates(subset=['data_encontro']).copy()
+        encontros_realizados['data_dt'] = pd.to_datetime(encontros_realizados['data_encontro'], errors='coerce', dayfirst=True)
+        encontros_realizados = encontros_realizados.sort_values('data_dt')
+        
+        for _, enc in encontros_realizados.iterrows():
+            dt_str = formatar_data_br(enc['data_encontro'])
+            tema_str = str(enc.get('tema_do_dia', 'Tema não registrado'))
+            pdf.cell(0, 5, limpar_texto(f"• {dt_str} - {tema_str}"), ln=True)
+    else:
+        pdf.cell(0, 5, limpar_texto("Nenhum encontro registrado com lista de presença no sistema."), ln=True)
+        
+    pdf.ln(5)
+    
+    # --- SESSÃO 2: QUADRO GERAL DE FREQUÊNCIA ---
+    pdf.set_font("helvetica", "B", 10)
+    pdf.set_text_color(65, 123, 153)
+    pdf.cell(0, 8, limpar_texto("2. QUADRO GERAL DE FREQUÊNCIA"), ln=True, fill=True)
+    
+    pdf.set_fill_color(65, 123, 153)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("helvetica", "B", 8)
+    
+    pdf.cell(10, 7, "Nº", border=1, fill=True, align='C')
+    pdf.cell(110, 7, "Nome do Catequizando", border=1, fill=True)
+    pdf.cell(15, 7, "Faltas", border=1, fill=True, align='C')
+    pdf.cell(15, 7, "Pres.", border=1, fill=True, align='C')
+    pdf.cell(40, 7, "Frequência (%)", border=1, fill=True, align='C')
+    pdf.ln()
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("helvetica", "", 8)
+    
+    alunos_ordenados = df_alunos.sort_values('nome_completo')
+    detalhamento_faltas = {}
+    
+    for i, (_, aluno) in enumerate(alunos_ordenados.iterrows(), 1):
+        id_cat = aluno['id_catequizando']
+        nome_c = limpar_texto(aluno['nome_completo'])
+        
+        if not df_presencas.empty:
+            pres_aluno = df_presencas[df_presencas['id_catequizando'] == id_cat]
+            faltas_df = pres_aluno[pres_aluno['status'] == 'AUSENTE']
+            faltas = len(faltas_df)
+            presencas = len(pres_aluno[pres_aluno['status'] == 'PRESENTE'])
+            total_aluno = faltas + presencas
+            freq = (presencas / total_aluno * 100) if total_aluno > 0 else 100.0
+            
+            # Salva o detalhamento para a Sessão 3
+            if faltas > 0:
+                lista_f =[]
+                for _, f in faltas_df.iterrows():
+                    data_f = formatar_data_br(f['data_encontro'])
+                    tema_f = str(f.get('tema_do_dia', 'Sem tema'))
+                    lista_f.append(f"{data_f} ({tema_f})")
+                detalhamento_faltas[nome_c] = lista_f
+        else:
+            faltas, presencas, freq = 0, 0, 100.0
+            
+        if faltas >= 3:
+            pdf.set_text_color(224, 61, 17) 
+            pdf.set_font("helvetica", "B", 8)
+        else:
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("helvetica", "", 8)
+
+        pdf.cell(10, 6, str(i), border=1, align='C')
+        pdf.cell(110, 6, nome_c[:55], border=1)
+        pdf.cell(15, 6, str(faltas), border=1, align='C')
+        pdf.cell(15, 6, str(presencas), border=1, align='C')
+        pdf.cell(40, 6, f"{freq:.1f}%", border=1, align='C')
+        pdf.ln()
+
+        if pdf.get_y() > 260:
+            pdf.add_page()
+            
+    # --- SESSÃO 3: DETALHAMENTO NOMINAL DE FALTAS ---
+    if detalhamento_faltas:
+        pdf.ln(5)
+        if pdf.get_y() > 240: pdf.add_page() # Garante que o título não fique sozinho no fim da página
+            
+        pdf.set_fill_color(240, 242, 246)
+        pdf.set_font("helvetica", "B", 10)
+        pdf.set_text_color(224, 61, 17)
+        pdf.cell(0, 8, limpar_texto("3. DETALHAMENTO NOMINAL DE FALTAS (ACOMPANHAMENTO)"), ln=True, fill=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(2)
+        
+        for nome, datas in detalhamento_faltas.items():
+            pdf.set_font("helvetica", "B", 8)
+            pdf.cell(0, 5, f"{nome}:", ln=True)
+            pdf.set_font("helvetica", "", 8)
+            texto_faltas = "Faltou em: " + "; ".join(datas)
+            pdf.multi_cell(0, 5, limpar_texto(texto_faltas))
+            pdf.ln(2)
+            
+            if pdf.get_y() > 270:
+                pdf.add_page()
+                
+    return finalizar_pdf(pdf)
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, f"RELATÓRIO DE FREQUÊNCIA E FALTAS")
