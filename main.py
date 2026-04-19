@@ -2925,7 +2925,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             })
                     
                     if dados_radar:
-                        with st.expander(f"🚨 {nome_t} ({etapa_base}) - {len(dados_radar)} alunos com pendências"):
+                        with st.expander(f"🚨 {nome_t} ({etapa_base}) - {len(dados_radar)} catequizandos com pendências"):
                             df_radar = pd.DataFrame(dados_radar)
                             # Estilização condicional simples via Pandas Styler não funciona bem no Streamlit cloud, 
                             # então usamos emojis direto no texto para garantir a cor.
@@ -3217,7 +3217,7 @@ elif menu == "✅ Fazer Chamada":
     
     tema_reposicao = ""
     if modo_reposicao:
-        st.info("💡 **Modo Reposição:** Selecione qual tema antigo você está repondo hoje. A lista abaixo mostrará APENAS os alunos que estão devendo este tema.")
+        st.info("💡 **Modo Reposição:** Selecione qual tema antigo você está repondo hoje. A lista abaixo mostrará APENAS os catequizandos que estão devendo este tema.")
         pres_turma = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
         
         temas_ja_dados = pres_turma[~pres_turma['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]['tema_do_dia'].dropna().unique().tolist()
@@ -3391,10 +3391,10 @@ elif menu == "✅ Fazer Chamada":
                         # Injeta direto no banco de presenças (sem criar um novo encontro oficial no diário)
                         planilha = conectar_google_sheets()
                         planilha.worksheet("presencas").append_rows(registros_presenca)
-                        st.success(f"✅ Reposição salva! Os alunos presentes não devem mais o tema '{tema_reposicao}'."); st.balloons()
+                        st.success(f"✅ Reposição salva! Os catequizandos presentes não devem mais o tema '{tema_reposicao}'."); st.balloons()
                         st.cache_data.clear(); time.sleep(1.5); st.rerun()
                 else:
-                    st.error("Marque a presença de pelo menos um aluno para fazer a reposição.")
+                    st.error("Marque a presença de pelo menos um catequizando para fazer a reposição.")
                     
             else:
                 # MODO NORMAL
