@@ -568,26 +568,24 @@ def atualizar_encontro_existente(data_e, turma_e, novos_dados):
     return False
 
 def marcar_tema_realizado_cronograma(turma, tema):
-    """Em vez de excluir, marca como REALIZADO na Coluna E do cronograma. Busca normalizada."""
+    """Marca como REALIZADO no cronograma, ignorando diferenças de maiúsculas/minúsculas."""
     planilha = conectar_google_sheets()
-    if planilha:
-        try:
-            aba = planilha.worksheet("cronograma")
-            dados = aba.get_all_values()
-            turma_norm = str(turma).strip().upper()
-            tema_norm = str(tema).strip().upper()
-            
-            for i, linha in enumerate(dados):
-                if len(linha) >= 3:
-                    t_banco = str(linha[1]).strip().upper()
-                    tema_banco = str(linha[2]).strip().upper()
-                    if t_banco == turma_norm and tema_banco == tema_norm:
-                        aba.update_cell(i + 1, 5, "REALIZADO")
-                        st.cache_data.clear()
-                        return True
-        except Exception as e: 
-            pass
-    return False
+    if not planilha: return False
+    try:
+        aba = planilha.worksheet("cronograma")
+        # Busca todos os temas da turma
+        dados = aba.get_all_values()
+        turma_norm = str(turma).strip().upper()
+        tema_norm = str(tema).strip().upper()
+        
+        for i, linha in enumerate(dados[1:], start=2):
+            if len(linha) >= 3:
+                if str(linha[1]).strip().upper() == turma_norm and str(linha[2]).strip().upper() == tema_norm:
+                    aba.update_cell(i, 5, "REALIZADO")
+                    st.cache_data.clear()
+                    return True
+        return False
+    except: return False
 
 def adicionar_novo_usuario(dados_usuario):
     """Adiciona novo usuário calculando a próxima linha real (A até N)."""
