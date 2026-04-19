@@ -1829,8 +1829,14 @@ def obter_ultima_chamada_turma(df_pres, nome_turma):
     pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], errors='coerce', dayfirst=True)
     pres_t = pres_t.dropna(subset=['data_dt'])
     
-    # 3. Trava de Segurança: Ignorar datas futuras (erros de digitação/formato)
-    hoje_limite = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).replace(hour=23, minute=59, second=59)
+    # 3. Trava de Segurança: Ignorar datas futuras (Blindagem contra Naive/Aware Conflict)
+    agora_br = dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)
+    # Removemos o tzinfo para permitir a comparação direta com o Pandas Naive
+    hoje_limite = agora_br.replace(tzinfo=None, hour=23, minute=59, second=59)
+    
+    # Garantimos que a coluna do Pandas também esteja sem timezone para a comparação
+    pres_t['data_dt'] = pres_t['data_dt'].dt.tz_localize(None)
+    
     pres_t = pres_t[pres_t['data_dt'] <= hoje_limite]
     
     if pres_t.empty: return None, pd.DataFrame()
