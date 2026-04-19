@@ -1943,7 +1943,8 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
         if td['data']:
             pdf.set_font("helvetica", "I", 8)
             pdf.set_fill_color(245, 245, 245)
-            pdf.cell(0, 6, limpar_texto(f"📖 Tema do último encontro: {td['tema']}"), border=1, ln=True, fill=True)
+            # Removemos o emoji do livro para evitar quebra no latin-1
+            pdf.cell(0, 6, limpar_texto(f"Tema do último encontro: {td['tema']}"), border=1, ln=True, fill=True)
             
         chamada = td['chamada']
         if not chamada.empty and td['data'] and td['data'] >= limite:
@@ -1969,13 +1970,16 @@ def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
                     pdf.cell(120, 6, limpar_texto(contatos_str)[:85], border=1, ln=True)
             else:
                 pdf.set_font("helvetica", "", 8)
-                pdf.cell(0, 6, "✅ Nenhuma falta registrada neste último encontro.", border=1, ln=True)
+                # Envelopado no limpar_texto e sem emoji puro
+                pdf.cell(0, 6, limpar_texto("OK - Nenhuma falta registrada neste último encontro."), border=1, ln=True)
         elif td['status'] == "ATRASADA":
             pdf.set_font("helvetica", "", 8)
-            pdf.cell(0, 6, "⚠️ O diário está atrasado. Realize a chamada para visualizar os faltosos.", border=1, ln=True)
+            # Envelopado no limpar_texto e sem emoji puro
+            pdf.cell(0, 6, limpar_texto("ATENCAO - O diario esta atrasado. Realize a chamada para visualizar os faltosos."), border=1, ln=True)
         else:
             pdf.set_font("helvetica", "", 8)
-            pdf.cell(0, 6, "🚫 Sem registros desta turma no sistema.", border=1, ln=True)
+            # Envelopado no limpar_texto e sem emoji puro
+            pdf.cell(0, 6, limpar_texto("Sem registros desta turma no sistema."), border=1, ln=True)
             
         pdf.ln(3)
 
