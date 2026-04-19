@@ -543,7 +543,9 @@ def atualizar_reuniao_pais(id_r, novos_dados):
             aba = planilha.worksheet("reunioes_pais")
             celula = aba.find(str(id_r), in_column=1)
             if celula:
-                aba.update(f"A{celula.row}:F{celula.row}", [novos_dados])
+                # BLINDAGEM: Garante que a lista tenha exatamente 8 itens (A até H)
+                dados_seguros = novos_dados + [""] * (8 - len(novos_dados)) if len(novos_dados) < 8 else novos_dados[:8]
+                aba.update(f"A{celula.row}:H{celula.row}", [dados_seguros])
                 st.cache_data.clear()
                 return True
         except Exception as e:
