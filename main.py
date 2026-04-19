@@ -2364,22 +2364,61 @@ elif menu == "🏫 Gestão de Turmas":
 
                 with sub_plan:
                     st.markdown("#### 📅 Adicionar novo tema ao Cronograma")
+                    
+                    template_ivc = ("🎯 Objetivo Geral:\n\n🙏🏻 Acolhida / Ambientação:\n\n🌱 Ver a Vida (Realidade):\n\n📖 Iluminar (Palavra de Deus):\n\n⚙️ Celebrar e Agir:\n")
+                    
                     with st.form(f"form_plan_rx_{t_alvo}", clear_on_submit=True):
                         novo_tema_rx = st.text_input("Título do Tema").upper()
-                        desc_tema_rx = st.text_area("Objetivo / Descrição Base (Opcional)", height=100)
+                        desc_tema_rx = st.text_area("Roteiro do Encontro (Metodologia IVC)", value=template_ivc, height=200, help="Preencha o roteiro para garantir o padrão diocesano de Iniciação à Vida Cristã.")
                         if st.form_submit_button("📌 ADICIONAR AO CRONOGRAMA"):
                             if novo_tema_rx:
                                 if salvar_tema_cronograma([f"PLAN-{int(time.time())}", t_alvo, novo_tema_rx, desc_tema_rx, "PENDENTE"]):
                                     st.success("Tema planejado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
                     
                     st.markdown("---")
-                    st.markdown("#### 📋 Temas Pendentes na Fila")
+                    st.markdown("#### 📋 Temas Pendentes na Fila (Corrigir/Padronizar)")
                     cron_t_rx = df_cron_local[(df_cron_local['etapa'].astype(str).str.strip().str.upper() == t_alvo.strip().upper())]
                     col_status_rx = 'status' if 'status' in cron_t_rx.columns else ('col_4' if 'col_4' in cron_t_rx.columns else None)
+                    
                     if col_status_rx and not cron_t_rx.empty:
                         pendentes_rx = cron_t_rx[cron_t_rx[col_status_rx].astype(str).str.strip().str.upper() != 'REALIZADO']
                         if not pendentes_rx.empty:
-                            st.dataframe(pendentes_rx[['titulo_tema', 'descricao_base']], use_container_width=True, hide_index=True)
+                            tema_editar = st.selectbox("Selecione um planejamento antigo para padronizar ou excluir:", [""] + pendentes_rx['titulo_tema'].tolist())
+                            
+                            if tema_editar:
+                                dado_tema = pendentes_rx[pendentes_rx['titulo_tema'] == tema_editar].iloc[0]
+                                with st.form(f"edit_pendente_{dado_tema['id_tema']}"):
+                                    st.info("Utilize este espaço para adaptar planejamentos antigos à nova padronização IVC.")
+                                    ed_tit = st.text_input("Título", value=dado_tema['titulo_tema']).upper()
+                                    
+                                    val_desc = str(dado_tema.get('descricao_base', ''))
+                                    if val_desc in["", "nan", "N/A", "None"]: val_desc = template_ivc
+                                    
+                                    ed_desc = st.text_area("Roteiro (Metodologia IVC)", value=val_desc, height=250)
+                                    
+                                    col_b1, col_b2 = st.columns([3, 1])
+                                    if col_b1.form_submit_button("💾 SALVAR PADRONIZAÇÃO", use_container_width=True, type="primary"):
+                                        try:
+                                            planilha = conectar_google_sheets()
+                                            if planilha:
+                                                aba_cron = planilha.worksheet("cronograma")
+                                                celulas = aba_cron.findall(dado_tema['id_tema'], in_column=1)
+                                                if celulas:
+                                                    aba_cron.update_cell(celulas[0].row, 3, ed_tit)
+                                                    aba_cron.update_cell(celulas[0].row, 4, ed_desc)
+                                                    st.success("Planejamento padronizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        except Exception as e: st.error(f"Erro ao salvar: {e}")
+                                                
+                                    if col_b2.form_submit_button("🗑️ EXCLUIR TEMA", use_container_width=True):
+                                        try:
+                                            planilha = conectar_google_sheets()
+                                            if planilha:
+                                                aba_cron = planilha.worksheet("cronograma")
+                                                celulas = aba_cron.findall(dado_tema['id_tema'], in_column=1)
+                                                if celulas:
+                                                    aba_cron.delete_rows(celulas[0].row)
+                                                    st.success("Tema excluído do cronograma!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        except Exception as e: st.error(f"Erro ao excluir: {e}")
                         else: st.info("Nenhum tema pendente no momento.")
                     else: st.info("Nenhum tema cadastrado.")
 
