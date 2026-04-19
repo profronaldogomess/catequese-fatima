@@ -1781,7 +1781,7 @@ def gerar_declaracao_pastoral_pdf(dados, tipo_doc, paroquia_destino="", data_ate
     return finalizar_pdf(pdf)
 
 def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias):
-    """Gera uma lista de presença física com cabeçalho oficial e espaço para assinatura."""
+    """Gera uma lista de presença física agrupada por turma com espaço limpo para assinatura."""
     pdf = FPDF()
     pdf.add_page()
     adicionar_cabecalho_diocesano(pdf, "LISTA DE PRESENÇA - REUNIÃO DE PAIS")
@@ -1789,42 +1789,56 @@ def gerar_lista_assinatura_reuniao_pdf(tema, data, local, turma, lista_familias)
     pdf.set_font("helvetica", "B", 10)
     pdf.set_text_color(65, 123, 153)
     pdf.cell(0, 6, limpar_texto(f"TEMA: {tema}"), ln=True)
-    pdf.cell(0, 6, limpar_texto(f"DATA: {formatar_data_br(data)}  |  LOCAL: {local}  |  TURMA: {turma}"), ln=True)
+    pdf.cell(0, 6, limpar_texto(f"DATA: {formatar_data_br(data)}  |  LOCAL: {local}"), ln=True)
     pdf.ln(4)
     
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 9)
-    pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
-    pdf.cell(70, 8, "Nome do Catequizando", border=1, fill=True, align='C')
-    pdf.cell(110, 8, "Nome do Responsável e Assinatura", border=1, fill=True, align='C')
-    pdf.ln()
-    
     pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 8)
-    for i, fam in enumerate(lista_familias, 1):
+    
+    # Agrupamento por Turma
+    turma_atual = ""
+    contador_turma = 1
+    
+    for fam in lista_familias:
+        etapa_fam = fam.get('etapa', 'GERAL')
+        
+        # Se mudou a turma, desenha o cabeçalho da nova turma
+        if etapa_fam != turma_atual:
+            turma_atual = etapa_fam
+            contador_turma = 1 # Reseta o contador para a nova turma
+            
+            # Quebra de página se estiver muito no final
+            if pdf.get_y() > 250:
+                pdf.add_page()
+            else:
+                pdf.ln(4)
+                
+            # Tarja da Turma
+            pdf.set_fill_color(230, 240, 245)
+            pdf.set_text_color(65, 123, 153)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(0, 8, limpar_texto(f"TURMA: {turma_atual}"), border=1, ln=True, fill=True, align='C')
+            
+            # Cabeçalho das Colunas
+            pdf.set_fill_color(65, 123, 153)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("helvetica", "B", 9)
+            pdf.cell(10, 8, "Nº", border=1, fill=True, align='C')
+            pdf.cell(80, 8, "Nome do Catequizando", border=1, fill=True, align='C')
+            pdf.cell(100, 8, "Assinatura do Responsável", border=1, fill=True, align='C')
+            pdf.ln()
+            
+        # Linha do Aluno
         nome_cat = limpar_texto(fam['nome_cat'].upper())
-        nome_resp = limpar_texto(fam['responsavel'].upper())
         
-        y_start = pdf.get_y()
-        pdf.cell(10, 10, str(i), border=1, align='C')
-        pdf.cell(70, 10, nome_cat[:35], border=1)
-        
-        # Célula vazia para a assinatura
-        pdf.cell(110, 10, "", border=1)
-        
-        # Escreve o nome do responsável e desenha a linha dentro da célula
-        pdf.set_xy(92, y_start + 2)
-        pdf.set_font("helvetica", "I", 7)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(100, 3, f"Resp: {nome_resp[:45]}")
-        
-        pdf.set_xy(92, y_start + 7)
-        pdf.line(95, y_start + 8, 195, y_start + 8)
-        
-        pdf.set_xy(10, y_start + 10)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("helvetica", "", 8)
+        
+        pdf.cell(10, 10, str(contador_turma), border=1, align='C')
+        pdf.cell(80, 10, nome_cat[:45], border=1)
+        pdf.cell(100, 10, "", border=1) # Célula 100% vazia para assinatura
+        pdf.ln()
+        
+        contador_turma += 1
         
         if pdf.get_y() > 270:
             pdf.add_page()
