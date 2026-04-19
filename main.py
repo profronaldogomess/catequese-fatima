@@ -3137,25 +3137,35 @@ elif menu == "✅ Fazer Chamada":
 
     # 1. DEFINIÇÃO DE PERMISSÕES
     vinculo_raw = str(st.session_state.usuario.get('turma_vinculada', '')).strip().upper()
-    turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if (eh_gestor or vinculo_raw == "TODAS") else[t.strip() for t in vinculo_raw.split(',') if t.strip()]
+    turmas_permitidas = sorted(df_turmas['nome_turma'].unique().tolist()) if (eh_gestor or vinculo_raw == "TODAS") else [t.strip() for t in vinculo_raw.split(',') if t.strip()]
     if not turmas_permitidas: st.error("❌ Nenhuma turma vinculada."); st.stop()
 
     # 2. INTERFACE DE TURMA E DATA
     c1, c2 = st.columns([1, 1])
     turma_sel = c1.selectbox("📋 Selecione a Turma:", turmas_permitidas, key="sel_t_chamada")
     data_enc = c2.date_input("📅 Data do Encontro:", date.today(), format="DD/MM/YYYY")
+    
+    # BLINDAGEM DE DATA: Força a data selecionada para o padrão BR (String)
+    data_enc_str = data_enc.strftime('%d/%m/%Y')
 
     # 3. MODO DE REPOSIÇÃO E FILTRO DE ALUNOS
     st.markdown("---")
     modo_reposicao = st.toggle("🔄 Ativar Modo de Reposição / Encontro Extra", help="Use isso para dar presença a quem entrou atrasado na turma ou para quem vai repor uma falta durante a semana.")
     
+    # Lista BRUTA (Todos os ativos da turma) - Usada para o Buffer e Aniversários
     lista_cat_bruta = df_cat[(df_cat['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
+    
+    # Normaliza as datas do banco de presenças UMA VEZ para buscas rápidas
+    df_pres_local = df_pres.copy()
+    if not df_pres_local.empty and 'data_encontro' in df_pres_local.columns:
+        df_pres_local['data_norm'] = df_pres_local['data_encontro'].apply(formatar_data_br)
+    else:
+        df_pres_local['data_norm'] = ""
     
     tema_reposicao = ""
     if modo_reposicao:
         st.info("💡 **Modo Reposição:** Selecione qual tema antigo você está repondo hoje. A lista abaixo mostrará APENAS os alunos que estão devendo este tema.")
-        df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
-        pres_turma = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
+        pres_turma = df_pres_local[df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
         
         temas_ja_dados = pres_turma[~pres_turma['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]['tema_do_dia'].dropna().unique().tolist()
         
@@ -3174,16 +3184,9 @@ elif menu == "✅ Fazer Chamada":
     else:
         lista_cat = lista_cat_bruta
 
-    # MURAL DE ANIVERSARIANTES
-    aniversariantes =[]
+    # MURAL DE ANIVERSARIANTES (Corrigido: Loop único na lista bruta)
+    aniversariantes = []
     for _, row in lista_cat_bruta.iterrows():
-        status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
-        if status_niver: aniversariantes.append(f"{status_niver}: {row['nome_completo']}")
-    
-    if aniversariantes and not modo_reposicao:
-        with st.expander("🎂 Aniversariantes do Encontro", expanded=True):
-            for niver in aniversariantes: st.info(niver)
-    for _, row in lista_cat.iterrows():
         status_niver = eh_aniversariante_da_semana(row['data_nascimento'], data_enc)
         if status_niver: aniversariantes.append(f"{status_niver}: {row['nome_completo']}")
     
@@ -3197,107 +3200,118 @@ elif menu == "✅ Fazer Chamada":
     
     encontro_do_dia = pd.DataFrame()
     if not df_enc_local.empty and 'data' in df_enc_local.columns:
-        df_enc_local['data_dt'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
+        # Blindagem: Compara strings no formato BR
+        df_enc_local['data_norm'] = df_enc_local['data'].apply(formatar_data_br)
         encontro_do_dia = df_enc_local[
             (df_enc_local['turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
-            (df_enc_local['data_dt'].dt.date == data_enc)
+            (df_enc_local['data_norm'] == data_enc_str)
         ]
 
     # --- TEMA E OBSERVAÇÕES INICIAIS ---
     tema_dia = ""
     obs_dia = ""
 
-    if not encontro_do_dia.empty and "RECESSO" not in str(encontro_do_dia.iloc[0]['tema']).upper():
-        tema_dia = encontro_do_dia.iloc[0]['tema']
-        obs_existente = encontro_do_dia.iloc[0].get('observacoes', '')
-        if obs_existente in["nan", "N/A", "None", "Registro via Chamada"]: obs_existente = ""
-        
-        st.success(f"📖 **Tema do Encontro já registrado no Diário:** {tema_dia}")
-        obs_dia = st.text_area("📝 Relato / Observações Pastorais (Edite se necessário):", value=obs_existente, height=100, help="Este encontro já existe no diário. Você pode complementar o relato aqui.")
-        
-    elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
-        pass # Será tratado no bloqueio abaixo
-    else:
-        # Busca temas pendentes no cronograma
-        lista_temas_pendentes = [""]
-        if not df_cron_local.empty:
-            col_status = 'status' if 'status' in df_cron_local.columns else ('col_4' if 'col_4' in df_cron_local.columns else None)
-            temas_turma = df_cron_local[df_cron_local['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
-            if col_status:
-                temas_turma = temas_turma[temas_turma[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
-            lista_temas_pendentes += temas_turma['titulo_tema'].tolist()
+    # Se NÃO for reposição, mostra os campos de Diário
+    if not modo_reposicao:
+        if not encontro_do_dia.empty and "RECESSO" not in str(encontro_do_dia.iloc[0]['tema']).upper():
+            tema_dia = encontro_do_dia.iloc[0]['tema']
+            obs_existente = encontro_do_dia.iloc[0].get('observacoes', '')
+            if obs_existente in ["nan", "N/A", "None", "Registro via Chamada"]: obs_existente = ""
             
-        tema_selecionado = st.selectbox("📌 Selecione um Tema Planejado no Cronograma (Opcional):", lista_temas_pendentes, key="sel_tema_chamada", help="Se escolher um tema aqui, ele preencherá o campo abaixo automaticamente.")
-        tema_dia = st.text_input("📖 Título do Encontro (Obrigatório):", value=tema_selecionado, key="txt_tema_chamada", help="Você pode digitar um tema livre caso tenha sido um encontro espontâneo.").upper()
+            st.success(f"📖 **Tema do Encontro já registrado no Diário:** {tema_dia}")
+            obs_dia = st.text_area("📝 Relato / Observações Pastorais (Edite se necessário):", value=obs_existente, height=100, help="Este encontro já existe no diário. Você pode complementar o relato aqui.")
+            
+        elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
+            pass # Será tratado no bloqueio abaixo
+        else:
+            # Busca temas pendentes no cronograma
+            lista_temas_pendentes = [""]
+            if not df_cron_local.empty:
+                col_status = 'status' if 'status' in df_cron_local.columns else ('col_4' if 'col_4' in df_cron_local.columns else None)
+                temas_turma = df_cron_local[df_cron_local['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()]
+                if col_status:
+                    temas_turma = temas_turma[temas_turma[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+                lista_temas_pendentes += temas_turma['titulo_tema'].tolist()
+                
+            tema_selecionado = st.selectbox("📌 Selecione um Tema Planejado no Cronograma (Opcional):", lista_temas_pendentes, key="sel_tema_chamada", help="Se escolher um tema aqui, ele preencherá o campo abaixo automaticamente.")
+            tema_dia = st.text_input("📖 Título do Encontro (Obrigatório):", value=tema_selecionado, key="txt_tema_chamada", help="Você pode digitar um tema livre caso tenha sido um encontro espontâneo.").upper()
 
-        # ELO FORTE: Busca a descrição do cronograma para exibir ao catequista
-        obs_planejada = ""
-        if tema_selecionado and not df_cron_local.empty:
-            linha_cron = df_cron_local[(df_cron_local['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cron_local['titulo_tema'].astype(str).str.strip().str.upper() == tema_selecionado.strip().upper())]
-            if not linha_cron.empty:
-                desc_b = str(linha_cron.iloc[0].get('descricao_base', ''))
-                if desc_b not in ["nan", "N/A", "None", ""]: obs_planejada = desc_b
+            # ELO FORTE: Busca a descrição do cronograma para exibir ao catequista
+            obs_planejada = ""
+            if tema_selecionado and not df_cron_local.empty:
+                linha_cron = df_cron_local[(df_cron_local['etapa'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_cron_local['titulo_tema'].astype(str).str.strip().str.upper() == tema_selecionado.strip().upper())]
+                if not linha_cron.empty:
+                    desc_b = str(linha_cron.iloc[0].get('descricao_base', ''))
+                    if desc_b not in ["nan", "N/A", "None", ""]: obs_planejada = desc_b
 
-        obs_dia = st.text_area("📝 Relato / Observações Pastorais (Opcional):", value=obs_planejada, height=100, help="O texto acima foi puxado do planejamento. Você pode editá-lo para registrar como foi a dinâmica real do encontro hoje.")
+            obs_dia = st.text_area("📝 Relato / Observações Pastorais (Opcional):", value=obs_planejada, height=100, help="O texto acima foi puxado do planejamento. Você pode editá-lo para registrar como foi a dinâmica real do encontro hoje.")
 
     # --- TRAVA DE RECESSO E LISTA DE PRESENÇA ---
-    if lista_cat.empty:
+    if lista_cat.empty and not modo_reposicao:
         st.warning(f"Nenhum catequizando ativo na turma {turma_sel}.")
     elif not encontro_do_dia.empty and "RECESSO" in str(encontro_do_dia.iloc[0]['tema']).upper():
-        st.error(f"🚫 **CHAMADA BLOQUEADA:** A coordenação decretou recesso para o dia {data_enc.strftime('%d/%m/%Y')}.")
+        st.error(f"🚫 **CHAMADA BLOQUEADA:** A coordenação decretou recesso para o dia {data_enc_str}.")
         st.info("Nenhuma presença pode ser registrada em datas de recesso.")
     else:
         st.divider()
         if st.button("✅ Marcar Todos como Presentes", use_container_width=True):
             for i, (_, r) in enumerate(lista_cat.iterrows()):
-                st.session_state[f"p_{r['id_catequizando']}_{data_enc}_{i}"] = True
+                st.session_state[f"p_{r['id_catequizando']}_{data_enc_str}_{i}"] = True
             st.rerun()
         
         st.markdown("---")
         
-        # --- BUFFER DE CHAMADA (REATIVO) ---
-        buffer_key = f"chamada_buffer_{turma_sel}_{data_enc}"
+        # --- BUFFER DE CHAMADA (REATIVO E BLINDADO CONTRA KEYERROR) ---
+        buffer_key = f"chamada_buffer_{turma_sel}_{data_enc_str}"
         if buffer_key not in st.session_state:
             buffer = {}
-            df_pres_existente = pd.DataFrame()
             
-            if not df_pres.empty and 'data_encontro' in df_pres.columns:
-                df_pres['data_dt'] = pd.to_datetime(df_pres['data_encontro'], errors='coerce', dayfirst=True)
-                df_pres_existente = df_pres[(df_pres['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & (df_pres['data_dt'].dt.date == data_enc)]
+            # Busca presenças do dia exato (usando a data normalizada)
+            pres_hoje = df_pres_local[
+                (df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_sel.strip().upper()) & 
+                (df_pres_local['data_norm'] == data_enc_str)
+            ]
             
-            for _, row in lista_cat.iterrows():
+            # BLINDAGEM: O buffer SEMPRE é criado com a lista BRUTA (todos os alunos), 
+            # para evitar KeyError se o usuário ligar/desligar o modo reposição.
+            for _, row in lista_cat_bruta.iterrows():
                 id_cat = row['id_catequizando']
                 foi_presente = False
-                if not df_pres_existente.empty:
-                    aluno_pres = df_pres_existente[df_pres_existente['id_catequizando'] == id_cat]
+                if not pres_hoje.empty:
+                    aluno_pres = pres_hoje[pres_hoje['id_catequizando'] == id_cat]
                     if not aluno_pres.empty and aluno_pres.iloc[0]['status'] == 'PRESENTE':
                         foi_presente = True
                 buffer[id_cat] = foi_presente
             
             st.session_state[buffer_key] = buffer
 
-        registros_presenca =[]
+        registros_presenca = []
         contador_p = 0
         contador_a = 0
         
         st.markdown("### 📋 Lista de Presença")
         cols_chamada = st.columns(2)
         
+        # Renderiza os botões usando a lista filtrada (lista_cat)
         for i, (_, row) in enumerate(lista_cat.iterrows()):
             id_cat = row['id_catequizando']
-            key_toggle = f"p_{id_cat}_{data_enc}_{i}"
+            key_toggle = f"p_{id_cat}_{data_enc_str}_{i}"
             
             with cols_chamada[i % 2]:
                 with st.container(border=True):
                     c_nome, c_tog = st.columns([3, 1])
                     c_nome.markdown(f"<span style='font-size:14px; font-weight:600; color:#417b99;'>{row['nome_completo']}</span>", unsafe_allow_html=True)
-                    presente = c_tog.toggle("P", key=key_toggle, value=st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat])
-                    st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat] = presente
+                    
+                    # Puxa o valor do buffer (que agora tem certeza que possui a chave)
+                    presente = c_tog.toggle("P", key=key_toggle, value=st.session_state[buffer_key][id_cat])
+                    st.session_state[buffer_key][id_cat] = presente
                     
                     if presente: contador_p += 1
                     else: contador_a += 1
 
-                    registros_presenca.append([data_enc.strftime('%d/%m/%Y'), id_cat, row['nome_completo'], turma_sel, "PRESENTE" if presente else "AUSENTE", tema_dia, st.session_state.usuario['nome']])
+                    # Se for reposição, o tema salvo é o tema antigo. Se for normal, é o tema do dia.
+                    tema_salvar = tema_reposicao if modo_reposicao else tema_dia
+                    registros_presenca.append([data_enc_str, id_cat, row['nome_completo'], turma_sel, "PRESENTE" if presente else "AUSENTE", tema_salvar, st.session_state.usuario['nome']])
 
         st.markdown("---")
         st.markdown("### 📊 Resumo da Chamada")
@@ -3312,12 +3326,12 @@ elif menu == "✅ Fazer Chamada":
             
             if modo_reposicao:
                 # No modo reposição, sobrescrevemos a lista de presenças para forçar o tema antigo
-                registros_presenca =[]
+                registros_presenca = []
                 for _, row in lista_cat.iterrows():
                     id_cat = row['id_catequizando']
-                    presente = st.session_state[f"chamada_buffer_{turma_sel}_{data_enc}"][id_cat]
+                    presente = st.session_state[buffer_key][id_cat]
                     if presente: # Na reposição, só salvamos quem VAI. Se não foi, continua devendo.
-                        registros_presenca.append([data_enc.strftime('%d/%m/%Y'), id_cat, row['nome_completo'], turma_sel, "PRESENTE", tema_reposicao, st.session_state.usuario['nome']])
+                        registros_presenca.append([data_enc_str, id_cat, row['nome_completo'], turma_sel, "PRESENTE", tema_reposicao, st.session_state.usuario['nome']])
                 
                 if registros_presenca:
                     with st.spinner("Quitando pendências..."):
@@ -3335,8 +3349,12 @@ elif menu == "✅ Fazer Chamada":
                 if salvar_com_seguranca(salvar_presencas, registros_presenca, obs_final):
                     st.success(f"✅ Chamada salva e Diário atualizado!"); st.balloons()
                     st.cache_data.clear(); time.sleep(1); st.rerun()
-        if not tema_dia:
+                    
+        if not tema_dia and not modo_reposicao:
             st.warning("⚠️ Preencha o Tema do Encontro para salvar.")
+
+
+
 
 # ==============================================================================
 # PÁGINA: 👥 GESTÃO DE CATEQUISTAS (RH PASTORAL 3.0)
