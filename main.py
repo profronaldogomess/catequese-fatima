@@ -1433,32 +1433,40 @@ elif menu == "📖 Diário de Encontros":
         st.markdown("#### 📜 Histórico de Encontros Realizados")
         
         if not df_enc_local.empty:
-            df_enc_local['turma_norm'] = df_enc_local['turma'].astype(str).str.strip().str.upper()
-            df_enc_local['data_sort'] = pd.to_datetime(df_enc_local['data'], errors='coerce', dayfirst=True)
-            hist_turma = df_enc_local[df_enc_local['turma_norm'] == turma_norm].sort_values(by='data_sort', ascending=False)
+            # Criar cópia para evitar SettingWithCopyWarning
+            df_enc_view = df_enc_local.copy()
+            df_enc_view['turma_norm'] = df_enc_view['turma'].astype(str).str.strip().str.upper()
+            df_enc_view['data_sort'] = pd.to_datetime(df_enc_view['data'], errors='coerce', dayfirst=True)
+            hist_turma = df_enc_view[df_enc_view['turma_norm'] == turma_norm].sort_values(by='data_sort', ascending=False)
             
             if not hist_turma.empty:
                 # Paginação visual: Mostra os 5 primeiros, esconde o resto
                 top_5 = hist_turma.head(5)
                 resto = hist_turma.iloc[5:]
                 
-                def renderizar_encontro(row, idx_suffix):
+                # --- RENDERIZA OS 5 PRIMEIROS ---
+                for idx, row in top_5.iterrows():
                     data_d = str(row['data'])
                     tema_d = row.get('tema', 'Tema não registrado')
                     obs_d = row.get('observacoes', '')
                     cat_d = row.get('catequista', 'Não informado')
                     
-                    pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
-                    qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE'])
-                    qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE'])
-                    faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist()
+                    # BLINDAGEM: Verifica se df_pres_local não está vazio antes de filtrar
+                    if not df_pres_local.empty and 'id_turma' in df_pres_local.columns:
+                        pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
+                    else:
+                        pres_e = pd.DataFrame()
+                        
+                    qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE']) if not pres_e.empty else 0
+                    qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE']) if not pres_e.empty else 0
+                    faltosos = pres_e[pres_e['status'] == 'AUSENTE']['nome_catequizando'].tolist() if not pres_e.empty else []
                     
                     # Alerta de Chamada Pendente
                     alerta_chamada = ""
                     if qtd_pres == 0 and qtd_aus == 0 and "RECESSO" not in tema_d.upper():
                         alerta_chamada = " ⚠️ <span style='color:#e03d11; font-weight:bold;'>(CHAMADA PENDENTE)</span>"
                     
-                    with st.expander(f"{formatar_data_br(data_d)} | {tema_d}", expanded=(alerta_chamada != "")):
+                    with st.expander(f"{formatar_data_br(data_d)} | {tema_d}", expanded=bool(alerta_chamada)):
                         st.markdown(f"**Catequista:** {cat_d}{alerta_chamada}", unsafe_allow_html=True)
                         
                         if alerta_chamada:
@@ -1476,7 +1484,7 @@ elif menu == "📖 Diário de Encontros":
                         st.markdown("---")
                         st.markdown("**✏️ Editar Registro do Encontro**")
                         
-                        with st.form(f"edit_enc_{data_d}_{turma_focal}_{idx_suffix}"):
+                        with st.form(f"edit_enc_{data_d}_{turma_focal}_top_{idx}"):
                             ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
                             ed_obs = st.text_area("Observações Pastorais / Relato:", value=obs_d, height=100)
                             
@@ -1485,8 +1493,81 @@ elif menu == "📖 Diário de Encontros":
                             btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR ENCONTRO", use_container_width=True)
                             
                             st.markdown("---")
-                            confirma_del = st.checkbox("⚠️ Confirmo a exclusão deste encontro e de todas as presenças do dia", key=f"chk_del_{data_d}_{idx_suffix}")
+                            confirma_del = st.checkbox("⚠️ Confirmo a exclusão deste encontro e de todas as presenças do dia", key=f"chk_del_{data_d}_top_{idx}")
+                            
+                            if btn_salvar:
+                                with st.spinner("Sincronizando Diário, Presenças e Cronograma..."):
+                                    if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
+                                        st.success("✅ Tudo atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
+                            if btn_excluir:
+                                if confirma_del:
+                                    with st.spinner("Excluindo encontro e revertendo cronograma..."):
+                                        if excluir_encontro_cascata(turma_focal, data_d, tema_d):
+                                            st.success("✅ Encontro excluído com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                else:
+                                    st.error("⚠️ Marque a caixa de confirmação abaixo para excluir o encontro.")
+                
+                # --- RENDERIZA O RESTO (HISTÓRICO ANTIGO) ---
+                if not resto.empty:
+                    with st.expander(f"📂 Ver Histórico Completo ({len(resto)} encontros mais antigos)"):
+                        for idx, row in resto.iterrows():
+                            data_d = str(row['data'])
+                            tema_d = row.get('tema', 'Tema não registrado')
+                            obs_d = row.get('observacoes', '')
+                            cat_d = row.get('catequista', 'Não informado')
+                            
+                            # BLINDAGEM
+                            if not df_pres_local.empty and 'id_turma' in df_pres_local.columns:
+                                pres_e = df_pres_local[(df_pres_local['id_turma'].astype(str).str.strip().str.upper() == turma_norm) & (df_pres_local['data_encontro'].astype(str) == data_d)]
+                            else:
+                                pres_e = pd.DataFrame()
+                                
+                            qtd_pres = len(pres_e[pres_e['status'] == 'PRESENTE']) if not pres_e.empty else 0
+                            qtd_aus = len(pres_e[pres_e['status'] == 'AUSENTE']) if not pres_e.empty else 0
+                            
+                            alerta_chamada = ""
+                            if qtd_pres == 0 and qtd_aus == 0 and "RECESSO" not in tema_d.upper():
+                                alerta_chamada = " ⚠️ <span style='color:#e03d11; font-weight:bold;'>(CHAMADA PENDENTE)</span>"
+                            
+                            with st.container():
+                                st.markdown(f"**{formatar_data_br(data_d)} | {tema_d}**")
+                                st.markdown(f"**Catequista:** {cat_d}{alerta_chamada}", unsafe_allow_html=True)
+                                
+                                if alerta_chamada:
+                                    st.error("🚨 **Atenção:** Chamada pendente.")
+                                
+                                c_met1, c_met2 = st.columns(2)
+                                c_met1.metric("Presentes", qtd_pres)
+                                c_met2.metric("Ausentes", qtd_aus)
+                                
+                                with st.form(f"edit_enc_{data_d}_{turma_focal}_resto_{idx}"):
+                                    ed_tema = st.text_input("Editar Tema:", value=tema_d).upper()
+                                    ed_obs = st.text_area("Observações Pastorais / Relato:", value=obs_d, height=100)
+                                    
+                                    c_btn1, c_btn2 = st.columns([3, 1])
+                                    btn_salvar = c_btn1.form_submit_button("💾 SALVAR", use_container_width=True)
+                                    btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR", use_container_width=True)
+                                    
+                                    confirma_del = st.checkbox("⚠️ Confirmo a exclusão", key=f"chk_del_{data_d}_resto_{idx}")
+                                    
+                                    if btn_salvar:
+                                        with st.spinner("Sincronizando..."):
+                                            if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
+                                                st.success("✅ Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+
+                                    if btn_excluir:
+                                        if confirma_del:
+                                            with st.spinner("Excluindo..."):
+                                                if excluir_encontro_cascata(turma_focal, data_d, tema_d):
+                                                    st.success("✅ Excluído!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                        else:
+                                            st.error("⚠️ Marque a caixa de confirmação.")
+                                st.divider()
+            else:
+                st.info("Nenhum encontro registrado na aba 'encontros' para esta turma.")
+        else:
+            st.info("O sistema ainda não possui registros de encontros.")
 
 
 # ==================================================================================
