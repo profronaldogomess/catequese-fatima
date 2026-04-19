@@ -910,7 +910,7 @@ if menu == "🏠 Início / Dashboard":
                 df_recomposicao = pd.DataFrame(dados_recomposicao).sort_values(by=['Qtd. Pendências', 'Turma'], ascending=[False, True])
                 
                 c_rec1, c_rec2 = st.columns(2)
-                c_rec1.metric("Total de Alunos Precisando de Reposição", len(df_recomposicao))
+                c_rec1.metric("Total de catequizandos Precisando de Reposição", len(df_recomposicao))
                 
                 filtro_t_rec = st.selectbox("Filtrar Recomposição por Turma:", ["TODAS"] + sorted(df_recomposicao['Turma'].unique().tolist()))
                 if filtro_t_rec != "TODAS":
