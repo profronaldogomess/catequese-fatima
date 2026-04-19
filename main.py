@@ -2846,7 +2846,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
     ])
     
     # ==========================================================================
-    # HUB 1: AUDITORIA CANÔNICA INTELIGENTE
+    # HUB 1: AUDITORIA CANÔNICA INTELIGENTE (RADAR 2.0)
     # ==========================================================================
     with tab_auditoria:
         st.subheader("📊 Censo Sacramental e Prontidão")
@@ -2889,45 +2889,47 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 if not alunos_t.empty:
                     # INTELIGÊNCIA CANÔNICA: O que cobrar de cada etapa?
                     audita_batismo = True
-                    audita_eucaristia = any(x in etapa_base for x in["3ª", "TERCEIRA", "ADULTO", "PERSEVERANÇA", "CRISMA"])
-                    # 3ª Etapa e Batismo/Eucaristia Adultos NÃO cobram Crisma
+                    audita_eucaristia = any(x in etapa_base for x in ["3ª", "TERCEIRA", "ADULTO", "PERSEVERANÇA", "CRISMA"])
                     audita_crisma = any(x in etapa_base for x in ["CRISMA", "PERSEVERANÇA"]) 
                     
-                    pend_bat = alunos_t[alunos_t['batizado_sn'] != "SIM"] if audita_batismo else pd.DataFrame()
-                    pend_euc = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("EUCARISTIA", na=False, case=False)] if audita_eucaristia else pd.DataFrame()
-                    pend_cri = alunos_t[~alunos_t['sacramentos_ja_feitos'].str.contains("CRISMA", na=False, case=False)] if audita_crisma else pd.DataFrame()
+                    dados_radar = []
                     
-                    tem_pendencia = not pend_bat.empty or not pend_euc.empty or not pend_cri.empty
+                    for _, aluno in alunos_t.iterrows():
+                        nome_aluno = aluno['nome_completo']
+                        falta_bat = aluno['batizado_sn'] != "SIM"
+                        falta_euc = "EUCARISTIA" not in str(aluno['sacramentos_ja_feitos']).upper()
+                        falta_cri = "CRISMA" not in str(aluno['sacramentos_ja_feitos']).upper()
+                        
+                        # Só adiciona na lista se tiver alguma pendência exigida para a etapa
+                        tem_pendencia = False
+                        status_bat = "✅ OK"
+                        status_euc = "✅ OK" if audita_eucaristia else "➖ N/A"
+                        status_cri = "✅ OK" if audita_crisma else "➖ N/A"
+                        
+                        if audita_batismo and falta_bat:
+                            status_bat = "❌ Pendente"
+                            tem_pendencia = True
+                        if audita_eucaristia and falta_euc:
+                            status_euc = "❌ Pendente"
+                            tem_pendencia = True
+                        if audita_crisma and falta_cri:
+                            status_cri = "❌ Pendente"
+                            tem_pendencia = True
+                            
+                        if tem_pendencia:
+                            dados_radar.append({
+                                "Catequizando": nome_aluno,
+                                "Batismo": status_bat,
+                                "Eucaristia": status_euc,
+                                "Crisma": status_cri
+                            })
                     
-                    if tem_pendencia:
-                        with st.expander(f"🚨 {nome_t} ({etapa_base}) - Pendências Identificadas"):
-                            cols_p = st.columns(3)
-                            
-                            with cols_p[0]:
-                                st.markdown("**🕊️ Falta Batismo**")
-                                if not pend_bat.empty:
-                                    for n in pend_bat['nome_completo'].tolist(): st.markdown(f"<span style='color:#e03d11; font-size:13px;'>❌ {n}</span>", unsafe_allow_html=True)
-                                else: st.markdown("<span style='color:green; font-size:13px;'>✅ Tudo OK</span>", unsafe_allow_html=True)
-                            
-                            with cols_p[1]:
-                                if audita_eucaristia:
-                                    st.markdown("**🍞 Falta Eucaristia**")
-                                    if not pend_euc.empty:
-                                        for n in pend_euc['nome_completo'].tolist(): st.markdown(f"<span style='color:#e03d11; font-size:13px;'>❌ {n}</span>", unsafe_allow_html=True)
-                                    else: st.markdown("<span style='color:green; font-size:13px;'>✅ Tudo OK</span>", unsafe_allow_html=True)
-                                else:
-                                    st.markdown("**🍞 Eucaristia**")
-                                    st.caption("Não exigido nesta etapa.")
-                                        
-                            with cols_p[2]:
-                                if audita_crisma:
-                                    st.markdown("**🔥 Falta Crisma**")
-                                    if not pend_cri.empty:
-                                        for n in pend_cri['nome_completo'].tolist(): st.markdown(f"<span style='color:#e03d11; font-size:13px;'>❌ {n}</span>", unsafe_allow_html=True)
-                                    else: st.markdown("<span style='color:green; font-size:13px;'>✅ Tudo OK</span>", unsafe_allow_html=True)
-                                else:
-                                    st.markdown("**🔥 Crisma**")
-                                    st.caption("Não exigido nesta etapa.")
+                    if dados_radar:
+                        with st.expander(f"🚨 {nome_t} ({etapa_base}) - {len(dados_radar)} alunos com pendências"):
+                            df_radar = pd.DataFrame(dados_radar)
+                            # Estilização condicional simples via Pandas Styler não funciona bem no Streamlit cloud, 
+                            # então usamos emojis direto no texto para garantir a cor.
+                            st.dataframe(df_radar, use_container_width=True, hide_index=True)
                     else:
                         st.markdown(f"<div style='padding:8px; background-color:#e8f5e9; border-radius:5px; margin-bottom:5px;'><small style='color:#2e7d32;'>✅ <b>{nome_t}</b>: Todos os sacramentos exigidos para a etapa estão em dia.</small></div>", unsafe_allow_html=True)
 
@@ -2942,7 +2944,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
         else:
             if st.button("✨ GERAR AUDITORIA PASTORAL COMPLETA", key="btn_disparar_ia_sac", use_container_width=True):
                 with st.spinner("O Auditor IA está analisando impedimentos..."):
-                    analise_detalhada_ia =[]
+                    analise_detalhada_ia = []
                     for _, t in df_turmas.iterrows():
                         nome_t = str(t['nome_turma']).strip().upper()
                         alunos_t = df_cat[(df_cat['etapa'] == nome_t) & (df_cat['status'] == 'ATIVO')]
@@ -2951,7 +2953,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                             imp_count = len(alunos_t[(("3ª" in str(t['etapa'])) | ("ADULTO" in str(t['etapa']).upper())) & (alunos_t['batizado_sn'] != "SIM")])
                             analise_detalhada_ia.append({"turma": nome_t, "etapa": t['etapa'], "batizados": len(alunos_t) - pend_bat, "pendentes": pend_bat, "impedimentos_civel": imp_count})
                     
-                    impedimentos_detalhados =[]
+                    impedimentos_detalhados = []
                     for _, cat in df_cat[df_cat['status'] == 'ATIVO'].iterrows():
                         if ("3ª" in str(cat['etapa']) or "ADULTO" in str(cat['etapa']).upper()) and cat['batizado_sn'] != "SIM":
                             impedimentos_detalhados.append({"nome": cat['nome_completo'], "turma": cat['etapa'], "motivo": "Falta Batismo (Impedimento de Iniciação)"})
@@ -2968,7 +2970,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
         st.subheader("⛪ Registrar Celebração em Lote")
         st.markdown("Selecione as turmas que participaram da Missa para registrar o sacramento e aplicar as automações de saída.")
         
-        turmas_s = st.multiselect("1. Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else[])
+        turmas_s = st.multiselect("1. Selecione as Turmas:", df_turmas['nome_turma'].tolist() if not df_turmas.empty else [])
         
         if turmas_s:
             with st.form("form_sac_lote"):
@@ -2978,7 +2980,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 
                 st.markdown("---")
                 st.markdown("**📍 Local da Celebração**")
-                local_celebra = st.radio("Onde ocorreu o sacramento?",["Nesta Paróquia (Fátima)", "Em Outra Paróquia (Com autorização)"], horizontal=True)
+                local_celebra = st.radio("Onde ocorreu o sacramento?", ["Nesta Paróquia (Fátima)", "Em Outra Paróquia (Com autorização)"], horizontal=True)
                 nome_outra_paroquia = ""
                 if local_celebra == "Em Outra Paróquia (Com autorização)":
                     nome_outra_paroquia = st.text_input("Qual o nome da Paróquia/Cidade?").upper()
@@ -2996,7 +2998,7 @@ elif menu == "🕊️ Gestão de Sacramentos":
                 st.markdown("---")
                 st.markdown("**👥 Selecione os Catequizandos que estavam presentes na Missa:**")
                 alunos_f = df_cat[(df_cat['etapa'].isin(turmas_s)) & (df_cat['status'] == 'ATIVO')].sort_values('nome_completo')
-                sel_ids =[]
+                sel_ids = []
                 
                 if not alunos_f.empty:
                     cols = st.columns(2)
@@ -3042,12 +3044,12 @@ elif menu == "🕊️ Gestão de Sacramentos":
                                 st.success(f"✅ Glória a Deus! {len(sel_ids)} sacramentos registrados com sucesso!"); st.balloons(); st.cache_data.clear(); time.sleep(2); st.rerun()
 
     # ==========================================================================
-    # HUB 3: CARTÓRIO E ACERVO INDIVIDUAL
+    # HUB 3: CARTÓRIO E ACERVO INDIVIDUAL (COM EDIÇÃO ESTILO CHAMADA)
     # ==========================================================================
     with tab_cartorio:
         st.subheader("👤 Cartório: Registro Individual e Histórico")
         
-        col_busca, col_hist = st.columns([1, 1])
+        col_busca, col_hist = st.columns([1, 1.5])
         
         with col_busca:
             st.markdown("#### 🔍 Lançamento Avulso")
@@ -3080,67 +3082,103 @@ elif menu == "🕊️ Gestão de Sacramentos":
             st.markdown("#### 📜 Histórico de Eventos")
             df_eventos = ler_aba("sacramentos_eventos")
             if not df_eventos.empty:
-                df_eventos['data_dt'] = pd.to_datetime(df_eventos['data'], errors='coerce', dayfirst=True)
-                df_eventos = df_eventos.sort_values(by='data_dt', ascending=False)
-                st.dataframe(df_eventos[['tipo', 'data', 'turmas', 'catequista']], use_container_width=True, hide_index=True)
+                # BLINDAGEM DE DATAS: Força a conversão e formatação para BR
+                df_eventos_view = df_eventos.copy()
+                df_eventos_view['data_dt'] = pd.to_datetime(df_eventos_view['data'], errors='coerce', dayfirst=True)
+                df_eventos_view = df_eventos_view.sort_values(by='data_dt', ascending=False)
+                df_eventos_view['data_formatada'] = df_eventos_view['data'].apply(formatar_data_br)
                 
-                with st.expander("✏️ Gerenciar Evento (Corrigir, Adicionar Alunos ou Excluir)"):
-                    id_para_editar = st.selectbox("Selecione o ID do Evento:", [""] + df_eventos['id_evento'].tolist())
-                    if id_para_editar:
-                        dados_atuais = df_eventos[df_eventos['id_evento'] == id_para_editar].iloc[0]
-                        tipo_atual = dados_atuais['tipo']
-                        turmas_str = dados_atuais['turmas']
-                        
-                        df_recebidos = ler_aba("sacramentos_recebidos")
-                        participantes_atuais = df_recebidos[df_recebidos.iloc[:, 0] == id_para_editar].iloc[:, 1].tolist() if not df_recebidos.empty else []
-                        
-                        turmas_lista =[t.strip() for t in turmas_str.split(",") if t.strip()]
-                        alunos_elegiveis = df_cat[(df_cat['etapa'].isin(turmas_lista))]
-                        
-                        with st.form("form_edit_sac_evento"):
-                            st.markdown(f"**Evento:** {tipo_atual} | **Turmas:** {turmas_str}")
-                            ed_data = st.date_input("Data Correta", value=pd.to_datetime(dados_atuais['data']).date(), format="DD/MM/YYYY")
-                            
-                            st.markdown("---")
-                            st.markdown("**👥 Gerenciar Participantes:**")
-                            opcoes_nomes = alunos_elegiveis['nome_completo'].tolist() if not alunos_elegiveis.empty else []
-                            nomes_atuais = list(set(df_cat[df_cat['id_catequizando'].isin(participantes_atuais)]['nome_completo'].tolist())) if participantes_atuais else[]
-                            
-                            # Para eventos avulsos, garante que o nome exista na lista
-                            for n in nomes_atuais:
-                                if n not in opcoes_nomes: opcoes_nomes.append(n)
-                                
-                            ed_participantes = st.multiselect("Alunos Presentes no Sacramento:", options=opcoes_nomes, default=[n for n in nomes_atuais if n in opcoes_nomes])
-                            
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            c_btn1, c_btn2 = st.columns([3, 1])
-                            btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
-                            btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR EVENTO", use_container_width=True)
-                            
-                            st.markdown("---")
-                            confirma_del = st.checkbox("⚠️ Confirmo a exclusão definitiva deste evento e de todos os seus registros", key=f"chk_del_sac_{id_para_editar}")
-                            
-                            if btn_salvar:
-                                with st.spinner("Atualizando registros no cartório e nas fichas..."):
-                                    novos_p_lista =[]
-                                    for nome in ed_participantes:
-                                        id_c = df_cat[df_cat['nome_completo'] == nome].iloc[0]['id_catequizando']
-                                        novos_p_lista.append([id_para_editar, id_c, nome, tipo_atual, ed_data.strftime('%d/%m/%Y')])
-                                    
-                                    novos_dados_ev =[id_para_editar, tipo_atual, ed_data.strftime('%d/%m/%Y'), turmas_str, dados_atuais['catequista']]
-                                    
-                                    if gerenciar_edicao_evento_sacramento(id_para_editar, novos_dados_ev, novos_p_lista, tipo_atual):
-                                        st.success("✅ Evento atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                                        
-                            if btn_excluir:
-                                if confirma_del:
-                                    with st.spinner("Excluindo evento e revertendo selos sacramentais..."):
-                                        if excluir_evento_sacramento_cascata(id_para_editar, tipo_atual):
-                                            st.success("✅ Evento excluído e revertido!"); st.cache_data.clear(); time.sleep(1); st.rerun()
-                                else:
-                                    st.error("⚠️ Marque a caixa de confirmação para excluir.")
+                # Exibe a tabela limpa
+                st.dataframe(df_eventos_view[['tipo', 'data_formatada', 'turmas', 'catequista']].rename(columns={'tipo': 'Sacramento', 'data_formatada': 'Data', 'turmas': 'Turmas', 'catequista': 'Responsável'}), use_container_width=True, hide_index=True)
             else:
                 st.info("Nenhum evento registrado no histórico.")
+
+        # --- NOVA ÁREA DE GERENCIAMENTO DE EVENTOS (ESTILO CHAMADA) ---
+        st.divider()
+        st.markdown("### ⚙️ Gerenciamento de Eventos (Corrigir Presenças)")
+        st.markdown("Selecione um evento passado para adicionar ou remover catequizandos que receberam o sacramento.")
+        
+        if not df_eventos.empty:
+            # Cria uma lista amigável para o Selectbox
+            opcoes_eventos = [""]
+            dict_eventos = {}
+            for _, ev in df_eventos_view.iterrows():
+                label = f"{ev['tipo']} - {ev['data_formatada']} ({ev['turmas']})"
+                opcoes_eventos.append(label)
+                dict_eventos[label] = ev['id_evento']
+                
+            evento_selecionado = st.selectbox("🔍 Selecione o Evento:", opcoes_eventos)
+            
+            if evento_selecionado:
+                id_para_editar = dict_eventos[evento_selecionado]
+                dados_atuais = df_eventos[df_eventos['id_evento'] == id_para_editar].iloc[0]
+                tipo_atual = dados_atuais['tipo']
+                turmas_str = dados_atuais['turmas']
+                data_atual_formatada = formatar_data_br(dados_atuais['data'])
+                
+                df_recebidos = ler_aba("sacramentos_recebidos")
+                participantes_atuais = df_recebidos[df_recebidos.iloc[:, 0] == id_para_editar].iloc[:, 1].tolist() if not df_recebidos.empty else []
+                
+                turmas_lista = [t.strip() for t in turmas_str.split(",") if t.strip()]
+                alunos_elegiveis = df_cat[(df_cat['etapa'].isin(turmas_lista))].sort_values('nome_completo')
+                
+                st.markdown(f"**Evento:** {tipo_atual} | **Data:** {data_atual_formatada} | **Turmas:** {turmas_str}")
+                
+                # Cria o formulário de edição
+                with st.form(f"form_edit_sac_evento_{id_para_editar}"):
+                    ed_data = st.date_input("Corrigir Data do Evento:", value=converter_para_data(dados_atuais['data']), format="DD/MM/YYYY")
+                    
+                    st.markdown("---")
+                    st.markdown("#### 👥 Lista de Participantes (Marque quem recebeu o sacramento)")
+                    
+                    # Lógica de Toggles (Estilo Chamada)
+                    selecionados_finais = []
+                    cols_edit = st.columns(2)
+                    
+                    # Garante que alunos avulsos (que não estão mais na turma) também apareçam se já estiverem marcados
+                    nomes_atuais = df_cat[df_cat['id_catequizando'].isin(participantes_atuais)]
+                    alunos_combinados = pd.concat([alunos_elegiveis, nomes_atuais]).drop_duplicates(subset=['id_catequizando']).sort_values('nome_completo')
+                    
+                    for i, (_, row) in enumerate(alunos_combinados.iterrows()):
+                        id_cat = row['id_catequizando']
+                        nome_cat = row['nome_completo']
+                        ja_estava_presente = id_cat in participantes_atuais
+                        
+                        with cols_edit[i % 2]:
+                            with st.container(border=True):
+                                c_nome, c_tog = st.columns([3, 1])
+                                c_nome.markdown(f"<span style='font-size:13px; font-weight:600; color:#417b99;'>{nome_cat}</span>", unsafe_allow_html=True)
+                                presente = c_tog.toggle("Sim", key=f"edit_sac_{id_para_editar}_{id_cat}", value=ja_estava_presente)
+                                if presente:
+                                    selecionados_finais.append(nome_cat)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    c_btn1, c_btn2 = st.columns([3, 1])
+                    btn_salvar = c_btn1.form_submit_button("💾 SALVAR ALTERAÇÕES NO CARTÓRIO", use_container_width=True, type="primary")
+                    btn_excluir = c_btn2.form_submit_button("🗑️ EXCLUIR EVENTO", use_container_width=True)
+                    
+                    st.markdown("---")
+                    confirma_del = st.checkbox("⚠️ Confirmo a exclusão definitiva deste evento e de todos os seus registros", key=f"chk_del_sac_{id_para_editar}")
+                    
+                    if btn_salvar:
+                        with st.spinner("Atualizando registros no cartório e nas fichas..."):
+                            novos_p_lista = []
+                            for nome in selecionados_finais:
+                                id_c = df_cat[df_cat['nome_completo'] == nome].iloc[0]['id_catequizando']
+                                novos_p_lista.append([id_para_editar, id_c, nome, tipo_atual, ed_data.strftime('%d/%m/%Y')])
+                            
+                            novos_dados_ev = [id_para_editar, tipo_atual, ed_data.strftime('%d/%m/%Y'), turmas_str, dados_atuais['catequista']]
+                            
+                            if gerenciar_edicao_evento_sacramento(id_para_editar, novos_dados_ev, novos_p_lista, tipo_atual):
+                                st.success("✅ Evento atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                                
+                    if btn_excluir:
+                        if confirma_del:
+                            with st.spinner("Excluindo evento e revertendo selos sacramentais..."):
+                                if excluir_evento_sacramento_cascata(id_para_editar, tipo_atual):
+                                    st.success("✅ Evento excluído e revertido!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                        else:
+                            st.error("⚠️ Marque a caixa de confirmação para excluir.")
 
 
 
