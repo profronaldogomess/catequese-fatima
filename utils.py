@@ -958,7 +958,7 @@ def gerar_relatorio_diocesano_pdf(df_turmas, df_cat, df_usuarios):
 def gerar_relatorio_pastoral_pdf(df_turmas, df_cat, df_pres, df_pres_reuniao):
     """
     Dossiê de Auditoria Profissional.
-    Catequistas em linhas separadas, sem abreviações e nomes completos.
+    Agora com a Matemática de Nivelamento (Faltas Reais + Pendências de Entrada Tardia).
     """
     pdf = FPDF()
     AZUL_P = (65, 123, 153); LARANJA_P = (224, 61, 17); CINZA_F = (245, 245, 245)
@@ -971,68 +971,76 @@ def gerar_relatorio_pastoral_pdf(df_turmas, df_cat, df_pres, df_pres_reuniao):
     }
 
     for _, t in df_turmas.iterrows():
-        nome_t = t['nome_turma']
+        nome_t = str(t['nome_turma']).strip().upper()
         etapa_base = str(t['etapa']).upper()
-        alunos_t = df_cat[df_cat['etapa'] == nome_t]
+        alunos_t = df_cat[df_cat['etapa'].astype(str).str.strip().str.upper() == nome_t]
         if alunos_t.empty: continue
         
         pdf.add_page()
-        adicionar_cabecalho_diocesano(pdf, f"DOSSIÊ PASTORAL: {nome_t}")
+        adicionar_cabecalho_diocesano(pdf, limpar_texto(f"DOSSIE PASTORAL: {nome_t}"))
 
-        # --- 1. QUADRO DE INDICADORES (COM ALTURA DINÂMICA) ---
+        # --- 1. PREPARAÇÃO DA MATEMÁTICA DE NIVELAMENTO ---
         ativos = alunos_t[alunos_t['status'] == 'ATIVO']
-        pres_t = df_pres[df_pres['id_turma'] == nome_t] if not df_pres.empty else pd.DataFrame()
-        freq_val = (pres_t['status'].value_counts(normalize=True).get('PRESENTE', 0) * 100) if not pres_t.empty else 0
+        pres_t = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_t] if not df_pres.empty else pd.DataFrame()
+        
+        temas_dados = set()
+        if not pres_t.empty and 'tema_do_dia' in pres_t.columns:
+            validos = pres_t[~pres_t['tema_do_dia'].str.contains('RECESSO', case=False, na=False)]
+            temas_dados = set(validos['tema_do_dia'].dropna().unique())
+            
+        total_encontros = len(temas_dados)
+        
+        freq_val = 0.0
+        if total_encontros > 0 and len(ativos) > 0:
+            total_presencas_turma = len(pres_t[pres_t['status'] == 'PRESENTE'])
+            # Frequência Global = Total de Presenças / (Total de Alunos * Total de Encontros Oficiais)
+            freq_val = (total_presencas_turma / (len(ativos) * total_encontros)) * 100
+            
         docs_ok = len(ativos[ativos['doc_em_falta'].isin(['COMPLETO', 'NADA', 'OK', 'NADA FALTANDO'])])
         
         # Processamento dos Catequistas (Um por linha)
-        cats_list = [c.strip() for c in str(t['catequista_responsavel']).split(',') if c.strip()]
+        cats_list =[c.strip() for c in str(t.get('catequista_responsavel', '')).split(',') if c.strip()]
         cats_text = "\n".join(cats_list)
         num_cats = len(cats_list) if len(cats_list) > 0 else 1
         
-        # Cálculo da altura baseada no número de catequistas
         h_header = num_cats * 6 
-        if h_header < 12: h_header = 12 # Altura mínima para não ficar espremido
+        if h_header < 12: h_header = 12 
 
         pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-        pdf.cell(190, 8, limpar_texto("1. INDICADORES DE ENGAJAMENTO E REGULARIZAÇÃO"), ln=True, fill=True, align='C')
+        pdf.cell(190, 8, limpar_texto("1. INDICADORES DE ENGAJAMENTO E REGULARIZACAO"), ln=True, fill=True, align='C')
         
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8); pdf.set_fill_color(*CINZA_F)
         
-        # Salva posição para alinhar as células
         x_start = pdf.get_x()
         y_start = pdf.get_y()
         
-        # Coluna 1: Frequência
-        pdf.cell(63, h_header, limpar_texto(f"Frequência Média: {freq_val:.1f}%"), border=1, fill=True, align='C')
-        # Coluna 2: Documentação
-        pdf.cell(63, h_header, limpar_texto(f"Documentação Regularizada: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
-        # Coluna 3: Catequistas (Multi-linha)
+        pdf.cell(63, h_header, limpar_texto(f"Frequencia Media: {freq_val:.1f}%"), border=1, fill=True, align='C')
+        pdf.cell(63, h_header, limpar_texto(f"Documentacao: {docs_ok} / {len(ativos)}"), border=1, fill=True, align='C')
+        
         pdf.set_xy(x_start + 126, y_start)
-        pdf.multi_cell(64, h_header/num_cats, limpar_texto(cats_text), border=1, align='C', fill=True)
+        pdf.multi_cell(64, h_header/num_cats if num_cats > 1 else h_header, limpar_texto(cats_text), border=1, align='C', fill=True)
         
         pdf.set_y(y_start + h_header + 5)
 
         # --- 2. TABELA NOMINAL DE CAMINHADA ---
         pdf.set_font("helvetica", "B", 10); pdf.set_text_color(*AZUL_P)
-        pdf.cell(0, 7, limpar_texto("2. RELAÇÃO NOMINAL E SITUAÇÃO SACRAMENTAL"), ln=True)
+        pdf.cell(0, 7, limpar_texto("2. RELACAO NOMINAL E SITUACAO SACRAMENTAL"), ln=True)
         
         pdf.set_fill_color(230, 230, 230); pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "B", 8)
-        pdf.cell(10, 7, "Nº", border=1, fill=True, align='C')
-        pdf.cell(90, 7, "Nome Completo do Catequizando", border=1, fill=True, align='C')
-        pdf.cell(30, 7, "Batismo", border=1, fill=True, align='C')
-        pdf.cell(30, 7, "1ª Eucaristia", border=1, fill=True, align='C')
-        pdf.cell(30, 7, "Documentação", border=1, fill=True, align='C')
+        pdf.cell(10, 7, limpar_texto("N"), border=1, fill=True, align='C')
+        pdf.cell(90, 7, limpar_texto("Nome Completo do Catequizando"), border=1, fill=True, align='C')
+        pdf.cell(30, 7, limpar_texto("Batismo"), border=1, fill=True, align='C')
+        pdf.cell(30, 7, limpar_texto("1a Eucaristia"), border=1, fill=True, align='C')
+        pdf.cell(30, 7, limpar_texto("Documentacao"), border=1, fill=True, align='C')
         pdf.ln()
 
         pdf.set_font("helvetica", "", 8)
         nomes_ativos = ativos.sort_values('nome_completo')
         for i, (_, r) in enumerate(nomes_ativos.iterrows(), 1):
-            status_bat = "Sim" if r['batizado_sn'] == "SIM" else "Pendente"
-            status_euc = "Sim" if "EUCARISTIA" in str(r['sacramentos_ja_feitos']).upper() else "Pendente"
-            status_doc = "Regular" if r['doc_em_falta'] in ['COMPLETO', 'NADA', 'OK'] else "Pendente"
+            status_bat = "Sim" if r.get('batizado_sn', '') == "SIM" else "Pendente"
+            status_euc = "Sim" if "EUCARISTIA" in str(r.get('sacramentos_ja_feitos', '')).upper() else "Pendente"
+            status_doc = "Regular" if r.get('doc_em_falta', '') in ['COMPLETO', 'NADA', 'OK', 'NADA FALTANDO'] else "Pendente"
             
-            # Altura dinâmica para o nome
             inicio_y = pdf.get_y()
             pdf.set_xy(20, inicio_y)
             pdf.multi_cell(90, 6, limpar_texto(r['nome_completo']), border=0, align='L')
@@ -1043,9 +1051,9 @@ def gerar_relatorio_pastoral_pdf(df_turmas, df_cat, df_pres, df_pres_reuniao):
             pdf.set_xy(10, inicio_y)
             pdf.cell(10, altura_linha, f"{i:02d}", border=1, align='C')
             pdf.cell(90, altura_linha, "", border=1) 
-            pdf.cell(30, altura_linha, status_bat, border=1, align='C')
-            pdf.cell(30, altura_linha, status_euc, border=1, align='C')
-            pdf.cell(30, altura_linha, status_doc, border=1, align='C')
+            pdf.cell(30, altura_linha, limpar_texto(status_bat), border=1, align='C')
+            pdf.cell(30, altura_linha, limpar_texto(status_euc), border=1, align='C')
+            pdf.cell(30, altura_linha, limpar_texto(status_doc), border=1, align='C')
             pdf.ln()
             
             if pdf.get_y() > 260: pdf.add_page()
@@ -1053,33 +1061,38 @@ def gerar_relatorio_pastoral_pdf(df_turmas, df_cat, df_pres, df_pres_reuniao):
         # --- 3. RADAR DE ATENÇÃO PASTORAL (AGRUPADO) ---
         pdf.ln(5)
         pdf.set_fill_color(*LARANJA_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-        pdf.cell(190, 8, limpar_texto("3. RADAR DE ATENÇÃO PASTORAL (AGRUPADO)"), ln=True, fill=True, align='C')
+        pdf.cell(190, 8, limpar_texto("3. RADAR DE ATENCAO PASTORAL (AGRUPADO)"), ln=True, fill=True, align='C')
         pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 9)
         
         min_i, max_i = faixas.get(etapa_base, (0, 99))
-        acima_idade, abaixo_idade, risco_evasao = [], [], []
+        acima_idade, abaixo_idade, risco_evasao = [], [],[]
 
         for _, r in ativos.iterrows():
-            idade_c = calcular_idade(r['data_nascimento'])
+            idade_c = calcular_idade(r.get('data_nascimento', ''))
             if idade_c > max_i: acima_idade.append(f"{r['nome_completo']} ({idade_c} anos)")
             elif idade_c < min_i: abaixo_idade.append(f"{r['nome_completo']} ({idade_c} anos)")
             
-            faltas = len(pres_t[(pres_t['id_catequizando'] == r['id_catequizando']) & (pres_t['status'] == 'AUSENTE')]) if not pres_t.empty else 0
-            if faltas >= 3: risco_evasao.append(f"{r['nome_completo']} ({faltas} faltas)")
+            # MATEMÁTICA DE NIVELAMENTO APLICADA AO RADAR
+            pres_aluno = pres_t[pres_t['id_catequizando'] == r['id_catequizando']] if not pres_t.empty else pd.DataFrame()
+            qtd_presencas = len(pres_aluno[pres_aluno['status'] == 'PRESENTE']) if not pres_aluno.empty else 0
+            faltas_reais = total_encontros - qtd_presencas
+            
+            if faltas_reais >= 3: 
+                risco_evasao.append(f"{r['nome_completo']} ({faltas_reais} faltas/pendencias)")
 
         tem_alerta = False
         if acima_idade:
-            pdf.set_font("helvetica", "B", 9); pdf.write(6, "Catequizandos acima da idade ideal: "); pdf.set_font("helvetica", "", 9)
+            pdf.set_font("helvetica", "B", 9); pdf.write(6, limpar_texto("Catequizandos acima da idade ideal: ")); pdf.set_font("helvetica", "", 9)
             pdf.multi_cell(0, 6, limpar_texto(", ".join(acima_idade)) + "."); tem_alerta = True
         if abaixo_idade:
-            pdf.set_font("helvetica", "B", 9); pdf.write(6, "Catequizandos abaixo da idade ideal: "); pdf.set_font("helvetica", "", 9)
+            pdf.set_font("helvetica", "B", 9); pdf.write(6, limpar_texto("Catequizandos abaixo da idade ideal: ")); pdf.set_font("helvetica", "", 9)
             pdf.multi_cell(0, 6, limpar_texto(", ".join(abaixo_idade)) + "."); tem_alerta = True
         if risco_evasao:
-            pdf.set_font("helvetica", "B", 9); pdf.set_text_color(*LARANJA_P); pdf.write(6, "Risco Crítico de Evasão (3+ faltas): "); pdf.set_font("helvetica", "", 9)
+            pdf.set_font("helvetica", "B", 9); pdf.set_text_color(*LARANJA_P); pdf.write(6, limpar_texto("Risco de Evasao ou Nivelamento Pendente (3+): ")); pdf.set_font("helvetica", "", 9)
             pdf.multi_cell(0, 6, limpar_texto(", ".join(risco_evasao)) + "."); pdf.set_text_color(0, 0, 0); tem_alerta = True
 
         if not tem_alerta:
-            pdf.cell(0, 8, limpar_texto("Nenhum alerta crítico detectado para esta turma."), ln=True)
+            pdf.cell(0, 8, limpar_texto("Nenhum alerta critico detectado para esta turma."), ln=True)
 
     return finalizar_pdf(pdf)
 
