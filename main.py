@@ -1031,13 +1031,21 @@ elif menu == "📚 Minha Turma":
                 link_wa_grupo = f"https://wa.me/?text={urllib.parse.quote(msg_convite)}"
                 st.markdown(f"<a href='{link_wa_grupo}' target='_blank' style='text-decoration:none;'><div style='background-color:#25d366; color:white; text-align:center; padding:12px; border-radius:8px; font-size:14px; font-weight:bold; margin-top:-10px; margin-bottom:25px; width: 100%; transition: 0.3s; box-shadow: 0 2px 4px rgba(37, 211, 102, 0.3);'>📲 Enviar Convite Oficial no Grupo da Turma</div></a>", unsafe_allow_html=True)
 
-    # --- PAINEL DE INDICADORES (CLEAN) ---
+    # --- PAINEL DE INDICADORES (CLEAN E BLINDADO) ---
     st.markdown("#### 📊 Indicadores da Caminhada")
     c1, c2, c3 = st.columns(3)
     
-    cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
-    total_temas = len(cron_turma)
-    total_feito = len(df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()])
+    # Blindagem para o Cronograma
+    total_temas = 0
+    if not df_cron_t.empty and 'etapa' in df_cron_t.columns:
+        cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+        total_temas = len(cron_turma)
+    
+    # Blindagem para o Diário (Encontros) - EVITA O KEYERROR
+    total_feito = 0
+    if not df_enc_t.empty and 'turma' in df_enc_t.columns:
+        total_feito = len(df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()])
+    
     progresso_seguro = min((total_feito / total_temas) if total_temas > 0 else 0.0, 1.0)
     
     c1.metric("Encontros Realizados", f"{total_feito}/{total_temas}", f"{progresso_seguro*100:.0f}% concluído")
