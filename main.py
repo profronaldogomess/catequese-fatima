@@ -3413,17 +3413,17 @@ elif menu == "✅ Fazer Chamada":
 # PÁGINA: 👥 GESTÃO DE CATEQUISTAS (RH PASTORAL 3.0)
 # ==============================================================================
 elif menu == "👥 Gestão de Catequistas":
-    st.title("👥 RH Pastoral e Universidade Catequética")
+    st.title("👥 Dados Catequistas e Formações Catequéticas")
     
     df_formacoes = ler_aba("formacoes")
     df_pres_form = ler_aba("presenca_formacao")
     
     tab_radar, tab_univ, tab_cartorio = st.tabs([
-        "📊 Radar do RH Pastoral", "🎓 Universidade Catequética", "⚙️ Central de Acessos e Perfis"
+        "📊 Dados Catequistas", "🎓 Formações Catequéticas", "⚙️ Central de Acessos e Perfis"
     ])
 
     # ==========================================================================
-    # HUB 1: RADAR DO RH PASTORAL (ENGAJAMENTO E ACESSOS)
+    # HUB 1: Dados Catequistas (ENGAJAMENTO E ACESSOS)
     # ==========================================================================
     with tab_radar:
         st.subheader("📊 Qualificação da Equipe Catequética")
@@ -3546,10 +3546,10 @@ elif menu == "👥 Gestão de Catequistas":
             st.info("Nenhum catequista cadastrado.")
 
     # ==========================================================================
-    # HUB 2: UNIVERSIDADE CATEQUÉTICA (FORMAÇÃO)
+    # HUB 2: Formações Catequéticas (FORMAÇÃO)
     # ==========================================================================
     with tab_univ:
-        st.subheader("🎓 Universidade Catequética (Formação Continuada)")
+        st.subheader("🎓 Formações Catequéticas")
         
         col_status = None
         if not df_formacoes.empty:
