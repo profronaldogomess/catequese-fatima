@@ -2516,16 +2516,18 @@ elif menu == "🏫 Gestão de Turmas":
                                 "Temas a Repor": " | ".join(temas_devidos)
                             })
                             
-                        if dados_rec_local:
-                            st.dataframe(pd.DataFrame(dados_rec_local).sort_values(by=['Qtd. Pendências'], ascending=False), use_container_width=True, hide_index=True)
-                        else:
-                            st.success("✅ Nenhum catequizando desta turma possui pendências de nivelamento.")
+                    # BLINDAGEM: Renderiza a tabela FORA do loop!
+                    if dados_rec_local:
+                        st.dataframe(pd.DataFrame(dados_rec_local).sort_values(by=['Qtd. Pendências'], ascending=False), use_container_width=True, hide_index=True)
+                    else:
+                        st.success("✅ Nenhum catequizando desta turma possui pendências de nivelamento.")
 
                 with sub_doc:
                     st.markdown("#### 📄 Documentação e Auditoria")
                     col_doc1, col_doc2 = st.columns(2)
                     with col_doc1:
-                        if st.button(f"✨ GERAR AUDITORIA PASTORAL DETALHADA", use_container_width=True, key="btn_auditoria_turma", type="primary"):
+                        # BLINDAGEM: Adição da chave dinâmica _{t_alvo} no botão
+                        if st.button(f"✨ GERAR AUDITORIA PASTORAL DETALHADA", use_container_width=True, key=f"btn_auditoria_turma_{t_alvo}", type="primary"):
                             with st.spinner("Compilando diário, cronograma e nivelamento em PDF..."):
                                 sem_batismo = len(alunos_t[alunos_t['batizado_sn'] != 'SIM'])
                                 batizados = len(alunos_t) - sem_batismo
@@ -2553,20 +2555,12 @@ elif menu == "🏫 Gestão de Turmas":
                             st.download_button(label=f"📥 BAIXAR DOSSIÊ DA TURMA (PDF)", data=st.session_state[f"pdf_auditoria_{t_alvo}"], file_name=f"Auditoria_{t_alvo}.pdf", mime="application/pdf", use_container_width=True)
                     
                     with col_doc2:
-                        if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
+                        # BLINDAGEM: Adição da chave dinâmica _{t_alvo} no botão
+                        if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key=f"btn_fichas_turma_{t_alvo}"):
                             with st.spinner("Gerando fichas individuais..."):
                                 st.session_state[f"pdf_fichas_{t_alvo}"] = gerar_fichas_turma_completa(t_alvo, alunos_t)
                         if f"pdf_fichas_{t_alvo}" in st.session_state:
                             st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
-                    
-                    with col_doc2:
-                        if st.button(f"📄 GERAR FICHAS DA TURMA (LOTE)", use_container_width=True, key="btn_fichas_turma"):
-                            with st.spinner("Gerando fichas individuais..."):
-                                st.session_state[f"pdf_fichas_{t_alvo}"] = gerar_fichas_turma_completa(t_alvo, alunos_t)
-                        if f"pdf_fichas_{t_alvo}" in st.session_state:
-                            st.download_button("📥 BAIXAR FICHAS (LOTE)", st.session_state[f"pdf_fichas_{t_alvo}"], f"Fichas_{t_alvo}.pdf", use_container_width=True)
-        else:
-            st.info("Nenhuma turma cadastrada.")
 
     # ==========================================================================
     # HUB 3: LOGÍSTICA E ALOCAÇÃO (RH DA CATEQUESE)
