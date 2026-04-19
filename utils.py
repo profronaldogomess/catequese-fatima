@@ -1820,28 +1820,31 @@ def obter_ultima_chamada_turma(df_pres, nome_turma):
     """Retorna a data da última chamada (limitada a hoje) e o DataFrame correspondente."""
     if df_pres.empty: return None, pd.DataFrame()
     
-    # 1. Normalização rigorosa da busca
+    # 1. Normalização rigorosa do nome da turma
     nome_busca = str(nome_turma).strip().upper()
     pres_t = df_pres[df_pres['id_turma'].astype(str).str.strip().str.upper() == nome_busca].copy()
     if pres_t.empty: return None, pd.DataFrame()
     
-    # 2. Conversão e Limpeza de Datas
-    pres_t['data_dt'] = pd.to_datetime(pres_t['data_encontro'], errors='coerce', dayfirst=True)
+    # 2. Conversão Universal de Datas (Tenta BR e depois ISO)
+    def converter_data_flexivel(v):
+        v_str = str(v).strip()
+        for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+            try: return dt_module.datetime.strptime(v_str.split(' ')[0], fmt)
+            except: continue
+        return pd.NaT
+
+    pres_t['data_dt'] = pres_t['data_encontro'].apply(converter_data_flexivel)
     pres_t = pres_t.dropna(subset=['data_dt'])
-    
-    # 3. Trava de Segurança: Ignorar datas futuras (Blindagem contra Naive/Aware Conflict)
-    agora_br = dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)
-    # Removemos o tzinfo para permitir a comparação direta com o Pandas Naive
-    hoje_limite = agora_br.replace(tzinfo=None, hour=23, minute=59, second=59)
-    
-    # Garantimos que a coluna do Pandas também esteja sem timezone para a comparação
-    pres_t['data_dt'] = pres_t['data_dt'].dt.tz_localize(None)
-    
-    pres_t = pres_t[pres_t['data_dt'] <= hoje_limite]
     
     if pres_t.empty: return None, pd.DataFrame()
     
-    # 4. Pega a última data real
+    # 3. Trava de Segurança: Hoje (sem fuso horário)
+    hoje_ref = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).replace(tzinfo=None, hour=23, minute=59, second=59)
+    pres_t = pres_t[pres_t['data_dt'] <= hoje_ref]
+    
+    if pres_t.empty: return None, pd.DataFrame()
+    
+    # 4. Captura a última data real e filtra
     ultima_data = pres_t['data_dt'].max()
     chamada_recente = pres_t[pres_t['data_dt'] == ultima_data]
     
@@ -1869,141 +1872,108 @@ def obter_data_ultimo_sabado():
     return hoje - dt_module.timedelta(days=dias_atras)
 
 def gerar_pdf_auditoria_chamadas(df_turmas, df_pres, df_cat, dias_limite=7):
-    """Gera Auditoria de Chamadas com Resumo Executivo e Detalhamento com Temas."""
+    """Gera Auditoria de Chamadas com Resumo Executivo e Detalhamento Real."""
     pdf = FPDF()
     pdf.add_page()
-    hoje = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
+    # Fuso horário para o cabeçalho
+    hoje_br = (dt_module.datetime.now(dt_module.timezone.utc) + dt_module.timedelta(hours=-3)).date()
     adicionar_cabecalho_diocesano(pdf, limpar_texto(f"AUDITORIA DE DIARIOS E CHAMADAS (Ultimos {dias_limite} dias)"))
     
-    limite = hoje - dt_module.timedelta(days=dias_limite)
+    limite = hoje_br - dt_module.timedelta(days=dias_limite)
     
-    # --- SESSÃO 1: RESUMO EXECUTIVO ---
+    # --- SESSÃO 1: RESUMO EXECUTIVO (TABELA BLINDADA) ---
     pdf.set_fill_color(240, 242, 246)
     pdf.set_font("helvetica", "B", 10)
     pdf.set_text_color(65, 123, 153)
-    pdf.cell(0, 8, limpar_texto(f"1. RESUMO EXECUTIVO DAS TURMAS (Data Base: {formatar_data_br(hoje)})"), ln=True, fill=True)
+    pdf.cell(0, 8, limpar_texto(f"1. RESUMO EXECUTIVO DAS TURMAS (Data: {formatar_data_br(hoje_br)})"), ln=True, fill=True)
     
-    pdf.set_fill_color(65, 123, 153)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("helvetica", "B", 8)
-    pdf.cell(50, 7, limpar_texto("Turma"), border=1, fill=True)
+    pdf.set_fill_color(65, 123, 153); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 8)
+    pdf.cell(60, 7, limpar_texto("Turma"), border=1, fill=True)
     pdf.cell(25, 7, limpar_texto("Status"), border=1, fill=True, align='C')
-    pdf.cell(25, 7, limpar_texto("Ultima Chamada"), border=1, fill=True, align='C')
-    pdf.cell(90, 7, limpar_texto("Catequista(s)"), border=1, fill=True)
+    pdf.cell(30, 7, limpar_texto("Ultima Chamada"), border=1, fill=True, align='C')
+    pdf.cell(75, 7, limpar_texto("Catequista(s)"), border=1, fill=True)
     pdf.ln()
     
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("helvetica", "", 8)
-    
-    turmas_detalhes =[]
+    pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 7)
+    turmas_detalhes = []
     
     for _, t in df_turmas.iterrows():
         nome_t = str(t['nome_turma']).upper()
         cats = str(t.get('catequista_responsavel', 'Nao informado'))
         ultima_data, chamada = obter_ultima_chamada_turma(df_pres, nome_t)
         
+        # Lógica de Status
         if ultima_data and ultima_data >= limite:
             status_resumo = "EM DIA"
-            cor_status = (46, 125, 50)
-        elif ultima_data:
-            status_resumo = "ATRASADA"
-            cor_status = (224, 61, 17)
+            cor_status = (46, 125, 50) # Verde
         else:
-            status_resumo = "PENDENTE"
-            cor_status = (224, 61, 17)
+            status_resumo = "ATRASADA" if ultima_data else "PENDENTE"
+            cor_status = (224, 61, 17) # Vermelho
             
         data_str = formatar_data_br(ultima_data) if ultima_data else "---"
         
-        # Desenha células sem truncar (ajustando larguras)
-        pdf.set_font("helvetica", "", 7) # Fonte levemente menor para caber tudo
-        pdf.cell(55, 6, limpar_texto(nome_t), border=1)
-        pdf.set_text_color(*cor_status)
-        pdf.set_font("helvetica", "B", 7)
-        pdf.cell(20, 6, limpar_texto(status_resumo), border=1, align='C')
-        pdf.set_text_color(0, 0, 0)
+        # Linha da Tabela (Sem MultiCell para evitar overlap)
         pdf.set_font("helvetica", "", 7)
-        pdf.cell(25, 6, limpar_texto(data_str), border=1, align='C')
+        pdf.cell(60, 6, limpar_texto(nome_t)[:40], border=1)
+        pdf.set_text_color(*cor_status); pdf.set_font("helvetica", "B", 7)
+        pdf.cell(25, 6, status_resumo, border=1, align='C')
+        pdf.set_text_color(0, 0, 0); pdf.set_font("helvetica", "", 7)
+        pdf.cell(30, 6, data_str, border=1, align='C')
+        pdf.cell(75, 6, limpar_texto(cats)[:55], border=1)
+        pdf.ln()
         
-        # Posição atual para o multi_cell dos catequistas
-        curr_x = pdf.get_x()
-        curr_y = pdf.get_y()
-        pdf.multi_cell(90, 6, limpar_texto(cats), border=1)
-        pdf.set_xy(10, curr_y + 6) # Garante que a próxima linha comece no lugar certo
-        
-        # Busca o tema real do diário para este encontro específico
         tema_dia = "Sem registro"
         if not chamada.empty:
-            # Pega o primeiro tema não vazio da lista de presenças
-            temas_validos = chamada['tema_do_dia'].dropna().unique()
-            if len(temas_validos) > 0:
-                tema_dia = str(temas_validos[0])
+            temas = chamada['tema_do_dia'].dropna().unique()
+            if len(temas) > 0: tema_dia = str(temas[0])
             
-        turmas_detalhes.append({
-            "nome": nome_t, "status": status_resumo, "data": ultima_data, 
-            "tema": tema_dia, "chamada": chamada
-        })
+        turmas_detalhes.append({"nome": nome_t, "status": status_resumo, "data": ultima_data, "tema": tema_dia, "chamada": chamada})
         
+    # --- SESSÃO 2: DETALHAMENTO DE FALTOSOS ---
     pdf.ln(5)
-    
-    # --- SESSÃO 2: DETALHAMENTO E RESGATE PASTORAL ---
     if pdf.get_y() > 240: pdf.add_page()
-    
-    pdf.set_fill_color(240, 242, 246)
-    pdf.set_font("helvetica", "B", 10)
-    pdf.set_text_color(65, 123, 153)
+    pdf.set_fill_color(240, 242, 246); pdf.set_font("helvetica", "B", 10); pdf.set_text_color(65, 123, 153)
     pdf.cell(0, 8, limpar_texto("2. DETALHAMENTO DE FALTOSOS E RESGATE PASTORAL"), ln=True, fill=True)
     pdf.ln(2)
     
     for td in turmas_detalhes:
         if pdf.get_y() > 250: pdf.add_page()
         
+        # Cabeçalho da Turma com Cor de Status
         cor_bg = (65, 123, 153) if td['status'] == "EM DIA" else (224, 61, 17)
-        pdf.set_fill_color(*cor_bg)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("helvetica", "B", 9)
-        
-        data_exibicao = formatar_data_br(td['data']) if td['data'] else "Nenhuma"
-        pdf.cell(0, 7, limpar_texto(f"TURMA: {td['nome']} | Status: {td['status']} | Ultima Chamada: {data_exibicao}"), border=1, ln=True, fill=True)
+        pdf.set_fill_color(*cor_bg); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 9)
+        pdf.cell(0, 7, limpar_texto(f"TURMA: {td['nome']} | {td['status']} | Ultima: {formatar_data_br(td['data']) if td['data'] else '---'}"), border=1, ln=True, fill=True)
         
         pdf.set_text_color(0, 0, 0)
-        
         if td['data']:
-            pdf.set_font("helvetica", "I", 8)
-            pdf.set_fill_color(245, 245, 245)
-            pdf.cell(0, 6, limpar_texto(f"Tema do ultimo encontro: {td['tema']}"), border=1, ln=True, fill=True)
+            pdf.set_font("helvetica", "I", 8); pdf.set_fill_color(245, 245, 245)
+            pdf.cell(0, 6, limpar_texto(f"Tema registrado: {td['tema']}"), border=1, ln=True, fill=True)
             
         chamada = td['chamada']
-        if not chamada.empty and td['data'] and td['data'] >= limite:
+        if not chamada.empty:
             faltosos = chamada[chamada['status'] == 'AUSENTE']
             if not faltosos.empty:
                 pdf.set_font("helvetica", "B", 8)
                 pdf.cell(70, 6, limpar_texto("Catequizando Faltoso"), border=1)
                 pdf.cell(120, 6, limpar_texto("Contatos (Mae / Pai / Resp.)"), border=1, ln=True)
-                
                 pdf.set_font("helvetica", "", 7)
                 for _, f in faltosos.iterrows():
                     cat_info = df_cat[df_cat['id_catequizando'] == f['id_catequizando']]
-                    contatos_str = "N/A"
+                    contatos_str = "Sem contato"
                     if not cat_info.empty:
                         c = cat_info.iloc[0]
-                        lista_contatos =[]
-                        if str(c.get('tel_mae', '')).strip() not in["N/A", "", "None"]: lista_contatos.append(f"Mae: {c['tel_mae']}")
-                        if str(c.get('tel_pai', '')).strip() not in["N/A", "", "None"]: lista_contatos.append(f"Pai: {c['tel_pai']}")
-                        if str(c.get('contato_principal', '')).strip() not in ["N/A", "", "None"]: lista_contatos.append(f"Resp: {c['contato_principal']}")
-                        contatos_str = " | ".join(lista_contatos) if lista_contatos else "Sem contato"
+                        list_c = []
+                        if str(c.get('tel_mae','')).strip() not in ["N/A","","None"]: list_c.append(f"M:{c['tel_mae']}")
+                        if str(c.get('tel_pai','')).strip() not in ["N/A","","None"]: list_c.append(f"P:{c['tel_pai']}")
+                        if str(c.get('contato_principal','')).strip() not in ["N/A","","None"]: list_c.append(f"R:{c['contato_principal']}")
+                        if list_c: contatos_str = " | ".join(list_c)
                     
                     pdf.cell(70, 6, limpar_texto(f['nome_catequizando'])[:45], border=1)
                     pdf.cell(120, 6, limpar_texto(contatos_str)[:85], border=1, ln=True)
             else:
-                pdf.set_font("helvetica", "", 8)
-                pdf.cell(0, 6, limpar_texto("Nenhuma falta registrada neste ultimo encontro."), border=1, ln=True)
-        elif td['status'] == "ATRASADA":
-            pdf.set_font("helvetica", "", 8)
-            pdf.cell(0, 6, limpar_texto("O diario esta atrasado. Realize a chamada para visualizar os faltosos."), border=1, ln=True)
+                pdf.set_font("helvetica", "", 8); pdf.cell(0, 6, limpar_texto("OK - Todos presentes no ultimo encontro."), border=1, ln=True)
         else:
-            pdf.set_font("helvetica", "", 8)
-            pdf.cell(0, 6, limpar_texto("Sem registros desta turma no sistema."), border=1, ln=True)
-            
+            pdf.set_font("helvetica", "I", 8); pdf.cell(0, 6, limpar_texto("Sem registros recentes ou diario atrasado."), border=1, ln=True)
         pdf.ln(3)
 
     return finalizar_pdf(pdf)
