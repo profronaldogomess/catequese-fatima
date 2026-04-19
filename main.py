@@ -1164,76 +1164,55 @@ elif menu == "📚 Minha Turma":
 
     st.divider()
     
-    # --- 🎯 LINHA DO TEMPO DO ITINERÁRIO ---
-    st.markdown("#### 🎯 Linha do Tempo do Itinerário")
+    # --- 1. LINHA DO TEMPO (SOMENTE REALIZADOS) ---
+    st.markdown("#### 📜 Histórico de Encontros Realizados")
+    if not df_enc_t.empty:
+        df_enc_t['data_dt'] = pd.to_datetime(df_enc_t['data'], errors='coerce', dayfirst=True)
+        hist_turma = df_enc_t[df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()].sort_values(by='data_dt', ascending=False)
+        
+        if not hist_turma.empty:
+            for idx, row in hist_turma.iterrows():
+                data_d = formatar_data_br(row['data'])
+                tema_d = row.get('tema', 'Sem tema')
+                
+                # Layout Compacto
+                with st.container(border=True):
+                    c1, c2 = st.columns([3, 1])
+                    c1.markdown(f"**{data_d}** - {tema_d}")
+                    if c2.button("✏️ Detalhes", key=f"det_{idx}"):
+                        st.session_state[f"show_det_{idx}"] = not st.session_state.get(f"show_det_{idx}", False)
+                    
+                    if st.session_state.get(f"show_det_{idx}", False):
+                        st.write(f"**Catequista:** {row.get('catequista', 'N/A')}")
+                        st.write(f"**Relato:** {row.get('observacoes', 'Sem relato')}")
+        else:
+            st.info("Nenhum encontro realizado registrado.")
+    else:
+        st.info("Nenhum encontro registrado.")
+
+    st.divider()
+
+    # --- 2. PRÓXIMO PLANEJADO (SEM FANTASMAS) ---
+    st.markdown("#### 🔜 Próximo Encontro Planejado")
     
-    c_hj, c_ult, c_prox = st.columns(3)
+    # Filtra apenas o primeiro tema pendente
+    cron_turma = df_cron_t[df_cron_t['etapa'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()]
+    col_status = 'status' if 'status' in cron_turma.columns else ('col_4' if 'col_4' in cron_turma.columns else None)
     
-    # 1. Busca Encontro de HOJE
-    hoje_date = date.today()
-    df_enc_t['data_dt'] = pd.to_datetime(df_enc_t['data'], errors='coerce', dayfirst=True)
-    enc_hoje = df_enc_t[(df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_enc_t['data_dt'].dt.date == hoje_date)]
-    
-    with c_hj:
-        if not enc_hoje.empty:
-            tema_h = enc_hoje.iloc[0]['tema']
-            obs_h = enc_hoje.iloc[0].get('observacoes', 'Sem relato')
+    if col_status:
+        pendentes = cron_turma[cron_turma[col_status].astype(str).str.strip().str.upper() != 'REALIZADO']
+        if not pendentes.empty:
+            prox = pendentes.iloc[0]
             st.markdown(f"""
-                <div style='background-color:#e3f2fd; padding:15px; border-radius:10px; border-left:5px solid #1976d2; height: 100%;'>
-                    <b style='color:#1976d2;'>☀️ Ocorrendo Hoje</b><br>
-                    <b style='font-size:15px;'>{tema_h}</b><br>
-                    <span style='font-size:12px; color:#555;'>{obs_h[:100]}...</span>
+                <div style='background-color:#fff8e1; padding:15px; border-radius:8px; border-left:5px solid #ffa000;'>
+                    <b style='font-size:16px;'>{prox['titulo_tema']}</b><br>
+                    <small>{str(prox.get('descricao_base', ''))[:150]}...</small>
                 </div>
             """, unsafe_allow_html=True)
         else:
-            st.markdown("""
-                <div style='background-color:#f5f5f5; padding:15px; border-radius:10px; border-left:5px solid #9e9e9e; height: 100%;'>
-                    <b style='color:#9e9e9e;'>☀️ Hoje</b><br>
-                    <span style='font-size:13px; color:#666;'>Nenhum encontro registrado para a data de hoje.</span>
-                </div>
-            """, unsafe_allow_html=True)
-
-    # 2. Busca ÚLTIMO Realizado (Antes de hoje)
-    enc_passado = df_enc_t[(df_enc_t['turma'].astype(str).str.strip().str.upper() == turma_ativa.strip().upper()) & (df_enc_t['data_dt'].dt.date < hoje_date)].sort_values('data_dt', ascending=False)
-    
-    with c_ult:
-        if not enc_passado.empty:
-            tema_u = enc_passado.iloc[0]['tema']
-            data_u = formatar_data_br(enc_passado.iloc[0]['data'])
-            st.markdown(f"""
-                <div style='background-color:#e8f5e9; padding:15px; border-radius:10px; border-left:5px solid #2e7d32; height: 100%;'>
-                    <b style='color:#2e7d32;'>🔙 Último Dado ({data_u})</b><br>
-                    <b style='font-size:15px;'>{tema_u}</b>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-                <div style='background-color:#f5f5f5; padding:15px; border-radius:10px; border-left:5px solid #9e9e9e; height: 100%;'>
-                    <b style='color:#9e9e9e;'>🔙 Último Dado</b><br>
-                    <span style='font-size:13px; color:#666;'>Histórico vazio.</span>
-                </div>
-            """, unsafe_allow_html=True)
-
-    # 3. Busca PRÓXIMO Planejado
-    with c_prox:
-        if proximo_tema_str:
-            desc_p = proximo.iloc[0].get('descricao_base', 'Sem descrição planejada')
-            if desc_p in["nan", "N/A", "None"]: desc_p = "Sem descrição planejada"
-            st.markdown(f"""
-                <div style='background-color:#fff8e1; padding:15px; border-radius:10px; border-left:5px solid #ffa000; height: 100%;'>
-                    <b style='color:#ffa000;'>🔜 Próximo Planejado</b><br>
-                    <b style='font-size:15px;'>{proximo_tema_str}</b><br>
-                    <span style='font-size:12px; color:#555;'>{desc_p[:100]}...</span>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-                <div style='background-color:#ffebee; padding:15px; border-radius:10px; border-left:5px solid #f44336; height: 100%;'>
-                    <b style='color:#f44336;'>🔜 Próximo Planejado</b><br>
-                    <span style='font-size:13px; color:#666;'>Fim do cronograma! Cadastre novos temas.</span>
-                </div>
-            """, unsafe_allow_html=True)
-
+            st.success("✅ Cronograma em dia! Todos os temas planejados foram realizados.")
+    else:
+        st.info("Cronograma não configurado.")
 
 # ==============================================================================
 # PÁGINA: 📖 DIÁRIO DE ENCONTROS
