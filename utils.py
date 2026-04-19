@@ -1190,7 +1190,7 @@ def gerar_relatorio_local_turma_pdf(nome_turma, metricas, df_alunos, df_presenca
     # --- 4. RELAÇÃO NOMINAL E RECOMPOSIÇÃO ---
     pdf.add_page()
     pdf.set_fill_color(*AZUL_P); pdf.set_text_color(255, 255, 255); pdf.set_font("helvetica", "B", 10)
-    pdf.cell(190, 8, limpar_texto("4. MATRICULAS E PENDENCIAS DE NIVELAMENTO"), ln=True, fill=True, align='C')
+    pdf.cell(190, 8, limpar_texto("4. INSCRIÇÕES E PENDENCIAS DE NIVELAMENTO"), ln=True, fill=True, align='C')
     pdf.ln(3)
 
     temas_dados = set()
@@ -1241,7 +1241,7 @@ def gerar_relatorio_local_turma_pdf(nome_turma, metricas, df_alunos, df_presenca
         pdf.ln(5)
         if pdf.get_y() > 250: pdf.add_page()
         pdf.set_font("helvetica", "B", 9); pdf.set_text_color(*LARANJA_P)
-        pdf.cell(0, 6, limpar_texto("GUIA DE REPOSICAO (TEMAS QUE CADA ALUNO DEVE):"), ln=True)
+        pdf.cell(0, 6, limpar_texto("GUIA DE REPOSICAO (TEMAS QUE CADA CATEQUIZANDO DEVE):"), ln=True)
         pdf.set_text_color(0, 0, 0)
         for n, devidos in detalhes_pendencias.items():
             pdf.set_font("helvetica", "B", 8)
