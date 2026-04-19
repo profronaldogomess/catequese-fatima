@@ -1418,14 +1418,6 @@ elif menu == "📖 Diário de Encontros":
                                 if atualizar_encontro_global(turma_focal, data_d, ed_tema, ed_obs):
                                     st.success("✅ Tudo atualizado com sucesso!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-                        # Botão de Upgrade IVC (Aparece apenas se o relato for curto/antigo)
-                        if len(obs_d) < 50:
-                            if st.button("✨ Converter para Roteiro IVC", key=f"upg_{data_d}_{idx}"):
-                                template_ivc = ("🎯 Objetivo Geral:\n\n🙏🏻 Acolhida / Ambientação:\n\n🌱 Ver a Vida (Realidade):\n\n📖 Iluminar (Palavra de Deus):\n\n⚙️ Celebrar e Agir:\n")
-                                # Atualiza o campo de observação com o template
-                                if atualizar_encontro_global(turma_focal, data_d, tema_d, template_ivc):
-                                    st.success("Template IVC aplicado! Agora edite o relato."); st.rerun()     
-                                           
                         if btn_excluir:
                             if confirma_del:
                                 with st.spinner("Excluindo encontro e revertendo cronograma..."):
